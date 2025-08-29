@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-mod barter_ingestor;
-mod types;
+pub mod barter_ingestor;
+pub mod types;
 
 /// The common DataEvent Trait, if data sources implement it can own event ability.
 pub trait DataEvent {
