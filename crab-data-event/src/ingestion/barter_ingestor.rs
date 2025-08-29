@@ -1,14 +1,15 @@
-use std::sync::Arc;
-use std::time::Duration;
+use crate::ingestion::Ingestor;
+use crate::ingestion::types::PublicTradeEvent;
 use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
-use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::streams::Streams;
+use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
-use crate::ingestion::types::PublicTradeEvent;
 use crossbeam::channel::Sender;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::warn;
+use std::sync::Arc;
+use std::time::Duration;
 
 /// BarterIngestor acquires real-time trade data events from the exchange
 pub struct BarterIngestor {
@@ -23,9 +24,7 @@ impl BarterIngestor {
     async fn subscribe(&self) {
         let sender = self.sender.clone();
         // get symbols（examples）
-        let symbols = vec![
-            "btc", "eth", "xrp", "sol", "avax", "ltc",
-        ];
+        let symbols = vec!["btc", "eth", "xrp", "sol", "avax", "ltc"];
 
         let mut retry_count = 0;
         let max_retries = 5; // 最大重试次数
@@ -48,7 +47,7 @@ impl BarterIngestor {
                     .collect::<Vec<_>>(),
             );
 
-            // 初始化并启动所有订阅
+            // init and start subscribe
             let streams = match streams.init().await {
                 Ok(s) => s,
                 Err(err) => {
@@ -60,7 +59,7 @@ impl BarterIngestor {
                         continue;
                     } else {
                         warn!("Maximum retries reached. Aborting subscription.");
-                        return; // 达到最大重试次数，放弃
+                        return; // retry max times , stop
                     }
                 }
             };
@@ -70,9 +69,8 @@ impl BarterIngestor {
                 .select_all()
                 .with_error_handler(|error| warn!(?error, "MarketStream generated error"));
 
-            // 监听和处理接收到的事件 listen and handle accepted events
+            // listen and handle accepted events
             while let Some(event) = joined_stream.next().await {
-                // info!("{:?}", event);
                 let public_trade_event: PublicTradeEvent = event.into();
                 // send public_trade_event to the channel
                 if let Err(err) = sender.send(public_trade_event) {
@@ -96,14 +94,17 @@ impl BarterIngestor {
     fn start_non_send(self: Arc<Self>) {
         std::thread::spawn(move || {
             // current thread runtime
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
             rt.block_on(async {
                 self.subscribe().await;
             });
         });
+    }
+}
+
+impl Ingestor<PublicTradeEvent> for BarterIngestor {
+    fn start(self: Arc<Self>) {
+        self.start_non_send();
     }
 }
