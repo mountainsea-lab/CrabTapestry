@@ -1,14 +1,14 @@
 [workspace]
-members = [ "crab-market-data","libs/crab-common-utils", "libs/crab-types",
+members = ["crab-data-event","libs/crab-common-utils", "libs/crab-types",
     # -- Libraries
     # -- Binaries
-    "crab-market-data",
+    "crab-data-event",
 ]
 default-members = [
     # -- Libraries
     "libs/crab-common-utils", "libs/crab-types",
     # -- Binaries
-    "crab-market-data",
+    "crab-data-event",
 ]
 
 resolver = "2"
