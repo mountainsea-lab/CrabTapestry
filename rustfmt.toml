@@ -1,0 +1,23 @@
+# 最大行宽，保持代码可读性（团队常用 100 或 120）
+max_width = 120
+
+# 使用空格缩进而不是 Tab
+hard_tabs = false
+tab_spaces = 4
+
+# Rust 版本
+edition = "2024"
+
+# 函数/参数等自动换行风格（避免一行塞太多）
+use_small_heuristics = "Max"
+
+# 模块 import 排序：先 std，再 external，再 internal
+reorder_imports = true
+imports_granularity = "One"
+group_imports = "One"
+
+# 控制函数链式调用的换行格式
+chain_width = 80
+
+# 控制 struct/enum 展开时的缩进
+struct_lit_width = 40
