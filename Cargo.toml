@@ -1,18 +1,20 @@
 [workspace]
-members = ["libs/crab-common-utils", "libs/crab-types",
+members = [ "crab-market-data","libs/crab-common-utils", "libs/crab-types",
     # -- Libraries
     # -- Binaries
+    "crab-market-data",
 ]
 default-members = [
     # -- Libraries
     "libs/crab-common-utils", "libs/crab-types",
     # -- Binaries
+    "crab-market-data",
 ]
 
 resolver = "2"
 
 [workspace.dependencies]
-# Mountquant Ecosystem
+# CrabTapestry Ecosystem
 crab-common-utils = { path = "libs/crab-common-utils", version = "0.1.0" }
 crab-types = { path = "libs/crab-types", version = "0.1.0" }
 
