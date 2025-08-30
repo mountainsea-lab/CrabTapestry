@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 bb8-redis = "0.20.0"
+thiserror = { workspace = true}
+anyhow = { workspace = true}
