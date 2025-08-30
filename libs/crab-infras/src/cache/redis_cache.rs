@@ -1,19 +1,23 @@
 use crate::utils::create_redis_pool;
 use anyhow::{Context, Result};
-use bb8_redis::{RedisConnectionManager, bb8, redis::cmd};
+use bb8_redis::{
+    RedisConnectionManager, bb8,
+    redis::{AsyncCommands, Client, aio::MultiplexedConnection, cmd},
+};
 use ms_tracing::tracing_utils::internal::{debug, info, warn};
 use serde::{Serialize, de::DeserializeOwned};
 
 #[derive(Debug, Clone)]
 pub struct RedisCache {
     pool: bb8::Pool<RedisConnectionManager>,
+    redis_url: String,
 }
 
 impl RedisCache {
     pub async fn new(redis_url: &str) -> Result<Self> {
         let pool = create_redis_pool(redis_url).await?;
         info!("Connected to Redis KV store at {}", redis_url);
-        Ok(Self { pool })
+        Ok(Self { pool, redis_url: redis_url.to_owned() })
     }
 
     pub async fn get<T: DeserializeOwned + Send>(&self, key: &str) -> Result<Option<T>> {
@@ -61,14 +65,6 @@ impl RedisCache {
             .with_context(|| format!("Failed to query exists for key: {}", key))?;
         debug!(key, exists, "redis exists ok");
         Ok(exists)
-    }
-
-    fn make_price_key(&self, mint: &str) -> String {
-        format!("solana:price:{}", mint)
-    }
-
-    fn make_metadata_key(&self, mint: &str) -> String {
-        format!("solana:metadata:{}", mint)
     }
 
     pub async fn push_kline<T: Serialize>(&self, key: &str, kline: &T) -> Result<()> {
@@ -180,5 +176,90 @@ impl RedisCache {
         }
 
         Ok(total)
+    }
+
+    // 发布消息到指定频道
+    pub async fn publish_message(&self, channel: &str, message: &str) -> Result<()> {
+        let mut conn = self.pool.get().await.context("Failed to get Redis connection")?;
+        let _: () = conn.publish(channel, message).await.context("Failed to publish message")?;
+        debug!(channel, "Message published to Redis channel.");
+        Ok(())
+    }
+
+    /// 订阅操作会一直占用连接 直接创建单个连接，绕过 bb8 管理
+    // async fn create_subscription_connection(&self) -> Result<Connection> {
+    //     let client = Client::open(self.redis_url.clone())
+    //         .context("Failed to create Redis client")?;
+    //
+    //     let connection = client.get_async_connection().await
+    //         .context("Failed to create subscription connection")?;
+    //
+    //     Ok(connection)
+    // }
+    async fn get_subscription_connection(&self) -> Result<MultiplexedConnection> {
+        let client = Client::open(self.redis_url.as_str()).context("Failed to create Redis client")?;
+
+        let connection = client
+            .get_multiplexed_async_connection()
+            .await
+            .context("Failed to create subscription connection")?;
+
+        Ok(connection)
+    }
+
+    /// 订阅单个频道
+    pub async fn subscribe(&self, channel: &str) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        cmd("SUBSCRIBE")
+            .arg(channel)
+            .exec_async(&mut conn)
+            .await
+            .context("Failed to subscribe to channel")?;
+
+        info!("Subscribed to channel: {}", channel);
+        Ok(())
+    }
+
+    /// 取消订阅单个频道
+    pub async fn unsubscribe(&self, channel: &str) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        cmd("UNSUBSCRIBE")
+            .arg(channel)
+            .exec_async(&mut conn)
+            .await
+            .context("Failed to unsubscribe from channel")?;
+
+        info!("Unsubscribed from channel: {}", channel);
+        Ok(())
+    }
+
+    /// 使用模式订阅多个频道
+    pub async fn psubscribe(&self, pattern: &str) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        cmd("PSUBSCRIBE")
+            .arg(pattern)
+            .exec_async(&mut conn)
+            .await
+            .context("Failed to pattern subscribe")?;
+
+        info!("Pattern subscribed to: {}", pattern);
+        Ok(())
+    }
+
+    /// 取消模式订阅
+    pub async fn punsubscribe(&self, pattern: &str) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        cmd("PUNSUBSCRIBE")
+            .arg(pattern)
+            .exec_async(&mut conn)
+            .await
+            .context("Failed to pattern unsubscribe")?;
+
+        info!("Pattern unsubscribed from: {}", pattern);
+        Ok(())
     }
 }
