@@ -1,12 +1,13 @@
 [workspace]
-members = ["crab-data-event","libs/crab-common-utils", "libs/crab-types",
-    # -- Libraries
+members = [
+     # -- Libraries
+    "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
     # -- Binaries
     "crab-data-event",
 ]
 default-members = [
     # -- Libraries
-    "libs/crab-common-utils", "libs/crab-types",
+    "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
     # -- Binaries
     "crab-data-event",
 ]
@@ -17,7 +18,7 @@ resolver = "2"
 # CrabTapestry Ecosystem
 crab-common-utils = { path = "libs/crab-common-utils", version = "0.1.0" }
 crab-types = { path = "libs/crab-types", version = "0.1.0" }
-
+crab-infras = { path = "libs/crab-infras", version = "0.1.0" }
 
 # Async
 tokio = { version = "1.44.2", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
