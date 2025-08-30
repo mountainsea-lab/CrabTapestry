@@ -1,10 +1,11 @@
 use crate::ingestion::types::PublicTradeEvent;
 use barter_data::barter_instrument::Side;
 use barter_data::subscription::trade::PublicTrade;
+use crab_common_utils::time_utils::milliseconds_to_offsetdatetime;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
-use trade_aggregation::{CandleComponent, CandleComponentUpdate, ModularCandle, TakerTrade, Trade};
+use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
 
 #[derive(Debug, Default, Clone)]
 pub struct TradeCandle {
@@ -150,11 +151,11 @@ pub struct BaseBar {
 /// convert TradeCandle to BaseBar
 impl From<TradeCandle> for BaseBar {
     fn from(c: TradeCandle) -> Self {
-        let begin_time =
-            OffsetDateTime::from_unix_timestamp(c.time_range.open_time).unwrap_or(OffsetDateTime::UNIX_EPOCH);
-        let end_time =
-            OffsetDateTime::from_unix_timestamp(c.time_range.close_time).unwrap_or(OffsetDateTime::UNIX_EPOCH);
-        let time_period = c.time_range.close_time - c.time_range.open_time;
+        let begin_time = milliseconds_to_offsetdatetime(c.time_range.open_time);
+
+        let end_time = milliseconds_to_offsetdatetime(c.time_range.close_time);
+
+        let time_period = M1.get() as i64;
 
         let close_price = c.close.value();
         let volume = c.volume.value();

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 # CrabTapestry Ecosystem
 crab-types = { workspace = true }
+crab-common-utils = { workspace = true }
 
 # Async
 tokio = { workspace = true }
@@ -21,9 +22,10 @@ ms-tracing = { workspace = true }
 
 # SerDe
 serde = { workspace = true }
+dashmap = "6.1.0"
 
 # Time
-time = { version = "0.3.41" ,features = ["serde"]}
+time = {workspace = true}
 
 # Cryto
 trade_aggregation = "13.0.1"
