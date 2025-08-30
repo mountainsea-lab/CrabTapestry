@@ -7,6 +7,7 @@ edition = "2024"
 # CrabTapestry Ecosystem
 crab-types = { workspace = true }
 crab-common-utils = { workspace = true }
+crab-infras = { workspace = true }
 
 # Async
 tokio = { workspace = true }
