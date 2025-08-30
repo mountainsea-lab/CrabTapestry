@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crab_data_event::ingestion::Ingestor;
+use crab_data_event::ingestion::barter_ingestor::BarterIngestor;
 use crossbeam::channel::unbounded;
 use ms_tracing::tracing_utils::internal::info;
-use crab_data_event::ingestion::barter_ingestor::BarterIngestor;
-use crab_data_event::ingestion::Ingestor;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
@@ -29,6 +29,4 @@ async fn main() {
             }
         });
     }
-
 }
-

@@ -1,2 +1,2 @@
-mod types;
 mod trade_aggregator;
+mod types;

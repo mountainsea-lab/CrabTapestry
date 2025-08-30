@@ -1,2 +1,2 @@
-pub mod ingestion;
 pub mod aggregator;
+pub mod ingestion;
