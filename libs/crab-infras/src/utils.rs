@@ -1,5 +1,5 @@
-use bb8_redis::{RedisConnectionManager, bb8};
 use anyhow::Result;
+use bb8_redis::{RedisConnectionManager, bb8};
 
 pub async fn create_redis_pool(redis_url: &str) -> Result<bb8::Pool<RedisConnectionManager>> {
     let manager = RedisConnectionManager::new(redis_url)?;
