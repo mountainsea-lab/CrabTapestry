@@ -196,7 +196,7 @@ impl RedisCache {
     //
     //     Ok(connection)
     // }
-    async fn get_subscription_connection(&self) -> Result<MultiplexedConnection> {
+    pub(crate) async fn get_subscription_connection(&self) -> Result<MultiplexedConnection> {
         let client = Client::open(self.redis_url.as_str()).context("Failed to create Redis client")?;
 
         let connection = client
@@ -207,7 +207,7 @@ impl RedisCache {
         Ok(connection)
     }
 
-    /// 订阅单个频道
+    /// 订阅单个频道--具体指定一个
     pub async fn subscribe(&self, channel: &str) -> Result<()> {
         let mut conn = self.get_subscription_connection().await?;
 
@@ -218,6 +218,23 @@ impl RedisCache {
             .context("Failed to subscribe to channel")?;
 
         info!("Subscribed to channel: {}", channel);
+        Ok(())
+    }
+
+    /// 批量订阅多个频道--具体指定多个
+    pub async fn subscribe_multiple(&self, channels: Vec<&str>) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        // 遍历频道列表，订阅每个频道
+        for channel in &channels {
+            cmd("SUBSCRIBE")
+                .arg(channel)
+                .exec_async(&mut conn)
+                .await
+                .context(format!("Failed to subscribe to channel: {}", channel))?;
+        }
+
+        info!("Subscribed to channels: {:?}", &channels);
         Ok(())
     }
 
@@ -235,7 +252,23 @@ impl RedisCache {
         Ok(())
     }
 
-    /// 使用模式订阅多个频道
+    /// 取消订阅多个频道
+    pub async fn unsubscribe_multiple(&self, channels: Vec<&str>) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        for channel in &channels {
+            cmd("UNSUBSCRIBE")
+                .arg(channel)
+                .exec_async(&mut conn)
+                .await
+                .context("Failed to unsubscribe from channel")?;
+        }
+
+        info!("Unsubscribed from channel: {:?}", &channels);
+        Ok(())
+    }
+
+    /// 使用模式订阅多个频道--模式规律性强
     pub async fn psubscribe(&self, pattern: &str) -> Result<()> {
         let mut conn = self.get_subscription_connection().await?;
 
@@ -246,6 +279,22 @@ impl RedisCache {
             .context("Failed to pattern subscribe")?;
 
         info!("Pattern subscribed to: {}", pattern);
+        Ok(())
+    }
+
+    /// 批量订阅多个频道---模式规律性弱
+    pub async fn subscribe_patterns(&self, patterns: Vec<&str>) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        for pattern in &patterns {
+            cmd("PSUBSCRIBE")
+                .arg(pattern)
+                .exec_async(&mut conn)
+                .await
+                .context(format!("Failed to subscribe to pattern: {}", pattern))?;
+        }
+
+        info!("Subscribed to patterns: {:?}", &patterns);
         Ok(())
     }
 
@@ -260,6 +309,22 @@ impl RedisCache {
             .context("Failed to pattern unsubscribe")?;
 
         info!("Pattern unsubscribed from: {}", pattern);
+        Ok(())
+    }
+
+    /// 批量取消模式订阅
+    pub async fn punsubscribe_patterns(&self, patterns: Vec<&str>) -> Result<()> {
+        let mut conn = self.get_subscription_connection().await?;
+
+        for pattern in &patterns {
+            cmd("PUNSUBSCRIBE")
+                .arg(pattern)
+                .exec_async(&mut conn)
+                .await
+                .context("Failed to pattern unsubscribe")?;
+        }
+
+        info!("Patterns unsubscribed from: {:?}", &patterns);
         Ok(())
     }
 }
