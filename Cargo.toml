@@ -25,6 +25,7 @@ tokio = { version = "1.44.2", default-features = false, features = ["macros", "n
 futures-util = "0.3.31"
 crossbeam = "0.8.4"
 futures = "0.3.31"
+once_cell = "1.21.3"
 
 # barter-data
 barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-data" }
