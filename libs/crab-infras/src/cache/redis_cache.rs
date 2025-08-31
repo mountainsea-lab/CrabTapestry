@@ -183,10 +183,13 @@ impl RedisCache {
     }
 
     // 发布消息到指定频道
-    pub async fn publish_message(&self, channel: &str, message: &str) -> Result<()> {
+    pub async fn publish_message(&self, channel: Arc<String>, message: &str) -> Result<()> {
         let mut conn = self.pool.get().await.context("Failed to get Redis connection")?;
-        let _: () = conn.publish(channel, message).await.context("Failed to publish message")?;
-        debug!(channel, "Message published to Redis channel.");
+        let _: () = conn
+            .publish(channel.clone(), message)
+            .await
+            .context("Failed to publish message")?;
+        info!("publish message to channel: {}", channel);
         Ok(())
     }
 
@@ -227,7 +230,7 @@ impl RedisCache {
     }
 
     // 批量订阅多个频道并返回 pubsub 供业务层处理
-    pub async fn subscribe_multiple1(&self, channels: Vec<Arc<String>>) -> Result<Arc<RwLock<PubSub>>> {
+    pub async fn subscribe_multiple(&self, channels: Vec<Arc<String>>) -> Result<Arc<RwLock<PubSub>>> {
         let pubsub = self.init_pubsub().await?;
 
         // 克隆 pubsub 以便在多个异步任务中共享
@@ -262,7 +265,7 @@ impl RedisCache {
     }
 
     // 取消订阅单个频道
-    pub async fn unsubscribe(&self, channel: String) -> Result<()> {
+    pub async fn unsubscribe(&self, channel: Arc<String>) -> Result<()> {
         let pubsub = self.init_pubsub().await?;
 
         pubsub
@@ -277,7 +280,7 @@ impl RedisCache {
     }
 
     // 取消订阅多个频道
-    pub async fn unsubscribe_multiple(&self, channels: Vec<String>) -> Result<()> {
+    pub async fn unsubscribe_multiple(&self, channels: Vec<Arc<String>>) -> Result<()> {
         let pubsub = self.init_pubsub().await?;
 
         // 使用并发取消订阅

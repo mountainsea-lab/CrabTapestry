@@ -1,7 +1,7 @@
 use crab_data_event::aggregator::trade_aggregator::TradeAggregatorPool;
-use crab_data_event::aggregator::types::BaseBar;
 use crab_data_event::ingestion::Ingestor;
 use crab_data_event::ingestion::barter_ingestor::BarterIngestor;
+use crab_infras::cache::BaseBar;
 use crossbeam::channel::unbounded;
 use ms_tracing::tracing_utils::internal::info;
 use std::sync::Arc;
@@ -27,9 +27,12 @@ async fn main() {
     // 启动 worker 池
     trade_aggregator_pool.start_workers(4, Arc::new(receiver), output_tx);
 
+    // 创建消息发布器
+    // let bar_puber = RedisPubSubHelper::new_puber()
     // 模拟接收处理完成后的 Bar 输出
     tokio::spawn(async move {
         while let Some(bar) = output_rx.recv().await {
+            // todo  发布最新bar消息
             info!("Generated BaseBar: {:?}", bar);
         }
     });

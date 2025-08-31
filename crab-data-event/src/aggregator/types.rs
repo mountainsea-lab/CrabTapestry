@@ -2,8 +2,8 @@ use crate::ingestion::types::PublicTradeEvent;
 use barter_data::barter_instrument::Side;
 use barter_data::subscription::trade::PublicTrade;
 use crab_common_utils::time_utils::milliseconds_to_offsetdatetime;
+use crab_infras::cache::BaseBar;
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
 use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
 
@@ -123,29 +123,6 @@ impl From<&PublicTradeEvent> for Trade {
             },
         }
     }
-}
-
-/// BaseBar 结构体 - 对应 ta4r 的 BaseBar 类
-/// BaseBar struct
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BaseBar {
-    /// 时间周期（例如 1 天、15 分钟等）
-    pub time_period: i64,
-    /// Bar 周期的开始时间（UTC, ISO8601 字符串）
-    pub begin_time: OffsetDateTime,
-    /// Bar 周期的结束时间（UTC, ISO8601 字符串）
-    pub end_time: OffsetDateTime,
-    /// OHLC
-    pub open_price: f64,
-    pub high_price: f64,
-    pub low_price: f64,
-    pub close_price: f64,
-    /// 总交易量
-    pub volume: f64,
-    /// 总交易金额
-    pub amount: f64,
-    /// 交易次数
-    pub trades: u64,
 }
 
 /// convert TradeCandle to BaseBar
