@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use crate::utils::create_redis_pool;
 use anyhow::{Context, Result};
+use bb8_redis::redis::aio::PubSub;
 use bb8_redis::{
     RedisConnectionManager, bb8,
-    redis::{AsyncCommands, Connection, Client, cmd},
+    redis::{AsyncCommands, Client, Connection, cmd},
 };
-use bb8_redis::redis::aio::PubSub;
 use futures::future;
 use ms_tracing::tracing_utils::internal::{debug, info, warn};
 use serde::{Serialize, de::DeserializeOwned};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
@@ -195,13 +195,10 @@ impl RedisCache {
     pub(crate) async fn get_subscription_connection(&self) -> Result<Connection> {
         let client = Client::open(self.redis_url.as_str()).context("Failed to create Redis client")?;
 
-        let connection = client
-            .get_connection()
-            .context("Failed to create subscription connection")?;
+        let connection = client.get_connection().context("Failed to create subscription connection")?;
 
         Ok(connection)
     }
-
 
     /// 创建独占PubSub, 绕过 bb8 管理
     async fn init_pubsub(&self) -> Result<Arc<RwLock<PubSub>>> {
@@ -215,7 +212,10 @@ impl RedisCache {
         let pubsub = self.init_pubsub().await?;
 
         // 获取写锁
-        pubsub.write().await.subscribe(&channel)
+        pubsub
+            .write()
+            .await
+            .subscribe(&channel)
             .await
             .context("Failed to subscribe to channel")?;
 
@@ -232,17 +232,22 @@ impl RedisCache {
 
         // 克隆 pubsub 以便在多个异步任务中共享
         let pubsub_write = pubsub.clone();
-        let subscribe_futures: Vec<_> = channels.clone().into_iter().map(|channel| {
-            let pubsub_write = pubsub_write.clone(); // 只需要克隆一次 pubsub
+        let subscribe_futures: Vec<_> = channels
+            .clone()
+            .into_iter()
+            .map(|channel| {
+                let pubsub_write = pubsub_write.clone(); // 只需要克隆一次 pubsub
 
-            // 使用 `async move` 将 `channel` 和 `pubsub_write` 移入闭包
-            async move {
-                let mut pubsub_write = pubsub_write.write().await; // 锁住并订阅
-                pubsub_write.subscribe(channel.as_str())
-                    .await
-                    .context(format!("Failed to subscribe to channel: {}", channel))
-            }
-        }).collect();
+                // 使用 `async move` 将 `channel` 和 `pubsub_write` 移入闭包
+                async move {
+                    let mut pubsub_write = pubsub_write.write().await; // 锁住并订阅
+                    pubsub_write
+                        .subscribe(channel.as_str())
+                        .await
+                        .context(format!("Failed to subscribe to channel: {}", channel))
+                }
+            })
+            .collect();
 
         // 等待所有订阅操作并返回结果
         let results = future::join_all(subscribe_futures).await;
@@ -260,7 +265,10 @@ impl RedisCache {
     pub async fn unsubscribe(&self, channel: String) -> Result<()> {
         let pubsub = self.init_pubsub().await?;
 
-        pubsub.write().await.unsubscribe(&channel)
+        pubsub
+            .write()
+            .await
+            .unsubscribe(&channel)
             .await
             .context("Failed to unsubscribe from channel")?;
 
@@ -273,17 +281,22 @@ impl RedisCache {
         let pubsub = self.init_pubsub().await?;
 
         // 使用并发取消订阅
-        let unsubscribe_futures: Vec<_> = channels.clone().into_iter().map(|channel| {
-            let pubsub = pubsub.clone();  // 克隆 pubsub 用于每个异步任务
+        let unsubscribe_futures: Vec<_> = channels
+            .clone()
+            .into_iter()
+            .map(|channel| {
+                let pubsub = pubsub.clone(); // 克隆 pubsub 用于每个异步任务
 
-            // 使用 `async move` 将 `channel` 和 `pubsub` 移入闭包
-            async move {
-                let mut pubsub = pubsub.write().await; // 获取写锁
-                pubsub.unsubscribe(&channel)
-                    .await
-                    .context(format!("Failed to unsubscribe from channel: {}", channel))
-            }
-        }).collect();
+                // 使用 `async move` 将 `channel` 和 `pubsub` 移入闭包
+                async move {
+                    let mut pubsub = pubsub.write().await; // 获取写锁
+                    pubsub
+                        .unsubscribe(&channel)
+                        .await
+                        .context(format!("Failed to unsubscribe from channel: {}", channel))
+                }
+            })
+            .collect();
 
         // 等待所有取消订阅操作并返回结果
         let results = future::join_all(unsubscribe_futures).await;
@@ -296,7 +309,6 @@ impl RedisCache {
         info!("Successfully unsubscribed from channels: {:?}", channels);
         Ok(())
     }
-
 
     // 使用模式订阅多个频道
     // pub async fn psubscribe(&self, pattern: Vec<String>) -> Result<mpsc::Receiver<String>> {

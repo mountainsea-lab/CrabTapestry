@@ -9,7 +9,6 @@ pub struct RedisMessage {
     pub payload: String, // 消息内容
 }
 
-
 //===============function==============
 // 简化的消息解析 - 只关注实际的消息内容
 // pub fn parse_redis_message(value: &Msg) -> anyhow::Result<RedisMessage, anyhow::Error> {
