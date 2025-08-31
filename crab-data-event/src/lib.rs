@@ -1,3 +1,3 @@
 pub mod aggregator;
-mod global;
+pub mod global;
 pub mod ingestion;

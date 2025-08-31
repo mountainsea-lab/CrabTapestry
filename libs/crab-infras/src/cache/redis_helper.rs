@@ -13,7 +13,7 @@ use tokio::time::sleep;
 
 // 业务层的订阅/发布辅助操作
 pub struct RedisPubSubHelper {
-    redis_cache: RedisCache,
+    redis_cache: Arc<RedisCache>,
     sender: Option<broadcast::Sender<RedisMessage>>,
 }
 
@@ -35,11 +35,11 @@ impl RedisPubSubHelper {
         self.redis_cache.unsubscribe_multiple(pattern).await
     }
 
-    pub fn new_suber(redis_cache: RedisCache) -> Self {
+    pub fn new_suber(redis_cache: Arc<RedisCache>) -> Self {
         let (sender, _) = broadcast::channel(100); // 设置广播通道
         Self { redis_cache, sender: Some(sender) }
     }
-    pub fn new_puber(redis_cache: RedisCache) -> Self {
+    pub fn new_puber(redis_cache: Arc<RedisCache>) -> Self {
         Self { redis_cache, sender: None } // 只初始化 redis_cache
     }
 
@@ -141,16 +141,15 @@ impl RedisPubSubHelper {
 mod tests {
     use super::*;
     use crate::cache::BaseBar;
-    use serde::{Deserialize, Serialize};
     use std::sync::Arc;
-    use time::{OffsetDateTime, serde::rfc3339};
+    use time::OffsetDateTime;
 
     #[tokio::test]
     async fn test_publish_message() {
         ms_tracing::setup_tracing();
 
         // 创建 RedisCache 实例
-        let redis_cache = RedisCache::new("redis://localhost:6379").await.unwrap();
+        let redis_cache = Arc::new(RedisCache::new("redis://localhost:6379").await.unwrap());
         let pub_helper = RedisPubSubHelper::new_puber(redis_cache);
 
         // 创建一个频道
@@ -209,7 +208,7 @@ mod tests {
         // 创建多个频道
         let channels = vec!["test_channel".to_string()];
 
-        let redis_cache_sub = RedisCache::new("redis://localhost:6379").await.unwrap();
+        let redis_cache_sub = Arc::new(RedisCache::new("redis://localhost:6379").await.unwrap());
         let sub_helper = Arc::new(RedisPubSubHelper::new_suber(redis_cache_sub));
 
         // 启动后台任务来监听频道消息
