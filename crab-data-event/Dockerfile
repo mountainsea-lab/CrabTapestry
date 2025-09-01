@@ -46,6 +46,6 @@ WORKDIR /app
 COPY --from=builder /app/target/release/crab-data-event /usr/local/bin/
 
   # 拷贝配置文件（如存在）
-# COPY config/ config/
+COPY config/ config/
 
 ENTRYPOINT ["/usr/local/bin/crab-data-event"]
