@@ -5,9 +5,7 @@ use warp::{self, Filter};
 
 pub mod handlers;
 
-pub fn routes(
-    state: AppState,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     let api = warp::path("api");
 
     let ping = api.and(warp::path("ping")).map(handlers::ping);
@@ -43,8 +41,7 @@ pub fn routes(
         .or(health)
 }
 
-fn with_state(
-    state: AppState,
-) -> impl Filter<Extract = (AppState,), Error = std::convert::Infallible> + Clone {
+#[allow(dead_code)]
+fn with_state(state: AppState) -> impl Filter<Extract = (AppState,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || state.clone())
 }

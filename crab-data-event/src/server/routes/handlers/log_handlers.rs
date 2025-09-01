@@ -21,14 +21,8 @@ pub async fn query_logs(params: LogQuery, cache: LogCache) -> Result<impl Reply,
         .iter()
         .cloned()
         .filter(|entry| {
-            params
-                .level
-                .as_ref()
-                .map_or(true, |lvl| entry.level.eq_ignore_ascii_case(lvl))
-                && params
-                .keyword
-                .as_ref()
-                .map_or(true, |kw| entry.message.contains(kw))
+            params.level.as_ref().map_or(true, |lvl| entry.level.eq_ignore_ascii_case(lvl))
+                && params.keyword.as_ref().map_or(true, |kw| entry.message.contains(kw))
         })
         .collect();
 
@@ -39,24 +33,17 @@ pub async fn query_logs(params: LogQuery, cache: LogCache) -> Result<impl Reply,
     let start = (page - 1) * page_size;
     let _end = start + page_size;
 
-    let result = filtered
-        .into_iter()
-        .skip(start)
-        .take(page_size)
-        .collect::<Vec<_>>();
+    let result = filtered.into_iter().skip(start).take(page_size).collect::<Vec<_>>();
 
     Ok(warp::reply::json(&result))
 }
 
 pub fn with_tx(
     tx: broadcast::Sender<LogEntry>,
-) -> impl Filter<Extract = (broadcast::Sender<LogEntry>,), Error = std::convert::Infallible> + Clone
-{
+) -> impl Filter<Extract = (broadcast::Sender<LogEntry>,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || tx.clone())
 }
 
-pub fn with_cache(
-    cache: LogCache,
-) -> impl Filter<Extract = (LogCache,), Error = std::convert::Infallible> + Clone {
+pub fn with_cache(cache: LogCache) -> impl Filter<Extract = (LogCache,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || cache.clone())
 }

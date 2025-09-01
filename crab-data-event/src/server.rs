@@ -1,16 +1,18 @@
-mod routes;
+mod data_event_flow;
+#[allow(dead_code)]
 mod response;
+mod routes;
 
+use crate::global::init_global_services;
+use crate::server::data_event_flow::start_data_event_flow;
+use ms_tracing::tracing_utils::internal::info;
+use ms_tracing::{LogCache, LogEntry, setup_tracing_with_broadcast};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use ms_tracing::{setup_tracing_with_broadcast, LogCache, LogEntry};
-use ms_tracing::tracing_utils::internal::info;
 use tokio::sync::broadcast;
-use crate::global::init_global_services;
 use warp::Filter;
 
 const APPLICATION_NAME: &str = "crab-data-event";
-
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,21 +30,24 @@ pub async fn start() {
     // 初始化 tracing 日志系统
     setup_tracing_with_broadcast(tx.clone(), cache.clone());
 
-
     info!("Starting crab-data-event server...");
 
     // init global comments domain
-    init_global_services().await;
+    let _ = init_global_services().await;
 
+    // ========== 启动数据事件流（订阅 -> 聚合 -> 发布） ==========
+    tokio::spawn(async move {
+        start_data_event_flow().await;
+    });
 
-
-    let bind_address: SocketAddr = "127.0.0.1:10099".parse().unwrap();
+    let bind_address: SocketAddr = "127.0.0.1:10086".parse().unwrap();
 
     // init app
-    let _app_state = AppState {
-        tx: tx.clone(),
-        cache: cache.clone(),
-    };
+    let app_state = AppState { tx: tx.clone(), cache: cache.clone() };
+
+    let routes = routes::routes(app_state).with(warp::log(APPLICATION_NAME));
+
+    warp::serve(routes).run(bind_address).await;
 
     info!("You can access the server at {}", bind_address);
 }

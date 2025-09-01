@@ -1,4 +1,4 @@
 pub mod aggregator;
 pub mod global;
 pub mod ingestion;
-mod server;
+pub mod server;
