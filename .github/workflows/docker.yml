@@ -21,7 +21,7 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v4
         with:
-          context: ./${{ matrix.service }}
+          context: .
           file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: |
