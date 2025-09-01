@@ -36,3 +36,4 @@ time = {workspace = true}
 trade_aggregation = "13.0.1"
 # error
 anyhow = { workspace = true}
+async-stream = "0.3.6"
