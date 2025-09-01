@@ -15,6 +15,8 @@ default-members = [
 resolver = "2"
 
 [workspace.dependencies]
+# Web
+warp = "0.4.2"
 # CrabTapestry Ecosystem
 crab-common-utils = { path = "libs/crab-common-utils", version = "0.1.0" }
 crab-types = { path = "libs/crab-types", version = "0.1.0" }

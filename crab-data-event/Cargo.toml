@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Web
+warp =  { workspace = true }
 # CrabTapestry Ecosystem
 crab-types = { workspace = true }
 crab-common-utils = { workspace = true }
