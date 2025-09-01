@@ -11,7 +11,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 # --- 第三阶段：构建依赖缓存 + 构建项目 ---
 FROM chef AS builder
 WORKDIR /app
-COPY .cargo/config.toml /usr/local/cargo/config.toml
 COPY --from=planner /app/crab-data-event/recipe.json recipe.json
 
 # 添加 SSH known_hosts（如果有私有依赖）
