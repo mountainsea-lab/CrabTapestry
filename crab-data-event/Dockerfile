@@ -1,51 +1,45 @@
-# 第一阶段：准备 cargo-chef 镜像
+# --- 第一阶段：准备 cargo-chef 镜像 ---
 FROM lukemathwalker/cargo-chef:latest-rust-1 as chef
 WORKDIR /app
 
-  # 第二阶段：生成依赖构建计划
-FROM chef as planner
+# --- 第二阶段：生成依赖构建计划 ---
+FROM chef AS planner
 COPY . .
+WORKDIR /app/crab-data-event
 RUN cargo chef prepare --recipe-path recipe.json
 
-  # 第三阶段：构建依赖缓存 + 使用 SSH 拉私有依赖
-FROM chef as builder
+# --- 第三阶段：构建依赖缓存 + 构建项目 ---
+FROM chef AS builder
 WORKDIR /app
-
-  # ✅ 添加 cargo 配置，启用 git-fetch-with-cli，放在最前面
 COPY .cargo/config.toml /usr/local/cargo/config.toml
+COPY --from=planner /app/crab-data-event/recipe.json recipe.json
 
-  # 拷贝构建计划
-COPY --from=planner /app/recipe.json recipe.json
+# 添加 SSH known_hosts（如果有私有依赖）
+RUN mkdir -p /root/.ssh && ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-  # 添加 SSH known_hosts，避免 Host key verification 失败
-RUN mkdir -p /root/.ssh && \
-ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-  # 允许容器访问 SSH agent (需要用 BuildKit 并带 --ssh)
+# 构建依赖缓存
 RUN --mount=type=ssh cargo chef cook --release --recipe-path recipe.json
 
-  # 拷贝项目源代码
+# 拷贝源码并构建二进制
 COPY . .
-
-  # 构建项目（同样使用 SSH agent）
+WORKDIR /app/crab-data-event
 RUN --mount=type=ssh cargo build --release
 
-  # 第四阶段：精简运行镜像
-FROM debian:bookworm-slim as runtime
+# --- 第四阶段：精简运行镜像 ---
+FROM debian:bookworm-slim AS runtime
 
-  # 安装运行时依赖库
+# 安装运行时依赖库
 RUN apt-get update && apt-get install -y \
-ca-certificates \
-openssl \
-libssl3 \
-&& rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    libssl3 \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-  # 拷贝 release 构建产物
-COPY --from=builder /app/target/release/crab-data-event /usr/local/bin/
+# 拷贝 release 二进制
+COPY --from=builder /app/crab-data-event/target/release/crab-data-event /usr/local/bin/
 
-  # 拷贝配置文件（如存在）
-COPY config/ /app/config/
+# ✅ 不再拷贝 config 文件，运行时通过挂载或环境变量注入
+# COPY config/ /app/config/
 
 ENTRYPOINT ["/usr/local/bin/crab-data-event"]
