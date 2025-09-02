@@ -12,7 +12,7 @@ WORKDIR /app
 FROM chef AS planner
 
 # 复制 workspace 根配置（相对于 build context）
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 COPY crab-data-event/Cargo.toml ./crab-data-event/
 COPY libs/*/Cargo.toml ./libs/
 
