@@ -9,10 +9,10 @@ WORKDIR /app
 # ================================
 FROM chef AS planner
 
-# 复制 workspace 根配置
-COPY ./Cargo.toml ./Cargo.lock ./
-COPY ./libs ./libs
-COPY ./crab-data-event/Cargo.toml ./crab-data-event/
+# 复制 workspace 根配置（注意路径必须从 context 根开始，而不是 Dockerfile 相对路径）
+COPY Cargo.toml Cargo.lock ./
+COPY libs ./libs
+COPY crab-data-event/Cargo.toml ./crab-data-event/
 
 WORKDIR /app/crab-data-event
 RUN cargo chef prepare --recipe-path recipe.json
