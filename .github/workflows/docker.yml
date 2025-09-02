@@ -43,6 +43,8 @@ jobs:
           context: .
           file: ./${{ matrix.service }}/Dockerfile
           push: true
+          build-args: |
+            SERVICE=${{ matrix.service }}
           tags: |
             mountainsealab/${{ matrix.service }}:${{ github.ref_name }}
             mountainsealab/${{ matrix.service }}:latest
