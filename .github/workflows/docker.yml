@@ -12,9 +12,10 @@ jobs:
       matrix:
         service:
           - crab-data-event
-          # - crab-strategy-server  # 未来可扩展
+          # - future-service  # 未来可扩展
+
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           submodules: recursive
