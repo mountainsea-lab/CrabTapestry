@@ -10,30 +10,36 @@ WORKDIR /app
 # 第二阶段：生成依赖构建计划 (planner)
 # ================================
 FROM chef AS planner
-WORKDIR /app
 
 ARG SERVICE
 ENV SERVICE_NAME=$SERVICE
 
-# 拷贝 workspace 根配置Cargo.lock
+# 复制 workspace 根目录Cargo.lock
 COPY Cargo.toml  ./
-COPY libs/*/Cargo.toml ./libs/
 
-# 拷贝目标服务模块 Cargo.toml
-COPY ${SERVICE}/Cargo.toml ./${SERVICE}/Cargo.toml
+# 复制所有 libs crate
+COPY libs ./libs
 
-# cargo-chef prepare: 必须在服务模块目录中执行，并使用相对路径生成 recipe.json
+# 复制服务模块目录
+COPY ${SERVICE} ./${SERVICE}
+
 WORKDIR /app/${SERVICE}
+
+# 检查变量是否传入
+RUN if [ -z "$SERVICE_NAME" ]; then echo "SERVICE_NAME is empty" && exit 1; fi
+
+# 生成 cargo-chef recipe.json
 RUN cargo chef prepare --recipe-path /app/recipe.json --bin $SERVICE_NAME
 
 # ================================
 # 第三阶段：构建依赖缓存 + 构建项目 (builder)
 # ================================
 FROM chef AS builder
-WORKDIR /app
 
 ARG SERVICE
 ENV SERVICE_NAME=$SERVICE
+
+WORKDIR /app
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -42,35 +48,35 @@ RUN apt-get update && apt-get install -y \
     build-essential \
   && rm -rf /var/lib/apt/lists/*
 
+# 拷贝 workspace 代码
+COPY Cargo.toml Cargo.lock ./
+COPY libs ./libs
+COPY ${SERVICE} ./${SERVICE}
+
 # 拷贝 recipe.json
-COPY --from=planner /app/recipe.json recipe.json
+COPY --from=planner /app/recipe.json /app/recipe.json
 
 # 构建依赖缓存
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path /app/recipe.json
 
-# 拷贝源码
-COPY . .
-
-# 构建目标服务
+# 构建服务二进制
 WORKDIR /app/${SERVICE}
-RUN cargo build --release -p $SERVICE_NAME
+RUN cargo build --release --bin $SERVICE_NAME
 
 # ================================
 # 第四阶段：精简运行镜像
 # ================================
 FROM debian:bookworm-slim AS runtime
+
 WORKDIR /app
 
-# 安装运行时依赖
+# 运行时依赖
 RUN apt-get update && apt-get install -y \
     libssl3 \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-ARG SERVICE
-ENV SERVICE_NAME=$SERVICE
-
 # 拷贝 release 二进制
-COPY --from=builder /app/${SERVICE}/target/release/$SERVICE_NAME /usr/local/bin/
+COPY --from=builder /app/${SERVICE}/target/release/${SERVICE_NAME} /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/${SERVICE_NAME}"]
