@@ -14,14 +14,6 @@ FROM chef AS planner
 ARG SERVICE
 ENV SERVICE_NAME=$SERVICE
 
-# 复制 workspace 根目录Cargo.lock
-COPY Cargo.toml  ./
-
-# 复制所有 libs crate
-COPY libs ./libs
-
-# 复制服务模块目录
-COPY ${SERVICE} ./${SERVICE}
 
 WORKDIR /app/${SERVICE}
 
