@@ -1,28 +1,44 @@
+version: "3.9"
+
+x-defaults: &defaults
+  env_file:
+    - .env
+  environment:
+    # 默认连接本地 Redis
+    REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
 services:
+  # ===============================
+  # Indexer / crab-data-event 服务
+  # ===============================
   indexer:
-    image: crab-data-event
+    <<: *defaults
     build:
       context: ./crab-data-event
       dockerfile: Dockerfile
-    env_file:
-      - .env
-    volumes:
-      - .env:/app/.env
-    environment:
-      - REDIS_URL=redis://redis:6379
+      args:
+        # 是否使用本地 Redis，默认为 true
+        USE_LOCAL_REDIS: ${USE_LOCAL_REDIS:-true}
     depends_on:
       redis:
         condition: service_healthy
+    volumes:
+      - .env:/app/.env
+    ports:
+      - "8080:8080"  # 如果 indexer 提供 HTTP 服务
 
-
+  # ===============================
+  # 可选本地 Redis 服务
+  # ===============================
   redis:
     build:
       context: ./vendor/redis
       dockerfile: Dockerfile
-    ports:
-      - 6379:6379
+    container_name: local-redis
     volumes:
       - redis-data:/data
+    ports:
+      - "6379:6379"
     deploy:
       resources:
         limits:
@@ -38,7 +54,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
+    profiles:
+      - local-redis  # 本地 Redis 可通过 profile 控制是否启动
 
 volumes:
   redis-data:

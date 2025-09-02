@@ -1,0 +1,4 @@
+{"timestamp":"2025-09-02T10:07:03.291790300+00:00","level":"INFO","target":"crab_data_event::server","message":"Starting crab-data-event server..."}
+{"timestamp":"2025-09-02T10:07:03.707666600+00:00","level":"INFO","target":"crab_infras::cache::redis_cache","message":"Connected to Redis KV store at redis://113.44.153.48:6379"}
+{"timestamp":"2025-09-02T10:07:03.721868800+00:00","level":"INFO","target":"barter_data::streams::consumer","message":"MarketStream with auto reconnect initialising"}
+{"timestamp":"2025-09-02T10:07:07.173447700+00:00","level":"INFO","target":"barter_data::streams::reconnect::stream","message":"successfully initialised Stream"}
