@@ -63,7 +63,6 @@ RUN apt-get update && apt-get install -y \
 
 # 拷贝编译好的二进制（注意：COPY 不会展开变量，所以用构建时 ARG）
 ARG SERVICE_NAME
-COPY --from=builder /app/${SERVICE_NAME}/target/release/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
-
+COPY --from=builder /app/target/release/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 # 默认入口
 ENTRYPOINT ["/usr/local/bin/crab-data-event"]
