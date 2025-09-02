@@ -38,3 +38,6 @@ trade_aggregation = "13.0.1"
 anyhow = { workspace = true}
 async-stream = "0.3.6"
 
+[[bin]]
+name = "crab-data-event"
+path = "src/main.rs"
