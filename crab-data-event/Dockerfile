@@ -10,12 +10,10 @@ WORKDIR /app
 # 第二阶段：生成依赖构建计划 (planner)
 # ================================
 FROM chef AS planner
-
-
-# 拷贝 workspace 根配置
-COPY Cargo.toml Cargo.lock ./
-
 WORKDIR /app
+
+# 拷贝 workspace 根配置Cargo.lock
+COPY Cargo.toml  ./
 COPY libs/*/Cargo.toml ./libs/
 
 # 拷贝目标服务模块 Cargo.toml
