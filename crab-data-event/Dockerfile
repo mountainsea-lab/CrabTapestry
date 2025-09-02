@@ -9,10 +9,10 @@ WORKDIR /app
 # ================================
 FROM chef AS planner
 
-# workspace 根文件
-COPY Cargo.toml Cargo.lock ./
-COPY libs/* ./libs/
-COPY crab-data-event/Cargo.toml ./crab-data-event/
+# 复制 workspace 根配置
+COPY ./Cargo.toml ./Cargo.lock ./
+COPY ./libs ./libs
+COPY ./crab-data-event/Cargo.toml ./crab-data-event/
 
 WORKDIR /app/crab-data-event
 RUN cargo chef prepare --recipe-path recipe.json
