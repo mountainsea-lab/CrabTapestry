@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.4
+
 # ================================
 # 第一阶段：准备 cargo-chef 镜像
 # ================================
@@ -9,21 +11,24 @@ WORKDIR /app
 # ================================
 FROM chef AS planner
 
-# 复制 workspace 根配置（注意路径必须从 context 根开始，而不是 Dockerfile 相对路径）
+# workspace 根的依赖信息
 COPY Cargo.toml Cargo.lock ./
-COPY libs ./libs
+
+# 复制 libs 的 Cargo.toml
+COPY libs/*/Cargo.toml ./libs/
+
+# 复制目标服务模块的 Cargo.toml
 COPY crab-data-event/Cargo.toml ./crab-data-event/
 
+# 进入服务模块目录生成 recipe
 WORKDIR /app/crab-data-event
-RUN cargo chef prepare --recipe-path recipe.json
+RUN cargo chef prepare --recipe-path crab-data-event/recipe.json -p crab-data-event
 
 # ================================
 # 第三阶段：构建依赖缓存 + 构建项目 (builder)
 # ================================
 FROM chef AS builder
 WORKDIR /app
-
-COPY --from=planner /app/crab-data-event/recipe.json recipe.json
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -32,11 +37,19 @@ RUN apt-get update && apt-get install -y \
     build-essential \
   && rm -rf /var/lib/apt/lists/*
 
+# 安装 cargo-chef
+RUN cargo install cargo-chef --locked
+
+# 拷贝 recipe
+COPY --from=planner /app/crab-data-event/recipe.json recipe.json
+
 # 构建依赖缓存
 RUN cargo chef cook --release --recipe-path recipe.json
 
-# 拷贝源码并构建 release binary
+# 拷贝源码
 COPY . .
+
+# 构建目标服务
 WORKDIR /app/crab-data-event
 RUN cargo build --release -p crab-data-event
 
@@ -44,16 +57,16 @@ RUN cargo build --release -p crab-data-event
 # 第四阶段：精简运行镜像
 # ================================
 FROM debian:bookworm-slim AS runtime
-
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libssl3 \
-  && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# 拷贝 release binary
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# 拷贝 release 二进制
 COPY --from=builder /app/crab-data-event/target/release/crab-data-event /usr/local/bin/
 
-# 配置文件通过挂载卷或环境变量注入
+# 运行时通过挂载卷或环境变量注入配置
 ENTRYPOINT ["/usr/local/bin/crab-data-event"]
