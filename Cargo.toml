@@ -3,13 +3,13 @@ members = [
      # -- Libraries
     "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
     # -- Binaries
-    "crab-data-event",
+    "crab-data-event", "crab-hmds",
 ]
 default-members = [
     # -- Libraries
     "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
     # -- Binaries
-    "crab-data-event",
+    "crab-data-event", "crab-hmds",
 ]
 
 resolver = "2"
