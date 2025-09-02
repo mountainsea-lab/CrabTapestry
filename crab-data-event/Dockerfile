@@ -40,8 +40,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
   && rm -rf /var/lib/apt/lists/*
 
-# 拷贝 workspace 代码
-COPY Cargo.toml Cargo.lock ./
+# 拷贝 workspace 代码 Cargo.lock
+COPY Cargo.toml  ./
 COPY libs ./libs
 COPY ${SERVICE} ./${SERVICE}
 
