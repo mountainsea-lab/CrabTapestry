@@ -10,16 +10,20 @@ WORKDIR /app
 # 第二阶段：生成依赖构建计划 (planner)
 # ================================
 FROM chef AS planner
+
+
+# 拷贝 workspace 根配置
+COPY Cargo.toml Cargo.lock ./
+
 WORKDIR /app
+COPY libs/*/Cargo.toml ./libs/
 
-# 复制整个 workspace 根结构，确保 workspace dependencies 可解析 Cargo.lock
-COPY Cargo.toml ./
-COPY libs ./libs
-COPY crab-data-event/Cargo.toml ./crab-data-event
+# 拷贝目标服务模块 Cargo.toml
+ARG SERVICE
+COPY ${SERVICE}/Cargo.toml ./${SERVICE}/Cargo.toml
 
-# 为目标服务生成 recipe.json
-# 注意：prepare 必须在 workspace 根执行，并使用 --bin 指定服务 binary
-RUN cargo chef prepare --recipe-path crab-data-event/recipe.json --bin crab-data-event
+# 生成 recipe.json（在 /app 根目录）
+RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE}
 
 # ================================
 # 第三阶段：构建依赖缓存 + 构建项目 (builder)
@@ -35,16 +39,17 @@ RUN apt-get update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 # 拷贝 recipe.json
-COPY --from=planner /app/crab-data-event/recipe.json crab-data-event/recipe.json
-
-# 拷贝源码（保持 workspace 结构完整）
-COPY . .
+COPY --from=planner /app/recipe.json recipe.json
 
 # 构建依赖缓存
-RUN cargo chef cook --release --recipe-path crab-data-event/recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# 拷贝源码
+COPY . .
 
 # 构建目标服务
-RUN cargo build --release -p crab-data-event
+ARG SERVICE
+RUN cargo build --release -p ${SERVICE}
 
 # ================================
 # 第四阶段：精简运行镜像
@@ -59,7 +64,7 @@ RUN apt-get update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 # 拷贝 release 二进制
-COPY --from=builder /app/crab-data-event/target/release/crab-data-event /usr/local/bin/
+ARG SERVICE
+COPY --from=builder /app/${SERVICE}/target/release/${SERVICE} /usr/local/bin/
 
-# 配置文件通过挂载卷或环境变量注入
-ENTRYPOINT ["/usr/local/bin/crab-data-event"]
+ENTRYPOINT ["/usr/local/bin/${SERVICE}"]
