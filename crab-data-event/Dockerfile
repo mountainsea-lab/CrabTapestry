@@ -16,8 +16,8 @@ ARG SERVICE
 ENV SERVICE_NAME=$SERVICE
 
 # 将整个 workspace 复制到镜像中
-# 注意：COPY 要在 build context 为 workspace 根目录下执行
-COPY Cargo.toml Cargo.lock ./
+# 注意：COPY 要在 build context 为 workspace 根目录下执行Cargo.lock
+COPY Cargo.toml  ./
 COPY libs ./libs
 COPY crab-data-event ./crab-data-event
 # 如果未来有其他服务，只要放在 workspace 根即可
