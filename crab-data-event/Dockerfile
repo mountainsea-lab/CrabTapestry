@@ -9,7 +9,7 @@ WORKDIR /app
 # ================================
 FROM chef AS planner
 
-# 只拷贝 workspace 根文件和各个 library crate 的 Cargo.toml
+# workspace 根文件
 COPY Cargo.toml Cargo.lock ./
 COPY libs/* ./libs/
 COPY crab-data-event/Cargo.toml ./crab-data-event/
@@ -23,10 +23,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 WORKDIR /app
 
-# 拷贝 recipe.json
 COPY --from=planner /app/crab-data-event/recipe.json recipe.json
 
-# 安装系统依赖，避免 Rust crate 编译失败
+# 安装系统依赖
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -36,11 +35,9 @@ RUN apt-get update && apt-get install -y \
 # 构建依赖缓存
 RUN cargo chef cook --release --recipe-path recipe.json
 
-# 拷贝完整源码并构建 release binary
+# 拷贝源码并构建 release binary
 COPY . .
 WORKDIR /app/crab-data-event
-
-# 可选：指定构建特定 binary
 RUN cargo build --release -p crab-data-event
 
 # ================================
@@ -48,7 +45,6 @@ RUN cargo build --release -p crab-data-event
 # ================================
 FROM debian:bookworm-slim AS runtime
 
-# 安装运行时依赖库
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
@@ -59,7 +55,5 @@ WORKDIR /app
 # 拷贝 release binary
 COPY --from=builder /app/crab-data-event/target/release/crab-data-event /usr/local/bin/
 
-# 配置文件通过挂载或环境变量注入，不必 COPY
-# COPY crab-data-event/config/ config/
-
+# 配置文件通过挂载卷或环境变量注入
 ENTRYPOINT ["/usr/local/bin/crab-data-event"]
