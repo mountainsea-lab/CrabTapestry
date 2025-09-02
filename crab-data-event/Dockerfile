@@ -12,8 +12,8 @@ WORKDIR /app
 FROM chef AS planner
 WORKDIR /app
 
-# 复制整个 workspace 根结构，确保 workspace dependencies 可解析
-COPY Cargo.toml Cargo.lock ./
+# 复制整个 workspace 根结构，确保 workspace dependencies 可解析 Cargo.lock
+COPY Cargo.toml ./
 COPY libs ./libs
 COPY crab-data-event/Cargo.toml ./crab-data-event
 
