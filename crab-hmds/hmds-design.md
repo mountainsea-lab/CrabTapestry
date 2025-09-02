@@ -193,3 +193,141 @@ Rust async pipeline + crossbeam channels
 异常重试机制
 
 数据版本和归档保证历史可追溯
+
+
+
+====数据采集层设计====
+数据采集层（Ingestor Layer） 设计开始，这是整个 HMDS（历史市场数据维护服务）的核心模块之一。我们要确保它能可靠、高效、可扩展地获取市场数据，为后续存储和处理提供标准化数据。
+
+1️⃣ 目标
+
+数据采集层主要负责：
+
+从不同交易所或数据源获取数据（实时 + 历史）
+
+对原始数据进行标准化（统一格式：OHLCV / Tick / Order Book）
+
+支持高吞吐量、低延迟
+
+对异常情况（断线、重试、数据缺失）提供处理机制
+
+提供给下游模块（处理层 / 存储层）的统一接口
+
+2️⃣ 数据源类型
+数据源类型	协议/接口	特点
+历史数据	REST API	一次拉取大批量历史 K 线或 Tick 数据
+实时行情	WebSocket	高频数据流，需要实时推送给处理层
+第三方数据平台	gRPC / WebSocket	可作为补充或冗余数据源
+3️⃣ 模块结构设计
+Ingestor Layer
+├── MarketIngestor
+│   ├── ExchangeClient (抽象)
+│   │    ├── BinanceClient
+│   │    ├── HuobiClient
+│   │    └── OKXClient
+│   ├── DataNormalizer
+│   ├── DataBuffer / Queue
+│   └── Retry & ErrorHandler
+
+3.1 ExchangeClient（交易所客户端）
+
+功能：与交易所 API/WS 交互，获取原始数据
+
+特点：
+
+实现统一接口（Trait/Interface），上层调用统一方法
+
+支持 REST 拉取历史数据、WebSocket 实时订阅
+
+可配置速率限制、重试策略
+
+pub trait ExchangeClient {
+fn fetch_historical_ohlcv(&self, symbol: &str, interval: Interval, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<OHLCV>, Error>;
+fn subscribe_tick(&self, symbol: &str) -> Result<Receiver<Tick>, Error>;
+}
+
+3.2 DataNormalizer（数据标准化）
+
+功能：
+
+将各交易所不同字段统一成 HMDS 内部标准数据结构
+
+时间戳统一（UTC）
+
+字段校验、数据补全（如果缺少 volume 或 bid/ask）
+
+pub struct OHLCV {
+pub symbol: String,
+pub ts: DateTime<Utc>,
+pub open: Decimal,
+pub high: Decimal,
+pub low: Decimal,
+pub close: Decimal,
+pub volume: Decimal,
+}
+
+pub struct Tick {
+pub symbol: String,
+pub ts: DateTime<Utc>,
+pub price: Decimal,
+pub qty: Decimal,
+}
+
+3.3 DataBuffer / Queue（缓冲层）
+
+功能：
+
+消息缓冲，解耦采集和存储/处理
+
+支持异步发送到处理层
+
+实现方式：
+
+Rust：crossbeam::channel 或 tokio::sync::mpsc
+
+队列可支持 backpressure 或落地到本地缓存（文件/Redis）
+
+3.4 Retry & ErrorHandler（异常处理）
+
+功能：
+
+断线重连 WebSocket
+
+REST 请求超时重试
+
+数据缺失时标记并触发补拉
+
+struct RetryPolicy {
+max_retries: u32,
+interval: Duration,
+}
+
+4️⃣ 数据流
+
+ExchangeClient 获取原始数据（历史/实时）
+
+DataNormalizer 转成统一结构
+
+DataBuffer 暂存
+
+下游模块（Processing/Storage Layer）消费
+
+[Exchange API / WS]
+↓
+[ExchangeClient]
+↓
+[DataNormalizer]
+↓
+[DataBuffer / Queue]
+↓
+[Processing Layer / Storage Layer]
+
+5️⃣ 扩展性设计
+
+多交易所扩展：只需新增 ExchangeClient 实现
+
+多数据类型扩展：OHLCV / Tick / OrderBook / Trades
+
+插件化处理：可以在 DataNormalizer 后挂载指标计算或数据校验插件
+
+我可以帮你下一步直接设计 数据采集层 Rust 模块结构和接口实现模板，包括 ExchangeClient、DataNormalizer、IngestorService，让你直接在 HMDS crate 里实现。

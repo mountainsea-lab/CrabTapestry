@@ -1,0 +1,455 @@
+目标是保证数据 连续、完整、无缝衔接，既可以支撑回测，也可以支撑实时策略。
+
+1️⃣ 数据类型差异
+类型	来源	特点	使用场景
+历史数据 (Historical)	REST API	批量、可回溯、慢	回测、策略回溯分析、数据补齐
+实时行情 (Realtime)	WebSocket / Push API	高频、延迟低	实时策略、告警、数据缓存更新
+
+差异点：
+
+历史数据是 离线批处理，可以一次拉取很长时间段的数据。
+
+实时数据是 连续流，无法拉取过去的数据，需要保证从最近点开始订阅。
+
+时间戳与数据完整性是衔接的核心问题。
+
+2️⃣ 数据衔接目标
+
+无缝时间线
+
+历史数据的最后一个时间点 T_last 与实时数据的第一个时间点 T_realtime_start 连续，避免重复或缺失。
+
+数据去重
+
+历史数据和实时数据可能会有重叠（例如最后一分钟的 K 线），需要去重逻辑。
+
+统一格式
+
+历史和实时数据统一成系统内部的 OHLCV 或 Tick 结构，方便下游处理层直接使用。
+
+3️⃣ 数据采集流程设计
+3.1 流程步骤
+[历史数据获取]
+       ↓
+[数据标准化 / 校验]
+       ↓
+[写入缓存 / DB]
+       ↓
+[确定实时订阅起点]
+       ↓
+[实时行情订阅]
+       ↓
+[数据标准化 / 校验]
+       ↓
+[写入缓存 / DB]
+
+3.2 关键流程说明
+1. 拉取历史数据
+
+步骤：
+
+根据 symbol、时间段拉取历史 K 线 / Tick
+
+校验完整性（是否缺失）
+
+写入缓存或数据库
+
+目标：
+
+建立 基础历史库
+
+确定最新时间点 T_last（比如最后一个 OHLCV 的时间戳）
+
+2. 启动实时订阅
+
+根据 T_last 决定实时数据的起始点：
+
+如果交易所 WebSocket 支持从时间点订阅，则直接从 T_last + interval 开始
+
+如果不支持，需要先拉取最近一小段历史数据作为衔接（例如最后 1-5 分钟数据），然后再订阅实时流
+
+3. 去重和合并
+
+由于历史数据和实时数据可能存在 重叠时间，需要：
+
+以时间戳为 key 去重
+
+或实时流中出现的重叠区间覆盖历史数据
+
+4. 写入统一缓存 / 存储
+
+所有数据最终都写入：
+
+时序数据库（ClickHouse / TimescaleDB）
+
+热缓存（Redis）
+
+下游处理层不区分历史/实时来源
+
+3.3 处理延迟与缺失
+
+延迟处理：
+
+实时行情可能延迟或断开
+
+可以设计缓冲队列，保证顺序消费
+
+缺失补齐：
+
+定期扫描缓存，发现缺失区间，触发历史数据补拉任务
+
+4️⃣ 数据衔接策略示例
+
+假设我们处理 BTCUSDT 1 分钟 K 线：
+
+拉取历史数据：2025-08-01 00:00 → 2025-08-30 23:59
+
+写入数据库，并标记最后时间点 T_last = 2025-08-30 23:59
+
+实时订阅：
+
+WebSocket 提供实时数据 2025-08-30 23:59 → Now
+
+对比数据库最后时间，去掉重叠 23:59 数据
+
+实时数据持续写入数据库，同时更新缓存
+
+这样历史与实时数据 无缝衔接，下游策略可以直接使用数据库或缓存的数据，不用关心数据来源。
+
+5️⃣ Rust HMDS 模块设计建议
+
+HistoricalFetcher
+
+拉取指定时间段的历史数据
+
+返回 Vec<OHLCV> 或 Vec<Tick>
+
+RealtimeSubscriber
+
+WebSocket 客户端，返回异步 stream
+
+支持断线重连、心跳检测
+
+IngestorService
+
+统一管理历史 + 实时
+
+维护 T_last，负责去重和缓存写入
+
+提供给 Processing Layer 的统一接口：async fn next_data() -> DataEvent
+
+==================================
+历史数据 + 实时数据衔接流程图，用 Rust async 模块风格表示，标出各模块和数据流向。
+
++----------------------+
+|  HMDS IngestorService |
++----------------------+
+           |
+           | async fn start()
+           v
++----------------------+      +----------------------+
+| HistoricalFetcher    | ---> | DataNormalizer       |
+| - fetch_historical() |      | - unify OHLCV/Tick  |
++----------------------+      +----------------------+
+           |                           |
+           | Vec<OHLCV>/Vec<Tick>      | standardized DataEvent
+           v                           v
+    +-------------------+     +----------------------+
+    | Deduplicator      | <-- | RealtimeSubscriber   |
+    | - remove overlap  |     | - WS subscribe()     |
+    +-------------------+     | - reconnect/retry    |
+           |                   +----------------------+
+           | async stream<DataEvent>
+           v
++--------------------------+
+| DataBuffer / Queue       |
+| - crossbeam channel /    |
+|   tokio mpsc            |
++--------------------------+
+           |
+           v
++--------------------------+
+| Storage Layer            |
+| - write to DB/Redis/S3  |
+| - maintain T_last        |
++--------------------------+
+           |
+           v
++--------------------------+
+| Processing Layer / SDK   |
+| - strategy / backtest    |
+| - unified access         |
++--------------------------+
+
+🔑 流程说明
+
+HistoricalFetcher
+
+拉取指定时间段的历史 K 线或 Tick 数据
+
+返回 Vec<OHLCV> 或 Vec<Tick>
+
+DataNormalizer
+
+标准化所有字段（统一时间戳 UTC、价格/成交量类型）
+
+RealtimeSubscriber
+
+WebSocket 实时订阅
+
+异步 stream 发送 DataEvent
+
+自动断线重连、心跳检测
+
+Deduplicator
+
+对历史和实时数据的重叠时间段去重
+
+保证时间线连续无重复
+
+DataBuffer / Queue
+
+异步缓冲，解耦采集和存储/处理
+
+可使用 crossbeam::channel 或 tokio::sync::mpsc
+
+Storage Layer
+
+持久化到时序数据库/对象存储
+
+维护最新时间点 T_last，用于历史数据与实时数据衔接
+
+Processing Layer / SDK
+
+为策略回测或实时策略提供统一接口
+
+不关心数据来源（历史或实时）
+
+Rust async 风格设计思路
+struct IngestorService {
+    historical: HistoricalFetcher,
+    realtime: RealtimeSubscriber,
+    deduplicator: Deduplicator,
+    buffer: tokio::sync::mpsc::Sender<DataEvent>,
+}
+
+impl IngestorService {
+    async fn start(&self) {
+        // 1. 拉取历史数据
+        let historical_data = self.historical.fetch().await;
+        for event in self.deduplicator.remove_overlap(historical_data) {
+            self.buffer.send(event).await.unwrap();
+        }
+
+        // 2. 订阅实时数据
+        let mut realtime_stream = self.realtime.subscribe().await;
+        while let Some(event) = realtime_stream.next().await {
+            let event = self.deduplicator.remove_overlap(vec![event]);
+            self.buffer.send(event).await.unwrap();
+        }
+    }
+}
+
+
+这个流程保证了：
+
+历史 + 实时数据 时间连续
+
+重叠去重
+
+下游模块 统一异步消费
+
+支持 断线重连和增量更新
+
+
+========================
+flowchart TD
+    subgraph IngestorService["HMDS IngestorService"]
+        direction TB
+        HF[HistoricalFetcher<br/>async fn fetch_historical()]
+        DN[DataNormalizer<br/>OHLCV/Tick unify]
+        RS[RealtimeSubscriber<br/>async WS subscribe()]
+        DD[Deduplicator<br/>remove overlap]
+        QB[DataBuffer / Queue<br/>tokio mpsc / crossbeam]
+    end
+
+    SL[Storage Layer<br/>DB / Redis / S3<br/>maintain T_last]
+    PL[Processing Layer / SDK<br/>strategy / backtest / unified access]
+
+    HF --> DN
+    RS --> DN
+    DN --> DD
+    DD --> QB
+    QB --> SL
+    SL --> PL
+🔑 图中说明
+HistoricalFetcher：批量拉取历史数据
+
+RealtimeSubscriber：WebSocket 实时订阅数据
+
+DataNormalizer：统一数据结构和时间戳
+
+Deduplicator：去重，保证历史+实时无重叠
+
+DataBuffer / Queue：异步缓冲，解耦采集和存储
+
+Storage Layer：持久化 + 更新最新时间戳 T_last
+
+Processing Layer / SDK：下游策略访问接口
+
+=============================
+实时数据量小、需要低延迟落盘，但又不能频繁写库浪费资源；同时还要不断 回溯历史数据维护完整性。我们可以把这个场景拆成两部分来设计解决方案。
+
+1️⃣ 实时数据落盘优化
+问题：
+
+Tick 或分钟 K 线实时产生，数量小，但下游策略需要“尽快可用”。
+
+直接每条写数据库会造成频繁 IO，非常浪费资源。
+
+解决方案：缓冲 + 批量落盘 + 推送通知
+方案 A：异步批量落盘 + 触发器通知
+
+DataBuffer 采用异步队列（Rust async / crossbeam / tokio mpsc）
+
+批量落盘策略：
+
+阈值触发：达到 N 条数据或间隔 T 秒落盘
+
+例如：N = 50条 或 T = 1秒
+
+触发下游更新：
+
+数据写库后，通过消息队列或事件通知下游服务，保证最新数据可用
+
+// pseudo Rust async
+async fn data_writer(mut rx: Receiver<DataEvent>, db: &Database) {
+    let mut batch = Vec::new();
+    let flush_interval = tokio::time::interval(Duration::from_secs(1));
+
+    loop {
+        tokio::select! {
+            Some(event) = rx.recv() => {
+                batch.push(event);
+                if batch.len() >= 50 {
+                    db.write_batch(&batch).await;
+                    batch.clear();
+                    notify_downstream().await;
+                }
+            },
+            _ = flush_interval.tick() => {
+                if !batch.is_empty() {
+                    db.write_batch(&batch).await;
+                    batch.clear();
+                    notify_downstream().await;
+                }
+            }
+        }
+    }
+}
+
+方案 B：内存 + 缓存 + 增量落盘
+
+Redis / 本地缓存 存储最新数据
+
+下游服务可以实时从缓存读取最新 K 线 / Tick
+
+数据库批量落盘可延迟，例如每 1 秒或每 1 分钟写一次
+
+✅ 优点：
+
+保证下游策略获取最新数据
+
+降低数据库写入压力
+
+2️⃣ 历史数据回溯与维护
+问题：
+
+历史数据可能存在缺失、错误或交易所更新
+
+需要周期性回溯、补齐历史数据
+
+解决方案：
+A. 周期性批量任务
+
+定期拉取过去 N 天的数据（例如每日 1 次，补过去 30 天）
+
+比较数据库已有数据，发现缺失区间再拉取
+
+B. DAG 调度
+
+任务调度器（Airflow / Rust cron / tokio timers）
+
+每个 symbol 单独调度，支持失败重试
+
+可以区分：
+
+历史回溯任务：低优先级、批量拉取
+
+实时采集任务：高优先级、低延迟
+
+C. 与实时采集结合
+
+历史回溯可能会与实时数据重叠：
+
+先拉历史数据
+
+使用 Deduplicator 去掉与实时数据重叠部分
+
+最终统一写入缓存和数据库
+
+3️⃣ 数据落盘与下游服务访问策略
+层级	存储方式	更新策略	下游访问
+最新数据	Redis / in-memory buffer	实时写入 / 小批量 flush	下游直接读缓存，低延迟
+历史数据	时序数据库 / Parquet	批量落盘 / 定期回溯	回测或全量分析读取 DB
+实时数据落盘	DB 批量写 + flush_interval	保证不丢最新数据	下游策略可通过缓存或 DB 获取增量数据
+4️⃣ Rust HMDS 模块设计思路
+struct IngestorService {
+    historical: HistoricalFetcher,
+    realtime: RealtimeSubscriber,
+    deduplicator: Deduplicator,
+    buffer: tokio::sync::mpsc::Sender<DataEvent>,
+    cache: Arc<Mutex<LatestDataCache>>, // 最新数据缓存
+}
+
+impl IngestorService {
+    async fn start(&self) {
+        // 历史数据回溯
+        tokio::spawn(self.run_historical_backfill());
+
+        // 实时数据采集
+        tokio::spawn(self.run_realtime_subscription());
+
+        // 数据写入
+        tokio::spawn(self.run_data_writer());
+    }
+}
+
+
+LatestDataCache 保存最近 N 条最新数据，供下游策略快速访问
+
+run_data_writer 批量落盘 + flush_interval + notify downstream
+
+run_historical_backfill 定期回溯历史数据，保证数据完整性
+
+🔑 总结
+
+实时数据落盘：
+
+不每条写数据库，而是 小批量+定时 flush
+
+使用缓存保证下游获取最新数据
+
+历史数据维护：
+
+定期回溯 + 去重
+
+异步任务和 DAG 调度
+
+衔接策略：
+
+Deduplicator 去重
+
+缓存 + 数据库双管齐下
+
+保证下游服务 低延迟可用
