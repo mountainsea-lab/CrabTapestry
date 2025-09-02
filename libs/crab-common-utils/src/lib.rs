@@ -1,8 +1,7 @@
 pub mod time_utils;
 
 pub fn is_local() -> bool {
-    // std::env::var("LOCAL").is_ok()
-    true
+    std::env::var("LOCAL").is_ok()
 }
 
 pub fn must_get_env(key: &str) -> String {

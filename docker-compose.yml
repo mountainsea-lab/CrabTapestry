@@ -9,9 +9,9 @@ x-defaults: &defaults
 
 services:
   # ===============================
-  # Indexer / crab-data-event 服务
+  # crab-data-event / crab-data-event 服务
   # ===============================
-  indexer:
+  crab-data-event:
     <<: *defaults
     build:
       context: ./crab-data-event
@@ -25,7 +25,7 @@ services:
     volumes:
       - .env:/app/.env
     ports:
-      - "8080:8080"  # 如果 indexer 提供 HTTP 服务
+      - "8080:8080"  # 如果 crab-data-event 提供 HTTP 服务
 
   # ===============================
   # 可选本地 Redis 服务
