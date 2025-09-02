@@ -12,22 +12,28 @@ WORKDIR /app
 FROM chef AS planner
 WORKDIR /app
 
-# 拷贝 workspace 根配置Cargo.lock
-COPY Cargo.toml  ./
+ARG SERVICE
+ENV SERVICE_NAME=$SERVICE
+
+# 拷贝 workspace 根配置
+COPY Cargo.toml Cargo.lock ./
 COPY libs/*/Cargo.toml ./libs/
 
 # 拷贝目标服务模块 Cargo.toml
-ARG SERVICE
 COPY ${SERVICE}/Cargo.toml ./${SERVICE}/Cargo.toml
 
-# 生成 recipe.json（在 /app 根目录）
-RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE}
+# cargo-chef prepare: 必须在服务模块目录中执行，并使用相对路径生成 recipe.json
+WORKDIR /app/${SERVICE}
+RUN cargo chef prepare --recipe-path /app/recipe.json --bin $SERVICE_NAME
 
 # ================================
 # 第三阶段：构建依赖缓存 + 构建项目 (builder)
 # ================================
 FROM chef AS builder
 WORKDIR /app
+
+ARG SERVICE
+ENV SERVICE_NAME=$SERVICE
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -46,8 +52,8 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 
 # 构建目标服务
-ARG SERVICE
-RUN cargo build --release -p ${SERVICE}
+WORKDIR /app/${SERVICE}
+RUN cargo build --release -p $SERVICE_NAME
 
 # ================================
 # 第四阶段：精简运行镜像
@@ -61,8 +67,10 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# 拷贝 release 二进制
 ARG SERVICE
-COPY --from=builder /app/${SERVICE}/target/release/${SERVICE} /usr/local/bin/
+ENV SERVICE_NAME=$SERVICE
 
-ENTRYPOINT ["/usr/local/bin/${SERVICE}"]
+# 拷贝 release 二进制
+COPY --from=builder /app/${SERVICE}/target/release/$SERVICE_NAME /usr/local/bin/
+
+ENTRYPOINT ["/usr/local/bin/${SERVICE_NAME}"]
