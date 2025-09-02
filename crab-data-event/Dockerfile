@@ -15,7 +15,7 @@ ARG SERVICE_NAME
 WORKDIR /app
 
 # 将整个 workspace 复制到镜像中
-COPY Cargo.toml ./
+COPY Cargo.toml /app/Cargo.lock ./
 COPY libs ./libs
 COPY crab-data-event ./crab-data-event
 # 如果未来有其他服务，只要放在 workspace 根即可
