@@ -15,8 +15,8 @@ WORKDIR /app
 ARG SERVICE
 ENV SERVICE_NAME=$SERVICE
 
-# 拷贝 workspace 根配置
-COPY Cargo.toml Cargo.lock ./
+# 拷贝 workspace 根配置Cargo.lock
+COPY Cargo.toml  ./
 COPY libs/*/Cargo.toml ./libs/
 
 # 拷贝目标服务模块 Cargo.toml
