@@ -531,6 +531,8 @@ name = "crab-hmds"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "crab-common-utils",
+ "crab-infras",
 ]
 
 [[package]]
