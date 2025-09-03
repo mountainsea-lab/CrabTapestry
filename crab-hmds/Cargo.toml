@@ -5,7 +5,11 @@ edition = "2024"
 
 [dependencies]
 # Async
+tokio = {workspace = true}
 async-trait = {workspace = true}
 # CrabTapestry Ecosystem
 crab-common-utils = { workspace = true }
 crab-infras = { workspace = true }
+
+# Error
+anyhow = {workspace = true}
