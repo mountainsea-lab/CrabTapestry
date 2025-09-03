@@ -131,11 +131,14 @@ pub type OHLCVBatch = Vec<OHLCVRecord>;
 /// Metadata about a historical data source.
 #[derive(Debug, Clone)]
 pub struct HistoricalSource {
-    pub name: String,         // 数据源名称，例如 Binance API
-    pub last_updated_ts: i64, // 最近一次拉取时间
-    pub batch_size: usize,    // 每次拉取批量数量
-    pub supports_tick: bool,  // 是否支持 Tick 数据
-    pub supports_ohlcv: bool, // 是否支持 OHLCV 数据
+    pub name: String,         // Data source name, e.g., "Binance API"
+    pub exchange: String,     // Exchange name, e.g., "binance"
+    pub last_success_ts: i64, // Last successfully saved data timestamp
+    pub last_fetch_ts: i64,   // Last fetch attempt timestamp
+    pub batch_size: usize,    // Batch size for each fetch
+    pub supports_tick: bool,  // Supports tick data
+    pub supports_trade: bool, // Supports trade data
+    pub supports_ohlcv: bool, // Supports OHLCV data
 }
 
 /// 拉取上下文信息
@@ -143,9 +146,10 @@ pub struct HistoricalSource {
 #[derive(Debug, Clone)]
 pub struct FetchContext<'a> {
     pub source: &'a HistoricalSource,
+    pub exchange: &'a str,
     pub symbol: &'a str,
-    pub period: Option<&'a str>, // 仅 OHLCV 有效
-    pub range: TimeRange,
+    pub period: Option<&'a str>, // Only valid for OHLCV
+    pub range: TimeRange,        // Time range for fetching
 }
 
 /// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
@@ -154,8 +158,8 @@ pub struct FetchContext<'a> {
 pub struct HistoricalBatch<T> {
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,
-    pub period: Option<String>, // OHLCV 时有效
-    pub data: Vec<T>,           // TickRecord 或 OHLCVRecord
+    pub period: Option<String>, // Only valid for OHLCV
+    pub range: TimeRange,       // Covered time range
+    pub data: Vec<T>,           // TickRecord, TradeRecord, or OHLCVRecord
 }
-
 //==============HistoricalFetcher Base Model===
