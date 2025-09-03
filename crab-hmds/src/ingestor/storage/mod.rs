@@ -1,3 +1,5 @@
+use crate::ingestor::types::OHLCVRecord;
+
 #[async_trait::async_trait]
 pub trait Storage {
     async fn last_time(&self) -> Option<i64>;
