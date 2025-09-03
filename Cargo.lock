@@ -543,13 +543,17 @@ name = "crab-infras"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "barter-data",
+ "barter-integration",
  "bb8",
  "bb8-redis",
  "crab-common-utils",
  "futures",
  "ms-tracing",
+ "reqwest",
  "serde",
  "serde_json",
+ "thiserror 2.0.16",
  "time",
  "tokio",
 ]

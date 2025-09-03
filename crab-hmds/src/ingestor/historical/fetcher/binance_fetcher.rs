@@ -2,7 +2,7 @@ use crate::ingestor::historical::HistoricalFetcher;
 use crate::ingestor::types::{FetchContext, OHLCVRecord, TickRecord};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::{stream, stream::BoxStream, StreamExt};
+use futures_util::{StreamExt, stream, stream::BoxStream};
 use std::sync::Arc;
 
 /// Binance 历史数据拉取器
