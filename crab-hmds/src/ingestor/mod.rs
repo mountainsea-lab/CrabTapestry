@@ -4,3 +4,4 @@ mod normalizer;
 mod deduplicator;
 mod data_buffer;
 mod storage;
+mod scheduler;

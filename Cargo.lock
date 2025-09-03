@@ -529,6 +529,9 @@ dependencies = [
 [[package]]
 name = "crab-hmds"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+]
 
 [[package]]
 name = "crab-infras"
