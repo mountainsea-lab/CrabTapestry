@@ -28,12 +28,12 @@ Level2 / Quote 数据视策略决定
 /// Represents a single market trade tick (individual trade event).
 #[derive(Debug, Clone)]
 pub struct Tick {
-    pub ts: i64,              // 成交时间 UTC 时间戳
-    pub symbol: Arc<str>,     // 交易对
-    pub exchange: Arc<str>,   // 交易所
-    pub price: f64,           // 成交价格
-    pub qty: f64,             // 成交数量
-    pub side: Option<String>, // 买/卖方向，可选
+    pub ts: i64,                  // 成交时间 UTC 时间戳
+    pub symbol: Arc<str>,         // 交易对
+    pub exchange: Arc<str>,       // 交易所
+    pub price: f64,               // 成交价格
+    pub qty: f64,                 // 成交数量
+    pub side: Option<String>,     // 买/卖方向，可选
     pub order_id: Option<String>, // 原始订单号，可选
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
@@ -42,21 +42,21 @@ pub struct Tick {
 /// Represents a single OHLCV candlestick (K-line).
 #[derive(Debug, Clone)]
 pub struct OHLCV {
-    pub ts: i64,               // K线结束时间
+    pub ts: i64,                      // K线结束时间
     pub period_start_ts: Option<i64>, // K线开始时间，可选
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,
-    pub period: String,        // K线周期 "1m", "5m", "1h"
+    pub period: String, // K线周期 "1m", "5m", "1h"
     pub open: f64,
     pub high: f64,
     pub low: f64,
     pub close: f64,
     pub volume: f64,
-    pub turnover: Option<f64>, // 成交额，可选
+    pub turnover: Option<f64>,   // 成交额，可选
     pub num_trades: Option<u32>, // 成交笔数，可选
-    pub vwap: Option<f64>,     // 成交量加权价格，可选
+    pub vwap: Option<f64>,       // 成交量加权价格，可选
 }
-
+/// 注意：实时聚合组件已经处理了数据缓存这个结构可以不使用，暂时保留后续可能用到
 /// 实时维护最新一条 K线
 /// Maintains the latest real-time K-line in memory.
 #[derive(Debug, Clone)]
@@ -65,7 +65,7 @@ pub struct RealtimeOHLCV {
     pub period_start_ts: i64, // K线开始时间
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,
-    pub period: String,       // "1m", "5m" 等
+    pub period: String, // "1m", "5m" 等
     pub open: f64,
     pub high: f64,
     pub low: f64,
@@ -89,11 +89,11 @@ pub struct HistoricalBatch<T> {
 /// Metadata about a historical data source.
 #[derive(Debug, Clone)]
 pub struct HistoricalSource {
-    pub name: String,           // 数据源名称，例如 Binance API
-    pub last_updated_ts: i64,   // 最近一次拉取时间
-    pub batch_size: usize,      // 每次拉取批量数量
-    pub supports_tick: bool,    // 是否支持 Tick 数据
-    pub supports_ohlcv: bool,   // 是否支持 OHLCV 数据
+    pub name: String,         // 数据源名称，例如 Binance API
+    pub last_updated_ts: i64, // 最近一次拉取时间
+    pub batch_size: usize,    // 每次拉取批量数量
+    pub supports_tick: bool,  // 是否支持 Tick 数据
+    pub supports_ohlcv: bool, // 是否支持 OHLCV 数据
 }
 
 /// 内存中流转的市场数据事件
@@ -109,34 +109,33 @@ pub enum MarketDataEvent {
 /// Tick data mapping for high-frequency database storage.
 #[derive(Debug, Clone)]
 pub struct TickRecord {
-    pub ts: i64,              // 成交时间 UTC 时间戳
-    pub symbol: Arc<str>,     // 交易对
-    pub exchange: Arc<str>,   // 交易所
-    pub price: f64,           // 成交价格
-    pub qty: f64,             // 成交量
-    pub side: Option<String>, // 买/卖方向，可选
+    pub ts: i64,                  // 成交时间 UTC 时间戳
+    pub symbol: Arc<str>,         // 交易对
+    pub exchange: Arc<str>,       // 交易所
+    pub price: f64,               // 成交价格
+    pub qty: f64,                 // 成交量
+    pub side: Option<String>,     // 买/卖方向，可选
     pub order_id: Option<String>, // 原始订单号，可选
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
-
 
 /// 低频 OHLCV 数据库映射
 /// OHLCV data mapping for low-frequency database storage.
 #[derive(Debug, Clone)]
 pub struct OHLCVRecord {
-    pub ts: i64,                   // K线结束时间
+    pub ts: i64,                      // K线结束时间
     pub period_start_ts: Option<i64>, // K线开始时间，可选
-    pub symbol: Arc<str>,          // 交易对
-    pub exchange: Arc<str>,        // 交易所
-    pub period: String,            // "1m", "5m", "1h"
+    pub symbol: Arc<str>,             // 交易对
+    pub exchange: Arc<str>,           // 交易所
+    pub period: String,               // "1m", "5m", "1h"
     pub open: f64,
     pub high: f64,
     pub low: f64,
     pub close: f64,
     pub volume: f64,
-    pub turnover: Option<f64>,     // 成交额，可选
-    pub num_trades: Option<u32>,   // 成交笔数，可选
-    pub vwap: Option<f64>,         // 成交量加权价格，可选
+    pub turnover: Option<f64>,   // 成交额，可选
+    pub num_trades: Option<u32>, // 成交笔数，可选
+    pub vwap: Option<f64>,       // 成交量加权价格，可选
 }
 
 /// 批量写入辅助

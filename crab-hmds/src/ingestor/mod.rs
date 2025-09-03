@@ -1,9 +1,8 @@
-pub mod historical;
-mod realtime;
-mod normalizer;
+pub mod buffer;
 mod deduplicator;
+pub mod historical;
+mod normalizer;
+mod realtime;
 mod scheduler;
 pub mod storage;
-pub mod buffer;
-mod realtime;
 mod types;
