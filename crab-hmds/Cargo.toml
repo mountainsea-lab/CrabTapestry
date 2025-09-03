@@ -7,9 +7,12 @@ edition = "2024"
 # Async
 tokio = {workspace = true}
 async-trait = {workspace = true}
+futures-util = { workspace = true }
+
 # CrabTapestry Ecosystem
 crab-common-utils = { workspace = true }
 crab-infras = { workspace = true }
+crab-types  = {workspace = true}
 
 # Error
 anyhow = {workspace = true}

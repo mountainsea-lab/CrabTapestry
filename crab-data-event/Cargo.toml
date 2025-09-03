@@ -15,7 +15,6 @@ crab-infras = { workspace = true }
 tokio = { workspace = true }
 futures-util = { workspace = true }
 crossbeam = { workspace = true }
-futures = { workspace = true }
 once_cell = { workspace = true }
 
 # barter-data

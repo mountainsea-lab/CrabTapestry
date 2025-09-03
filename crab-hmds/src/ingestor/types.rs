@@ -1,4 +1,6 @@
+use crab_types::TimeRange;
 use std::sync::Arc;
+
 /**
 4. 实践建议
 
@@ -75,30 +77,10 @@ pub struct RealtimeOHLCV {
     pub num_trades: u32,
 }
 
-/// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
-/// Batch of historical data, unified for Trade, Tick, or OHLCV records.
-#[derive(Debug, Clone)]
-pub struct HistoricalBatch<T> {
-    pub symbol: Arc<str>,
-    pub exchange: Arc<str>,
-    pub period: Option<String>, // OHLCV 时有效
-    pub data: Vec<T>,           // TickRecord 或 OHLCVRecord
-}
-
-/// 历史数据源信息
-/// Metadata about a historical data source.
-#[derive(Debug, Clone)]
-pub struct HistoricalSource {
-    pub name: String,         // 数据源名称，例如 Binance API
-    pub last_updated_ts: i64, // 最近一次拉取时间
-    pub batch_size: usize,    // 每次拉取批量数量
-    pub supports_tick: bool,  // 是否支持 Tick 数据
-    pub supports_ohlcv: bool, // 是否支持 OHLCV 数据
-}
-
 /// 内存中流转的市场数据事件
+/// memory-based market data event.
 pub enum MarketDataEvent {
-    Trade(Trade),
+    // Trade(Trade),
     Tick(Tick),
     OHLCV(OHLCV),
 }
@@ -142,3 +124,38 @@ pub struct OHLCVRecord {
 /// Helper type for batch inserts.
 pub type TickBatch = Vec<TickRecord>;
 pub type OHLCVBatch = Vec<OHLCVRecord>;
+
+//==============HistoricalFetcher Base Model=================
+
+/// 历史数据源信息
+/// Metadata about a historical data source.
+#[derive(Debug, Clone)]
+pub struct HistoricalSource {
+    pub name: String,         // 数据源名称，例如 Binance API
+    pub last_updated_ts: i64, // 最近一次拉取时间
+    pub batch_size: usize,    // 每次拉取批量数量
+    pub supports_tick: bool,  // 是否支持 Tick 数据
+    pub supports_ohlcv: bool, // 是否支持 OHLCV 数据
+}
+
+/// 拉取上下文信息
+/// Context for fetching historical data.
+#[derive(Debug, Clone)]
+pub struct FetchContext<'a> {
+    pub source: &'a HistoricalSource,
+    pub symbol: &'a str,
+    pub period: Option<&'a str>, // 仅 OHLCV 有效
+    pub range: TimeRange,
+}
+
+/// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
+/// Batch of historical data, unified for Trade, Tick, or OHLCV records.
+#[derive(Debug, Clone)]
+pub struct HistoricalBatch<T> {
+    pub symbol: Arc<str>,
+    pub exchange: Arc<str>,
+    pub period: Option<String>, // OHLCV 时有效
+    pub data: Vec<T>,           // TickRecord 或 OHLCVRecord
+}
+
+//==============HistoricalFetcher Base Model===

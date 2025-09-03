@@ -514,7 +514,6 @@ dependencies = [
  "crab-types",
  "crossbeam",
  "dashmap",
- "futures",
  "futures-util",
  "ms-tracing",
  "once_cell",
@@ -534,6 +533,8 @@ dependencies = [
  "async-trait",
  "crab-common-utils",
  "crab-infras",
+ "crab-types",
+ "futures-util",
  "tokio",
 ]
 
