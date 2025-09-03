@@ -1,3 +1,5 @@
+pub mod fetcher;
+
 use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRecord};
 use anyhow::Result;
 use async_trait::async_trait;
