@@ -1,267 +1,3 @@
-目标是保证数据 连续、完整、无缝衔接，既可以支撑回测，也可以支撑实时策略。
-
-1️⃣ 数据类型差异
-类型	来源	特点	使用场景
-历史数据 (Historical)	REST API	批量、可回溯、慢	回测、策略回溯分析、数据补齐
-实时行情 (Realtime)	WebSocket / Push API	高频、延迟低	实时策略、告警、数据缓存更新
-
-差异点：
-
-历史数据是 离线批处理，可以一次拉取很长时间段的数据。
-
-实时数据是 连续流，无法拉取过去的数据，需要保证从最近点开始订阅。
-
-时间戳与数据完整性是衔接的核心问题。
-
-2️⃣ 数据衔接目标
-
-无缝时间线
-
-历史数据的最后一个时间点 T_last 与实时数据的第一个时间点 T_realtime_start 连续，避免重复或缺失。
-
-数据去重
-
-历史数据和实时数据可能会有重叠（例如最后一分钟的 K 线），需要去重逻辑。
-
-统一格式
-
-历史和实时数据统一成系统内部的 OHLCV 或 Tick 结构，方便下游处理层直接使用。
-
-3️⃣ 数据采集流程设计
-3.1 流程步骤
-[历史数据获取]
-       ↓
-[数据标准化 / 校验]
-       ↓
-[写入缓存 / DB]
-       ↓
-[确定实时订阅起点]
-       ↓
-[实时行情订阅]
-       ↓
-[数据标准化 / 校验]
-       ↓
-[写入缓存 / DB]
-
-3.2 关键流程说明
-1. 拉取历史数据
-
-步骤：
-
-根据 symbol、时间段拉取历史 K 线 / Tick
-
-校验完整性（是否缺失）
-
-写入缓存或数据库
-
-目标：
-
-建立 基础历史库
-
-确定最新时间点 T_last（比如最后一个 OHLCV 的时间戳）
-
-2. 启动实时订阅
-
-根据 T_last 决定实时数据的起始点：
-
-如果交易所 WebSocket 支持从时间点订阅，则直接从 T_last + interval 开始
-
-如果不支持，需要先拉取最近一小段历史数据作为衔接（例如最后 1-5 分钟数据），然后再订阅实时流
-
-3. 去重和合并
-
-由于历史数据和实时数据可能存在 重叠时间，需要：
-
-以时间戳为 key 去重
-
-或实时流中出现的重叠区间覆盖历史数据
-
-4. 写入统一缓存 / 存储
-
-所有数据最终都写入：
-
-时序数据库（ClickHouse / TimescaleDB）
-
-热缓存（Redis）
-
-下游处理层不区分历史/实时来源
-
-3.3 处理延迟与缺失
-
-延迟处理：
-
-实时行情可能延迟或断开
-
-可以设计缓冲队列，保证顺序消费
-
-缺失补齐：
-
-定期扫描缓存，发现缺失区间，触发历史数据补拉任务
-
-4️⃣ 数据衔接策略示例
-
-假设我们处理 BTCUSDT 1 分钟 K 线：
-
-拉取历史数据：2025-08-01 00:00 → 2025-08-30 23:59
-
-写入数据库，并标记最后时间点 T_last = 2025-08-30 23:59
-
-实时订阅：
-
-WebSocket 提供实时数据 2025-08-30 23:59 → Now
-
-对比数据库最后时间，去掉重叠 23:59 数据
-
-实时数据持续写入数据库，同时更新缓存
-
-这样历史与实时数据 无缝衔接，下游策略可以直接使用数据库或缓存的数据，不用关心数据来源。
-
-5️⃣ Rust HMDS 模块设计建议
-
-HistoricalFetcher
-
-拉取指定时间段的历史数据
-
-返回 Vec<OHLCV> 或 Vec<Tick>
-
-RealtimeSubscriber
-
-WebSocket 客户端，返回异步 stream
-
-支持断线重连、心跳检测
-
-IngestorService
-
-统一管理历史 + 实时
-
-维护 T_last，负责去重和缓存写入
-
-提供给 Processing Layer 的统一接口：async fn next_data() -> DataEvent
-
-==================================
-历史数据 + 实时数据衔接流程图，用 Rust async 模块风格表示，标出各模块和数据流向。
-
-+----------------------+
-|  HMDS IngestorService |
-+----------------------+
-           |
-           | async fn start()
-           v
-+----------------------+      +----------------------+
-| HistoricalFetcher    | ---> | DataNormalizer       |
-| - fetch_historical() |      | - unify OHLCV/Tick  |
-+----------------------+      +----------------------+
-           |                           |
-           | Vec<OHLCV>/Vec<Tick>      | standardized DataEvent
-           v                           v
-    +-------------------+     +----------------------+
-    | Deduplicator      | <-- | RealtimeSubscriber   |
-    | - remove overlap  |     | - WS subscribe()     |
-    +-------------------+     | - reconnect/retry    |
-           |                   +----------------------+
-           | async stream<DataEvent>
-           v
-+--------------------------+
-| DataBuffer / Queue       |
-| - crossbeam channel /    |
-|   tokio mpsc            |
-+--------------------------+
-           |
-           v
-+--------------------------+
-| Storage Layer            |
-| - write to DB/Redis/S3  |
-| - maintain T_last        |
-+--------------------------+
-           |
-           v
-+--------------------------+
-| Processing Layer / SDK   |
-| - strategy / backtest    |
-| - unified access         |
-+--------------------------+
-
-🔑 流程说明
-
-HistoricalFetcher
-
-拉取指定时间段的历史 K 线或 Tick 数据
-
-返回 Vec<OHLCV> 或 Vec<Tick>
-
-DataNormalizer
-
-标准化所有字段（统一时间戳 UTC、价格/成交量类型）
-
-RealtimeSubscriber
-
-WebSocket 实时订阅
-
-异步 stream 发送 DataEvent
-
-自动断线重连、心跳检测
-
-Deduplicator
-
-对历史和实时数据的重叠时间段去重
-
-保证时间线连续无重复
-
-DataBuffer / Queue
-
-异步缓冲，解耦采集和存储/处理
-
-可使用 crossbeam::channel 或 tokio::sync::mpsc
-
-Storage Layer
-
-持久化到时序数据库/对象存储
-
-维护最新时间点 T_last，用于历史数据与实时数据衔接
-
-Processing Layer / SDK
-
-为策略回测或实时策略提供统一接口
-
-不关心数据来源（历史或实时）
-
-Rust async 风格设计思路
-struct IngestorService {
-    historical: HistoricalFetcher,
-    realtime: RealtimeSubscriber,
-    deduplicator: Deduplicator,
-    buffer: tokio::sync::mpsc::Sender<DataEvent>,
-}
-
-impl IngestorService {
-    async fn start(&self) {
-        // 1. 拉取历史数据
-        let historical_data = self.historical.fetch().await;
-        for event in self.deduplicator.remove_overlap(historical_data) {
-            self.buffer.send(event).await.unwrap();
-        }
-
-        // 2. 订阅实时数据
-        let mut realtime_stream = self.realtime.subscribe().await;
-        while let Some(event) = realtime_stream.next().await {
-            let event = self.deduplicator.remove_overlap(vec![event]);
-            self.buffer.send(event).await.unwrap();
-        }
-    }
-}
-
-
-这个流程保证了：
-
-历史 + 实时数据 时间连续
-
-重叠去重
-
-下游模块 统一异步消费
-
-支持 断线重连和增量更新
-
-
 ========================
 flowchart TD
     subgraph IngestorService["HMDS IngestorService"]
@@ -453,3 +189,103 @@ Deduplicator 去重
 缓存 + 数据库双管齐下
 
 保证下游服务 低延迟可用
+
+
+======================================最终设计架构===================================
+单服务混合架构，同时支持 实时 pipeline 和 历史 DAG 回溯，并保证 数据完整性 + 实时性。我先画出 总体模块架构和数据流关系。
+
+📦 总体模块设计（一个服务）
++--------------------------------------------------------+
+|               Quant Market Data Service               |
+|--------------------------------------------------------|
+| 1. IngestorService                                     |
+|    - 管理启动/停止                                     |
+|    - 协调历史 DAG + 实时 Pipeline                     |
+|                                                        |
+|  +----------------------+      +--------------------+ |
+|  | HistoricalBackfill   | ---> | Deduplicator       | |
+|  | (DAG Scheduler)      |      | - 去重历史+实时    | |
+|  +----------------------+      +--------------------+ |
+|           ^                          ^                |
+|           |                          |                |
+|   +-------------------+       +--------------------+ |
+|   | HistoricalFetcher  |       | RealtimeSubscriber | |
+|   | - 拉历史数据        |       | - WS/Tick流         | |
+|   +-------------------+       +--------------------+ |
+|                                                        |
+|  2. DataBuffer / Queue                                  |
+|     - crossbeam / tokio mpsc                            |
+|     - 解耦 pipeline + 存储                               |
+|                                                        |
+|  3. Storage Layer                                       |
+|     - DB / Redis / S3                                   |
+|     - 写入 + 更新 T_last                                 |
+|                                                        |
+|  4. Processing Layer / SDK                               |
+|     - 策略/回测/统一访问
+   5 +--------------------------+
+      | Processing Layer / SDK   |
+      | - strategy / backtest    |
+      | - unified access         |
+      +--------------------------+|
++--------------------------------------------------------+
+
+🔄 数据流说明
+
+历史 DAG 回溯路径
+
+HistoricalBackfill (定时 DAG)
+   -> HistoricalFetcher (API/S3)
+   -> Deduplicator
+   -> DataBuffer
+   -> Storage Layer
+
+
+批量拉取历史数据
+
+去重 + 幂等写入
+
+更新 T_last
+
+实时 Pipeline 路径
+
+RealtimeSubscriber (WS/Tick)
+   -> Deduplicator
+   -> DataBuffer / Queue
+   -> Storage Layer
+   -> Processing Layer / SDK
+
+
+异步流消费
+
+解耦存储和策略层
+
+与历史数据共享 Deduplicator + Buffer，保证时间线连续
+
+DataBuffer / Queue
+
+统一缓冲层
+
+历史回溯数据和实时数据都通过同一个队列进入存储层
+
+下游处理层统一消费，无需关心来源
+
+Storage Layer
+
+存储历史 + 实时数据
+
+维护 T_last
+
+为策略/回测/分析提供统一访问接口
+
+⚙️ 核心设计思路
+
+单服务：历史回溯和实时订阅共存，节省部署成本
+
+统一 Deduplicator + Buffer：保证历史 + 实时数据时间线连续
+
+DAG 定时任务 + pipeline 流处理：历史批量和实时事件两条逻辑清晰分离
+
+Storage 层统一：保证数据一致性和下游统一接口
+
+模块解耦：未来可拆分成独立服务
