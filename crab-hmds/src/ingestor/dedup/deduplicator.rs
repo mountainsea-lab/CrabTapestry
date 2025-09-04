@@ -4,12 +4,23 @@ use futures_util::stream::BoxStream;
 use futures_util::{Stream, StreamExt};
 use std::sync::Arc;
 
-/// 去重模式
-/// re-duplication mode
+/// Deduplicator 支持历史/实时/统一去重模式
+/// dedup supports historical/realtime/unified deduplication mode
 #[derive(Clone, Copy, Debug)]
 pub enum DedupMode {
+    /// 历史批量回补模式
+    /// - 使用 bulk_insert / deduplicate 批量去重
+    /// - 更新 historical backend，实时 backend 不变
     Historical,
+
+    /// 实时流式模式
+    /// - 使用 dedup_one / deduplicate_stream 单条去重
+    /// - 更新 realtime backend，历史 backend 不变
     Realtime,
+
+    /// 历史 + 实时统一模式
+    /// - 同时更新 historical + realtime backend
+    /// - 用于历史数据和实时数据混合场景，保证时间重叠去重
     Unified,
 }
 
