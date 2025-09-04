@@ -144,22 +144,34 @@ pub struct HistoricalSource {
 /// 拉取上下文信息
 /// Context for fetching historical data.
 #[derive(Debug, Clone)]
-pub struct FetchContext<'a> {
-    pub source: &'a HistoricalSource,
-    pub exchange: &'a str,
-    pub symbol: &'a str,
-    pub period: Option<&'a str>, // Only valid for OHLCV
-    pub range: TimeRange,        // Time range for fetching
+pub struct FetchContext {
+    pub source: HistoricalSource,
+    pub exchange: Arc<str>,
+    pub symbol: Arc<str>,
+    pub period: Option<Arc<str>>, // ✅ 和 HistoricalBatch 对齐，也用 Arc<str>
+    pub range: TimeRange,
 }
 
 /// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
 /// Batch of historical data, unified for Trade, Tick, or OHLCV records.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HistoricalBatch<T> {
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,
-    pub period: Option<String>, // Only valid for OHLCV
-    pub range: TimeRange,       // Covered time range
-    pub data: Vec<T>,           // TickRecord, TradeRecord, or OHLCVRecord
+    pub period: Option<Arc<str>>, // ✅ 改成 Arc<str>，和 FetchContext 对齐
+    pub range: TimeRange,         // Covered time range
+    pub data: Vec<T>,             // TickRecord, TradeRecord, or OHLCVRecord
+}
+
+impl FetchContext {
+    pub fn new(source: HistoricalSource, exchange: &str, symbol: &str, period: Option<&str>, range: TimeRange) -> Self {
+        Self {
+            source,
+            exchange: Arc::<str>::from(exchange),
+            symbol: Arc::<str>::from(symbol),
+            period: period.map(|p| Arc::<str>::from(p)),
+            range,
+        }
+    }
 }
 //==============HistoricalFetcher Base Model===

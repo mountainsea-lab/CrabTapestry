@@ -17,7 +17,7 @@ impl BinanceFetcher {
     }
 
     /// 内部方法：拉取单个分页 OHLCV
-    async fn fetch_ohlcv_page(&self, ctx: &FetchContext<'_>, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
+    async fn fetch_ohlcv_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
         // TODO: 调用 Binance API，例如 Kline Endpoint
         // https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&startTime=xxx&endTime=xxx&limit=1000
         // 这里只返回空 Vec 作为示例
@@ -25,7 +25,7 @@ impl BinanceFetcher {
     }
 
     /// 内部方法：拉取单个分页 Tick
-    async fn fetch_ticks_page(&self, ctx: &FetchContext<'_>, start_ts: i64, end_ts: i64) -> Result<Vec<TickRecord>> {
+    async fn fetch_ticks_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<TickRecord>> {
         // TODO: 调用 Binance Trade History API
         Ok(Vec::new())
     }
@@ -34,7 +34,7 @@ impl BinanceFetcher {
 #[async_trait]
 impl HistoricalFetcher for BinanceFetcher {
     /// 流式拉取 OHLCV
-    async fn stream_ohlcv(&self, ctx: Arc<FetchContext<'_>>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
+    async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
         // 分批拉取，每批 1000 条（Binance 限制）
         let chunk_ms = 60 * 60 * 1000; // 1小时为例
         let ranges = ctx.range.split(chunk_ms);
@@ -60,7 +60,7 @@ impl HistoricalFetcher for BinanceFetcher {
     }
 
     /// 流式拉取 Tick
-    async fn stream_ticks(&self, ctx: Arc<FetchContext<'_>>) -> Result<BoxStream<'static, Result<TickRecord>>> {
+    async fn stream_ticks(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<TickRecord>>> {
         let chunk_ms = 60 * 60 * 1000; // 1小时为例
         let ranges = ctx.range.split(chunk_ms);
         let client = self.client.clone();
@@ -81,5 +81,50 @@ impl HistoricalFetcher for BinanceFetcher {
             });
 
         Ok(s.boxed())
+    }
+}
+
+// ---------------------- 测试 ----------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ingestor::historical::HistoricalFetcherExt;
+    use crate::ingestor::types::HistoricalSource;
+    use anyhow::Result;
+    use crab_types::TimeRange;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_fetch_ohlcv_pipeline() -> Result<()> {
+        // 构造 FetchContext
+        let ctx = Arc::new(FetchContext::new(
+            HistoricalSource {
+                name: "Binance API".to_string(),
+                exchange: "binance".to_string(),
+                last_success_ts: 0,
+                last_fetch_ts: 0,
+                batch_size: 0,
+                supports_tick: false,
+                supports_trade: false,
+                supports_ohlcv: false,
+            },
+            "binance",
+            "BTC/USDT",
+            Some("1h"),
+            TimeRange::new(0, 3 * 60 * 60 * 1000), // 3 小时
+        ));
+
+        let fetcher = BinanceFetcher::new();
+
+        // 批量拉取 OHLCV
+        let batch = fetcher.fetch_ohlcv(ctx.clone()).await?;
+
+        // 打印输出，确保字段被使用
+        println!("HistoricalBatch: {:#?}", batch);
+
+        // 简单断言，保证数据条数正确
+        assert_eq!(batch.data.len(), 3); // 3 个小时 -> 3 条记录
+
+        Ok(())
     }
 }

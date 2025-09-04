@@ -13,11 +13,11 @@ use std::sync::Arc;
 pub trait HistoricalFetcher: Send + Sync {
     /// 拉取 OHLCV 数据（流式模式，适合大规模回溯）
     /// pull OHLCV data in stream mode, suitable for large-scale backfilling
-    async fn stream_ohlcv(&self, ctx: Arc<FetchContext<'_>>) -> Result<BoxStream<'static, Result<OHLCVRecord>>>;
+    async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>>;
 
     /// 拉取 Tick 数据（流式模式）
     /// pull tick data in stream mode
-    async fn stream_ticks(&self, ctx: Arc<FetchContext<'_>>) -> Result<BoxStream<'static, Result<TickRecord>>>;
+    async fn stream_ticks(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<TickRecord>>>;
 }
 
 /// Extension trait: provides batch fetch by collecting stream
@@ -25,16 +25,16 @@ pub trait HistoricalFetcher: Send + Sync {
 pub trait HistoricalFetcherExt: HistoricalFetcher {
     /// 拉取 OHLCV 数据（批量模式）
     /// pull OHLCV data in batch mode
-    async fn fetch_ohlcv(&self, ctx: Arc<FetchContext<'_>>) -> Result<HistoricalBatch<OHLCVRecord>> {
+    async fn fetch_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<HistoricalBatch<OHLCVRecord>> {
         let mut stream = self.stream_ohlcv(ctx.clone()).await?;
         let mut data = Vec::new();
         while let Some(item) = stream.next().await {
             data.push(item?);
         }
         Ok(HistoricalBatch {
-            symbol: ctx.symbol.into(),
-            exchange: ctx.source.name.clone().into(),
-            period: ctx.period.map(|p| p.to_string()),
+            symbol: ctx.symbol.clone(),
+            exchange: ctx.exchange.clone(),
+            period: ctx.period.clone(), // ✅ 直接 clone Arc
             range: ctx.range.clone(),
             data,
         })
@@ -42,16 +42,16 @@ pub trait HistoricalFetcherExt: HistoricalFetcher {
 
     /// 拉取 Tick 数据（批量模式）
     /// pull tick data in batch mode
-    async fn fetch_ticks(&self, ctx: Arc<FetchContext<'_>>) -> Result<HistoricalBatch<TickRecord>> {
+    async fn fetch_ticks(&self, ctx: Arc<FetchContext>) -> Result<HistoricalBatch<TickRecord>> {
         let mut stream = self.stream_ticks(ctx.clone()).await?;
         let mut data = Vec::new();
         while let Some(item) = stream.next().await {
             data.push(item?);
         }
         Ok(HistoricalBatch {
-            symbol: ctx.symbol.into(),
-            exchange: ctx.source.name.clone().into(),
-            period: None,
+            symbol: ctx.symbol.clone(),
+            exchange: ctx.exchange.clone(),
+            period: ctx.period.clone(), // ✅ 直接 clone Arc
             range: ctx.range.clone(),
             data,
         })
