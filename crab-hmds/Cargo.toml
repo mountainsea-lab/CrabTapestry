@@ -8,6 +8,7 @@ edition = "2024"
 tokio = {workspace = true}
 async-trait = {workspace = true}
 futures-util = { workspace = true }
+crossbeam = { workspace = true }
 
 # CrabTapestry Ecosystem
 crab-common-utils = { workspace = true }

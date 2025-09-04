@@ -535,6 +535,7 @@ dependencies = [
  "crab-common-utils",
  "crab-infras",
  "crab-types",
+ "crossbeam",
  "dashmap",
  "futures-util",
  "tokio",
