@@ -1,7 +1,7 @@
+use crate::ingestor::dedup::Deduplicatable;
+use chrono::Utc;
 use crab_types::TimeRange;
 use std::sync::Arc;
-use chrono::Utc;
-use crate::ingestor::dedup::Deduplicatable;
 
 /**
 4. 实践建议
@@ -132,12 +132,20 @@ impl Deduplicatable for OHLCVRecord {
         // symbol + period + ts
         Arc::from(format!("{}:{}:{}", self.symbol, self.period, self.ts))
     }
+
+    fn timestamp(&self) -> i64 {
+        todo!()
+    }
 }
 
 impl Deduplicatable for TickRecord {
     fn unique_key(&self) -> Arc<str> {
         // symbol + ts
         Arc::from(format!("{}:{}", self.symbol, self.ts))
+    }
+
+    fn timestamp(&self) -> i64 {
+        todo!()
     }
 }
 

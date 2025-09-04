@@ -2,9 +2,9 @@ use crate::ingestor::historical::HistoricalFetcher;
 use crate::ingestor::types::{FetchContext, OHLCVRecord, TickRecord};
 use anyhow::Result;
 use async_trait::async_trait;
-use crab_infras::external::binance::market::KlineSummary;
 use crab_infras::external::binance::DefaultBinanceExchange;
-use futures_util::{stream, stream::BoxStream, StreamExt};
+use crab_infras::external::binance::market::KlineSummary;
+use futures_util::{StreamExt, stream, stream::BoxStream};
 use std::sync::Arc;
 
 /// Binance 历史数据拉取器
@@ -135,7 +135,6 @@ mod tests {
     use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
 
-
     #[tokio::test]
     async fn test_fetch_ohlcv_pipeline() -> Result<()> {
         // 构造 FetchContext
@@ -154,7 +153,7 @@ mod tests {
             "BTCUSDT",
             Some("1h"),
             Some(3), // 最近 3 小时
-            None, // 最近 3 小时, // 3 小时
+            None,    // 最近 3 小时, // 3 小时
         );
 
         let fetcher = BinanceFetcher::new();

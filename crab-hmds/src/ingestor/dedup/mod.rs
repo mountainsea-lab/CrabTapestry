@@ -8,6 +8,7 @@ pub trait Deduplicatable {
     /// 返回唯一 key，建议使用 Arc<str> 或组合元组，避免 heap 分配
     /// return unique key, it's recommended to use Arc<str> or a combination of tuples to avoid heap allocation
     fn unique_key(&self) -> Arc<str>;
+    fn timestamp(&self) -> i64;
 }
 
 /// insert → 返回 true 表示新 key，false 表示重复
