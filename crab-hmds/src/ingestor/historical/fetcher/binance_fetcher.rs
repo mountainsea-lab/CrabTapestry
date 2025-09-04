@@ -2,12 +2,13 @@ use crate::ingestor::historical::HistoricalFetcher;
 use crate::ingestor::types::{FetchContext, OHLCVRecord, TickRecord};
 use anyhow::Result;
 use async_trait::async_trait;
-use crab_infras::external::binance::DefaultBinanceExchange;
 use crab_infras::external::binance::market::KlineSummary;
-use futures_util::{StreamExt, stream, stream::BoxStream};
+use crab_infras::external::binance::DefaultBinanceExchange;
+use futures_util::{stream, stream::BoxStream, StreamExt};
 use std::sync::Arc;
 
 /// Binance 历史数据拉取器
+/// Binance historical data fetcher
 pub struct BinanceFetcher {
     client: Arc<DefaultBinanceExchange<'static>>,
 }
@@ -20,6 +21,7 @@ impl BinanceFetcher {
     }
 
     /// 内部方法：拉取单个分页 OHLCV
+    /// internal method: fetch single page of OHLCV
     async fn fetch_ohlcv_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
         let symbol = ctx.symbol.clone();
         let interval = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
@@ -64,6 +66,7 @@ impl BinanceFetcher {
     }
 
     /// 内部方法：拉取单个分页 Tick
+    /// internal method: fetch single page of ticks
     async fn fetch_ticks_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<TickRecord>> {
         // TODO: 调用 Binance Trade History API
         Ok(Vec::new())
@@ -73,6 +76,7 @@ impl BinanceFetcher {
 #[async_trait]
 impl HistoricalFetcher for BinanceFetcher {
     /// 流式拉取 OHLCV
+    /// stream pull ohlcv from exchange
     async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
         let chunk_ms = 60 * 60 * 1000; // 每小时为例
         let ranges = ctx.range.split(chunk_ms);
@@ -97,6 +101,7 @@ impl HistoricalFetcher for BinanceFetcher {
     }
 
     /// 流式拉取 Tick
+    /// stream pull ticks from exchange
     async fn stream_ticks(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<TickRecord>>> {
         let chunk_ms = 60 * 60 * 1000; // 每小时为例
         let ranges = ctx.range.split(chunk_ms);
@@ -122,19 +127,19 @@ impl HistoricalFetcher for BinanceFetcher {
 }
 
 // ---------------------- 测试 ----------------------
+// ---------------------- test ----------------------
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ingestor::historical::HistoricalFetcherExt;
     use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
-    use crab_types::TimeRange;
-    use std::sync::Arc;
+
 
     #[tokio::test]
     async fn test_fetch_ohlcv_pipeline() -> Result<()> {
         // 构造 FetchContext
-        let ctx = Arc::new(FetchContext::new(
+        let ctx = FetchContext::new_with_past(
             HistoricalSource {
                 name: "Binance API".to_string(),
                 exchange: "binance".to_string(),
@@ -146,10 +151,11 @@ mod tests {
                 supports_ohlcv: false,
             },
             "binance",
-            "BTC/USDT",
+            "BTCUSDT",
             Some("1h"),
-            TimeRange::new(0, 3 * 60 * 60 * 1000), // 3 小时
-        ));
+            Some(3), // 最近 3 小时
+            None, // 最近 3 小时, // 3 小时
+        );
 
         let fetcher = BinanceFetcher::new();
 

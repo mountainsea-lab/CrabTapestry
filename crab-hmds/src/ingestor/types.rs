@@ -1,5 +1,6 @@
 use crab_types::TimeRange;
 use std::sync::Arc;
+use chrono::Utc;
 
 /**
 4. 实践建议
@@ -172,6 +173,40 @@ impl FetchContext {
             period: period.map(|p| Arc::<str>::from(p)),
             range,
         }
+    }
+
+    /// 创建 FetchContext，并生成一个安全的时间区间
+    ///
+    /// `past_hours` / `past_days` 可选，优先使用小时
+    pub fn new_with_past(
+        source: HistoricalSource,
+        exchange: &str,
+        symbol: &str,
+        period: Option<&str>,
+        past_hours: Option<i64>,
+        past_days: Option<i64>,
+    ) -> Arc<Self> {
+        // 当前 UTC 时间（毫秒）
+        let end_ts = Utc::now().timestamp_millis();
+
+        // 计算开始时间
+        let start_ts = if let Some(hours) = past_hours {
+            end_ts - hours * 60 * 60 * 1000
+        } else if let Some(days) = past_days {
+            end_ts - days * 24 * 60 * 60 * 1000
+        } else {
+            end_ts - 60 * 60 * 1000 // 默认过去 1 小时
+        };
+
+        let range = TimeRange::new(start_ts, end_ts);
+
+        Arc::new(Self {
+            source,
+            exchange: Arc::from(exchange),
+            symbol: Arc::from(symbol),
+            period: period.map(|p| Arc::from(p)),
+            range,
+        })
     }
 }
 //==============HistoricalFetcher Base Model===
