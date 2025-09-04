@@ -19,3 +19,6 @@ anyhow = {workspace = true}
 
 # Time
 chrono = {workspace = true}
+
+# SerDe Data
+dashmap =  { workspace = true }

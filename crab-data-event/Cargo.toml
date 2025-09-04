@@ -23,10 +23,10 @@ barter-data = { workspace = true }
 # tracing
 ms-tracing = { workspace = true }
 
-# SerDe
+# SerDe Data
 serde = { workspace = true }
 serde_json = { workspace = true }
-dashmap = "6.1.0"
+dashmap =  { workspace = true }
 
 # Time
 time = {workspace = true}

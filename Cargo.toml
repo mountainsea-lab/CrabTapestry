@@ -38,9 +38,10 @@ barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "d
 # tracing
 ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
 
-# SerDe
+# SerDe Data
 serde_json = "1.0.140"
 serde = { version = "1.0.219", features = ["derive"] }
+dashmap = "6.1.0"
 
 # Time
 time = { version = "^0.3.41", features = ["serde", "formatting", "parsing"] }
