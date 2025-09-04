@@ -1,12 +1,12 @@
 use async_stream::stream;
+use crossbeam::queue::SegQueue;
 use futures_util::{Stream, StreamExt, stream::BoxStream};
+use ms_tracing::tracing_utils::internal::warn;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use crossbeam::queue::SegQueue;
-use ms_tracing::tracing_utils::internal::warn;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 
 /// 最大容量策略
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +15,7 @@ pub enum CapacityStrategy {
     DropNewest,
     /// 超出容量丢弃最老数据
     DropOldest,
-    /// 阻塞等待直到有空间
+    /// 阻塞等待直到有空间（基于 Semaphore）
     Block,
 }
 
@@ -32,6 +32,7 @@ where
     batch_notify_size: usize,
     batch_counter: AtomicUsize,
     capacity_strategy: CapacityStrategy,
+    permits: Option<Arc<Semaphore>>, // Block 策略专用
 }
 
 impl<T> DataBuffer<T>
@@ -39,19 +40,29 @@ where
     T: Send + Sync + 'static,
 {
     /// 创建新 DataBuffer
-    pub fn new(max_capacity: Option<usize>, batch_notify_size: usize, capacity_strategy: CapacityStrategy) -> Self {
-        Self {
+    pub fn new(
+        max_capacity: Option<usize>,
+        batch_notify_size: usize,
+        capacity_strategy: CapacityStrategy,
+    ) -> Arc<Self> {
+        let permits = match (capacity_strategy, max_capacity) {
+            (CapacityStrategy::Block, Some(max)) => Some(Arc::new(Semaphore::new(max))),
+            _ => None,
+        };
+
+        Arc::new(Self {
             queue: Arc::new(SegQueue::new()),
             notify: Arc::new(Notify::new()),
             max_capacity,
             batch_notify_size,
             batch_counter: AtomicUsize::new(0),
             capacity_strategy,
-        }
+            permits,
+        })
     }
 
-    /// 入队单条数据
-    pub fn push(&self, item: T) {
+    /// 入队单条数据（Block 策略下为异步）
+    pub async fn push(self: &Arc<Self>, item: T) {
         if let Some(max) = self.max_capacity {
             if self.queue.len() >= max {
                 match self.capacity_strategy {
@@ -63,9 +74,9 @@ where
                         let _ = self.queue.pop();
                     }
                     CapacityStrategy::Block => {
-                        // 简单 busy-wait，可用 async-aware semaphore 改进
-                        while self.queue.len() >= max {
-                            std::thread::yield_now();
+                        if let Some(permits) = &self.permits {
+                            // 等待一个 permit
+                            let _ = permits.acquire().await.unwrap();
                         }
                     }
                 }
@@ -81,7 +92,7 @@ where
     }
 
     /// 批量入队
-    pub fn push_batch(&self, items: Vec<T>) {
+    pub async fn push_batch(self: &Arc<Self>, items: Vec<T>) {
         let mut added = 0;
         for item in items {
             if let Some(max) = self.max_capacity {
@@ -92,8 +103,8 @@ where
                             let _ = self.queue.pop();
                         }
                         CapacityStrategy::Block => {
-                            while self.queue.len() >= max {
-                                std::thread::yield_now();
+                            if let Some(permits) = &self.permits {
+                                let _ = permits.acquire().await.unwrap();
                             }
                         }
                     }
@@ -113,31 +124,31 @@ where
     }
 
     /// 异步流式消费（批量 yield）
-    pub fn consume_stream(&self, batch_size: usize) -> BoxStream<'static, Vec<Arc<T>>> {
+    pub fn consume_stream(self: &Arc<Self>, batch_size: usize) -> BoxStream<'static, Vec<Arc<T>>> {
         let queue = Arc::clone(&self.queue);
         let notify = Arc::clone(&self.notify);
+        let permits = self.permits.clone();
 
         let s = stream! {
             loop {
-                // 新建 batch
                 let mut batch = Vec::with_capacity(batch_size);
 
-                // 拉取数据填充 batch
                 while batch.len() < batch_size {
                     if let Some(item) = queue.pop() {
                         batch.push(item);
+                        if let Some(p) = &permits {
+                            p.add_permits(1); // 消费后释放 permit
+                        }
                     } else {
                         break;
                     }
                 }
 
-                // 如果有数据就 yield
                 if !batch.is_empty() {
                     yield batch;
-                    continue; // 重新开始循环，batch 已经 move，不会再访问
+                    continue;
                 }
 
-                // 队列空了，等待 notify
                 notify.notified().await;
             }
         };
@@ -145,14 +156,114 @@ where
         s.boxed()
     }
 
-    /// 当前队列长度
     pub fn len(&self) -> usize {
         self.queue.len()
     }
 
-    /// 清空队列
     pub fn clear(&self) {
         while let Some(_) = self.queue.pop() {}
-        self.batch_counter.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.batch_counter.store(0, Ordering::Relaxed);
+        if let Some(p) = &self.permits {
+            if let Some(max) = self.max_capacity {
+                p.add_permits(max.saturating_sub(self.queue.len()));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::StreamExt;
+    use tokio::task;
+
+    #[tokio::test]
+    async fn test_drop_newest_strategy() {
+        let buf = DataBuffer::new(Some(5), 1, CapacityStrategy::DropNewest);
+        for i in 0..10 {
+            buf.push(i).await;
+        }
+        assert!(buf.len() <= 5);
+    }
+
+    #[tokio::test]
+    async fn test_drop_oldest_strategy() {
+        let buf = DataBuffer::new(Some(5), 1, CapacityStrategy::DropOldest);
+        for i in 0..10 {
+            buf.push(i).await;
+        }
+        assert_eq!(buf.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_block_strategy_no_loss() {
+        let buf = DataBuffer::new(Some(5), 1, CapacityStrategy::Block);
+
+        // consumer 在后台跑，持续消费
+        let consumer = {
+            let buf = Arc::clone(&buf);
+            task::spawn(async move {
+                let mut stream = buf.consume_stream(2);
+                let mut consumed = 0;
+                while let Some(batch) = stream.next().await {
+                    consumed += batch.len();
+                    if consumed >= 10 {
+                        break;
+                    }
+                }
+                consumed
+            })
+        };
+
+        // producer 并发写入
+        let producer = {
+            let buf = Arc::clone(&buf);
+            task::spawn(async move {
+                for i in 0..10 {
+                    buf.push(i).await;
+                }
+            })
+        };
+
+        producer.await.unwrap();
+        let consumed = consumer.await.unwrap();
+        assert_eq!(consumed, 10, "Block strategy should not drop data");
+    }
+
+    #[tokio::test]
+    async fn test_high_concurrency() {
+        let buf = DataBuffer::new(Some(1000), 10, CapacityStrategy::Block);
+
+        let consumers = {
+            let buf = Arc::clone(&buf);
+            task::spawn(async move {
+                let mut stream = buf.consume_stream(50);
+                let mut consumed = 0;
+                while let Some(batch) = stream.next().await {
+                    consumed += batch.len();
+                    if consumed >= 100_000 {
+                        break;
+                    }
+                }
+                consumed
+            })
+        };
+
+        let mut producers = Vec::new();
+        for _ in 0..4 {
+            let buf = Arc::clone(&buf);
+            producers.push(task::spawn(async move {
+                for i in 0..25_000 {
+                    buf.push(i).await;
+                }
+            }));
+        }
+
+        for p in producers {
+            p.await.unwrap();
+        }
+
+        let consumed = consumers.await.unwrap();
+        assert_eq!(consumed, 100_000);
     }
 }
