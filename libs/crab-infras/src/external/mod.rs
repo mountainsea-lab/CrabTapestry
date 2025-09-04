@@ -3,7 +3,7 @@ use barter_integration::protocol::http::HttpParser;
 use reqwest::StatusCode;
 use thiserror::Error;
 
-mod binance;
+pub mod binance;
 
 /// Parser for third domain responses
 #[derive(Debug)]

@@ -2,26 +2,65 @@ use crate::ingestor::historical::HistoricalFetcher;
 use crate::ingestor::types::{FetchContext, OHLCVRecord, TickRecord};
 use anyhow::Result;
 use async_trait::async_trait;
+use crab_infras::external::binance::DefaultBinanceExchange;
+use crab_infras::external::binance::market::KlineSummary;
 use futures_util::{StreamExt, stream, stream::BoxStream};
 use std::sync::Arc;
 
 /// Binance 历史数据拉取器
 pub struct BinanceFetcher {
-    // todo use crab infras
-    client: String,
+    client: DefaultBinanceExchange<'static>,
 }
 
 impl BinanceFetcher {
     pub fn new() -> Self {
-        Self { client: String::from("client_id") }
+        Self {
+            client: DefaultBinanceExchange::default(),
+        }
     }
 
     /// 内部方法：拉取单个分页 OHLCV
     async fn fetch_ohlcv_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
-        // TODO: 调用 Binance API，例如 Kline Endpoint
-        // https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&startTime=xxx&endTime=xxx&limit=1000
-        // 这里只返回空 Vec 作为示例
-        Ok(Vec::new())
+        let symbol = ctx.symbol.clone();
+        let interval = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
+
+        // 调用 BinanceExchange 获取 KlineSummary
+        let kline_summaries: Vec<KlineSummary> = self
+            .client
+            .get_klines(
+                symbol.as_ref(),
+                interval.as_ref(),
+                Some(1000),
+                Some(start_ts as u64),
+                Some(end_ts as u64),
+            )
+            .await;
+
+        // 转换 KlineSummary -> OHLCVRecord
+        let records: Vec<OHLCVRecord> = kline_summaries
+            .into_iter()
+            .map(|k| OHLCVRecord {
+                ts: k.close_time,
+                period_start_ts: Some(k.open_time),
+                open: k.open,
+                high: k.high,
+                low: k.low,
+                close: k.close,
+                volume: k.volume,
+                turnover: Some(k.quote_asset_volume),
+                num_trades: Some(k.number_of_trades as u32),
+                vwap: if k.volume != 0.0 {
+                    Some(k.quote_asset_volume / k.volume)
+                } else {
+                    None
+                },
+                symbol: ctx.symbol.clone(),
+                exchange: ctx.exchange.clone(),
+                period: interval.as_ref().to_string(),
+            })
+            .collect();
+
+        Ok(records)
     }
 
     /// 内部方法：拉取单个分页 Tick
@@ -33,19 +72,47 @@ impl BinanceFetcher {
 
 #[async_trait]
 impl HistoricalFetcher for BinanceFetcher {
+    // /// 流式拉取 OHLCV
+    // async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
+    //     // 分批拉取，每批 1000 条（Binance 限制）
+    //     let chunk_ms = 60 * 60 * 1000; // 1小时为例
+    //     let ranges = ctx.range.split(chunk_ms);
+    //     let client = self.client;
+    //     let ctx_clone = ctx.clone();
+    //
+    //     // 创建异步 Stream
+    //     let s = stream::iter(ranges.into_iter())
+    //         .then(move |range| {
+    //             let ctx = ctx_clone.clone();
+    //             let client = client.clone();
+    //             async move {
+    //                 let fetcher = BinanceFetcher { client };
+    //                 fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
+    //             }
+    //         })
+    //         .flat_map(|res| match res {
+    //             Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
+    //             Err(e) => stream::iter(vec![Err(e)]).boxed(),
+    //         });
+    //
+    //     Ok(s.boxed())
+    // }
+
     /// 流式拉取 OHLCV
-    async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-        // 分批拉取，每批 1000 条（Binance 限制）
-        let chunk_ms = 60 * 60 * 1000; // 1小时为例
+    pub async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
+        // 分批拉取，每批 1小时（Binance 限制）
+        let chunk_ms = 60 * 60 * 1000;
         let ranges = ctx.range.split(chunk_ms);
-        let client = self.client.clone();
         let ctx_clone = ctx.clone();
+
+        // 使用 Arc 包装 client，避免移动问题
+        let client = Arc::new(self.client.clone());
 
         // 创建异步 Stream
         let s = stream::iter(ranges.into_iter())
             .then(move |range| {
                 let ctx = ctx_clone.clone();
-                let client = client.clone();
+                let client = client.clone(); // 每个任务持有 Arc 副本
                 async move {
                     let fetcher = BinanceFetcher { client };
                     fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
