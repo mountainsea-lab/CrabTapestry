@@ -1,11 +1,11 @@
 use async_stream::stream;
-use crossbeam_queue::SegQueue;
 use futures_util::{Stream, StreamExt, stream::BoxStream};
-use log::warn;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use crossbeam::queue::SegQueue;
+use ms_tracing::tracing_utils::internal::warn;
 use tokio::sync::Notify;
 
 /// 最大容量策略

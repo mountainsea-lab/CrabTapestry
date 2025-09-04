@@ -537,10 +537,8 @@ dependencies = [
  "crab-infras",
  "crab-types",
  "crossbeam",
- "crossbeam-queue",
  "dashmap",
  "futures-util",
- "log",
  "ms-tracing",
  "tokio",
 ]
