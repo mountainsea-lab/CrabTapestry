@@ -129,23 +129,26 @@ pub type OHLCVBatch = Vec<OHLCVRecord>;
 
 impl Deduplicatable for OHLCVRecord {
     fn unique_key(&self) -> Arc<str> {
-        // symbol + period + ts
-        Arc::from(format!("{}:{}:{}", self.symbol, self.period, self.ts))
+        // 唯一 key = exchange + symbol + period + ts
+        // unique key = exchange + symbol + period + ts
+        Arc::from(format!("{}:{}:{}:{}", self.exchange, self.symbol, self.period, self.ts))
     }
 
     fn timestamp(&self) -> i64 {
-        todo!()
+        self.ts
     }
 }
 
 impl Deduplicatable for TickRecord {
     fn unique_key(&self) -> Arc<str> {
-        // symbol + ts
-        Arc::from(format!("{}:{}", self.symbol, self.ts))
+        // 唯一 key = exchange + symbol + ts (+ trade_id 如果有的话)
+        // unique key = exchange + symbol + ts (+ trade_id if available)
+        Arc::from(format!("{}:{}:{}", self.exchange, self.symbol, self.ts))
     }
 
+
     fn timestamp(&self) -> i64 {
-        todo!()
+        self.ts
     }
 }
 
