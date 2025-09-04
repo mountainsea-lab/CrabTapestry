@@ -67,7 +67,7 @@ impl BinanceFetcher {
 
     /// 内部方法：拉取单个分页 Tick
     /// internal method: fetch single page of ticks
-    async fn fetch_ticks_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<TickRecord>> {
+    async fn fetch_ticks_page(&self, _ctx: &FetchContext, _start_ts: i64, _end_ts: i64) -> Result<Vec<TickRecord>> {
         // TODO: 调用 Binance Trade History API
         Ok(Vec::new())
     }

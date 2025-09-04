@@ -146,7 +146,6 @@ impl Deduplicatable for TickRecord {
         Arc::from(format!("{}:{}:{}", self.exchange, self.symbol, self.ts))
     }
 
-
     fn timestamp(&self) -> i64 {
         self.ts
     }

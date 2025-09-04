@@ -1,5 +1,7 @@
 use crate::ingestor::dedup::{Deduplicatable, DeduplicatorBackend};
 use dashmap::{DashMap, DashSet};
+use futures_util::stream::BoxStream;
+use futures_util::StreamExt;
 use std::sync::Arc;
 
 /// 历史回补模式
@@ -63,8 +65,7 @@ impl DeduplicatorBackend for DashMapBackend {
     }
 }
 
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Deduplicator<T, B>
 where
     T: Deduplicatable + Send + Sync,
@@ -74,25 +75,72 @@ where
     _marker: std::marker::PhantomData<T>,
 }
 
+// 只要求 B 可 Clone
+// only require B can Clone
+impl<T, B> Clone for Deduplicator<T, B>
+where
+    T: Deduplicatable + Send + Sync, // 继承结构体约束
+    B: DeduplicatorBackend + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            backend: self.backend.clone(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<T, B> Deduplicator<T, B>
 where
-    T: Deduplicatable + Send + Sync,
+    T: Deduplicatable + Send + Sync + 'static,
     B: DeduplicatorBackend,
 {
     pub fn new(backend: B) -> Self {
-        Self { backend, _marker: std::marker::PhantomData }
+        Self {
+            backend,
+            _marker: std::marker::PhantomData,
+        }
+    }
+    /// 去重单条（实时流场景）
+    /// Deduplicate a single record (real-time streaming scenario)
+    pub fn dedup_one(&self, record: T) -> Option<T> {
+        let key = record.unique_key();
+        let ts = record.timestamp();
+        if self.backend.insert(key, ts) {
+            Some(record)
+        } else {
+            None
+        }
     }
 
+    /// 批量去重（历史数据批量场景）
+    /// Deduplicate a batch of records (historical data batch scenario)
     pub fn deduplicate(&self, records: Vec<T>) -> Vec<T> {
         let mut result = Vec::with_capacity(records.len());
         for record in records {
-            let key = record.unique_key();
-            let ts = record.timestamp();
-            if self.backend.insert(key, ts) {
-                result.push(record);
+            if let Some(rec) = self.dedup_one(record) {
+                result.push(rec);
             }
         }
         result
+    }
+
+    /// 对流式数据去重（直接接到 HistoricalFetcher::stream_xxx 输出）
+    /// Deduplicate streaming data (directly received from HistoricalFetcher::stream_xxx output)
+    /// 异步流去重
+    pub fn deduplicate_stream<S>(self: Arc<Self>, stream: S) -> BoxStream<'static, T>
+    where
+        S: futures_util::stream::Stream<Item = T> + Send + 'static,
+    {
+        stream
+            .filter_map(move |record| {
+                let dedup = Arc::clone(&self);
+                async move {
+                    // dedup_one 返回 Option<T>
+                    dedup.dedup_one(record)
+                }
+            })
+            .boxed()
     }
 
     pub fn reset(&self) {
