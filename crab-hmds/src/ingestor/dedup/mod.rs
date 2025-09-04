@@ -9,3 +9,23 @@ pub trait Deduplicatable {
     /// return unique key, it's recommended to use Arc<str> or a combination of tuples to avoid heap allocation
     fn unique_key(&self) -> Arc<str>;
 }
+
+/// insert → 返回 true 表示新 key，false 表示重复
+///
+/// insert → returns true if new key, false if duplicate
+///
+/// ts → 方便实时模式下做 TTL 清理
+///
+/// ts → useful for TTL cleanup in real-time mode
+///
+/// gc → 定期垃圾回收
+///
+/// gc → periodically garbage collection
+///
+pub trait DeduplicatorBackend: Send + Sync + 'static {
+    fn insert(&self, key: Arc<str>, ts: i64) -> bool;
+    fn reset(&self);
+    // 实时模式才需要，历史模式可以空实现
+    // only needed in real-time mode, can be empty implementation in historical mode
+    fn gc(&self, now: i64);
+}
