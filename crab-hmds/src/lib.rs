@@ -1,1 +1,1 @@
-mod ingestor;
+pub mod ingestor;
