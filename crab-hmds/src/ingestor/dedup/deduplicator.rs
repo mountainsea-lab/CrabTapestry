@@ -1,8 +1,17 @@
 use crate::ingestor::dedup::{Deduplicatable, DeduplicatorBackend};
 use dashmap::{DashMap, DashSet};
 use futures_util::stream::BoxStream;
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use std::sync::Arc;
+
+/// 去重模式
+/// re-duplication mode
+#[derive(Clone, Copy, Debug)]
+pub enum DedupMode {
+    Historical,
+    Realtime,
+    Unified,
+}
 
 /// 历史回补模式
 /// history replay mode
@@ -14,6 +23,11 @@ pub struct DashSetBackend {
 impl DashSetBackend {
     pub fn new() -> Self {
         Self { seen: Arc::new(DashSet::new()) }
+    }
+    /// 支持批量插入
+    /// Support bulk insertion
+    pub fn bulk_insert(&self, keys: &[Arc<str>]) -> Vec<bool> {
+        keys.iter().map(|k| self.seen.insert(k.clone())).collect()
     }
 }
 
@@ -44,6 +58,19 @@ impl DashMapBackend {
     pub fn new(ttl_ms: i64) -> Self {
         Self { seen: Arc::new(DashMap::new()), ttl_ms }
     }
+
+    /// 支持批量插入
+    /// Support bulk insertion
+    pub fn bulk_insert(&self, keys_ts: &[(Arc<str>, i64)]) -> Vec<bool> {
+        keys_ts
+            .iter()
+            .map(|(k, ts)| match self.seen.insert(k.clone(), *ts) {
+                None => true,
+                Some(prev) if *ts > prev => true,
+                _ => false,
+            })
+            .collect()
+    }
 }
 
 impl DeduplicatorBackend for DashMapBackend {
@@ -65,89 +92,102 @@ impl DeduplicatorBackend for DashMapBackend {
     }
 }
 
-#[derive(Debug)]
-pub struct Deduplicator<T, B>
+/// Deduplicator 统一结构多模式支持
+/// Deduplicator supports multiple modes
+#[derive(Debug, Clone)]
+pub struct Deduplicator<T>
 where
-    T: Deduplicatable + Send + Sync,
-    B: DeduplicatorBackend,
+    T: Deduplicatable + Send + Sync + Clone,
 {
-    backend: B,
+    historical: DashSetBackend,
+    realtime: DashMapBackend,
     _marker: std::marker::PhantomData<T>,
 }
 
-// 只要求 B 可 Clone
-// only require B can Clone
-impl<T, B> Clone for Deduplicator<T, B>
+impl<T> Deduplicator<T>
 where
-    T: Deduplicatable + Send + Sync, // 继承结构体约束
-    B: DeduplicatorBackend + Clone,
+    T: Deduplicatable + Send + Sync + 'static + Clone,
 {
-    fn clone(&self) -> Self {
+    pub fn new(ttl_ms: i64) -> Self {
         Self {
-            backend: self.backend.clone(),
+            historical: DashSetBackend::new(),
+            realtime: DashMapBackend::new(ttl_ms),
             _marker: std::marker::PhantomData,
         }
     }
-}
 
-impl<T, B> Deduplicator<T, B>
-where
-    T: Deduplicatable + Send + Sync + 'static,
-    B: DeduplicatorBackend,
-{
-    pub fn new(backend: B) -> Self {
-        Self {
-            backend,
-            _marker: std::marker::PhantomData,
-        }
-    }
-    /// 去重单条（实时流场景）
-    /// Deduplicate a single record (real-time streaming scenario)
-    pub fn dedup_one(&self, record: T) -> Option<T> {
+    /// 单条去重
+    /// Deduplicate a single record
+    pub fn dedup_one(&self, record: T, mode: DedupMode) -> Option<T> {
         let key = record.unique_key();
         let ts = record.timestamp();
-        if self.backend.insert(key, ts) {
-            Some(record)
-        } else {
-            None
-        }
+        let inserted = match mode {
+            DedupMode::Historical => self.historical.insert(key, ts),
+            DedupMode::Realtime => self.realtime.insert(key, ts),
+            DedupMode::Unified => {
+                let hist = self.historical.insert(key.clone(), ts);
+                let realtime = self.realtime.insert(key, ts);
+                hist || realtime
+            }
+        };
+        if inserted { Some(record) } else { None }
     }
 
-    /// 批量去重（历史数据批量场景）
-    /// Deduplicate a batch of records (historical data batch scenario)
-    pub fn deduplicate(&self, records: Vec<T>) -> Vec<T> {
-        let mut result = Vec::with_capacity(records.len());
-        for record in records {
-            if let Some(rec) = self.dedup_one(record) {
-                result.push(rec);
+    /// 批量去重
+    /// Deduplicate a batch of records
+    pub fn deduplicate(&self, records: Vec<T>, mode: DedupMode) -> Vec<T> {
+        match mode {
+            DedupMode::Historical => {
+                let keys: Vec<_> = records.iter().map(|r| r.unique_key()).collect();
+                let results = self.historical.bulk_insert(&keys);
+                records
+                    .into_iter()
+                    .zip(results)
+                    .filter_map(|(r, ok)| if ok { Some(r) } else { None })
+                    .collect()
+            }
+            DedupMode::Realtime => {
+                let keys_ts: Vec<_> = records.iter().map(|r| (r.unique_key(), r.timestamp())).collect();
+                let results = self.realtime.bulk_insert(&keys_ts);
+                records
+                    .into_iter()
+                    .zip(results)
+                    .filter_map(|(r, ok)| if ok { Some(r) } else { None })
+                    .collect()
+            }
+            DedupMode::Unified => {
+                let mut result = Vec::with_capacity(records.len());
+                for r in records {
+                    if self.dedup_one(r.clone(), DedupMode::Unified).is_some() {
+                        result.push(r);
+                    }
+                }
+                result
             }
         }
-        result
     }
 
-    /// 对流式数据去重（直接接到 HistoricalFetcher::stream_xxx 输出）
-    /// Deduplicate streaming data (directly received from HistoricalFetcher::stream_xxx output)
-    /// 异步流去重
-    pub fn deduplicate_stream<S>(self: Arc<Self>, stream: S) -> BoxStream<'static, T>
+    /// 流式去重
+    /// Deduplicate streaming data
+    pub fn deduplicate_stream<S>(&self, stream: S, mode: DedupMode) -> BoxStream<'static, T>
     where
-        S: futures_util::stream::Stream<Item = T> + Send + 'static,
+        S: Stream<Item = T> + Send + 'static,
     {
+        let dedup = Arc::new(self.clone());
         stream
             .filter_map(move |record| {
-                let dedup = Arc::clone(&self);
-                async move {
-                    // dedup_one 返回 Option<T>
-                    dedup.dedup_one(record)
-                }
+                let dedup = Arc::clone(&dedup);
+                async move { dedup.dedup_one(record, mode) }
             })
             .boxed()
     }
 
     pub fn reset(&self) {
-        self.backend.reset();
+        self.historical.reset();
+        self.realtime.reset();
     }
 
     pub fn gc(&self, now: i64) {
-        self.backend.gc(now);
+        self.realtime.gc(now);
     }
 }

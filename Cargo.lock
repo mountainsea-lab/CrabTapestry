@@ -538,7 +538,6 @@ dependencies = [
  "dashmap",
  "futures-util",
  "tokio",
- "tokio-stream",
 ]
 
 [[package]]
