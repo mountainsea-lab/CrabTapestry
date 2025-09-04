@@ -206,3 +206,104 @@ where
         self.realtime.gc(now);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::StreamExt;
+    use futures_util::stream;
+    use std::sync::Arc;
+    use tokio::task;
+
+    #[derive(Debug, Clone)]
+    struct DummyRecord {
+        pub symbol: String,
+        pub ts: i64,
+    }
+
+    impl Deduplicatable for DummyRecord {
+        fn unique_key(&self) -> Arc<str> {
+            Arc::from(format!("{}:{}", self.symbol, self.ts))
+        }
+        fn timestamp(&self) -> i64 {
+            self.ts
+        }
+    }
+
+    #[tokio::test]
+    async fn test_deduplicator_historical() {
+        let dedup = Deduplicator::<DummyRecord>::new(60_000);
+        let records = vec![
+            DummyRecord { symbol: "BTC".to_string(), ts: 1 },
+            DummyRecord { symbol: "BTC".to_string(), ts: 2 },
+            DummyRecord { symbol: "BTC".to_string(), ts: 1 }, // duplicate
+        ];
+
+        let result = dedup.deduplicate(records, DedupMode::Historical);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_deduplicator_realtime() {
+        let dedup = Deduplicator::<DummyRecord>::new(60_000);
+        let records = vec![
+            DummyRecord { symbol: "ETH".to_string(), ts: 10 },
+            DummyRecord { symbol: "ETH".to_string(), ts: 11 },
+            DummyRecord { symbol: "ETH".to_string(), ts: 10 }, // duplicate
+        ];
+
+        // 单条去重
+        let deduped: Vec<_> = records
+            .into_iter()
+            .filter_map(|r| dedup.dedup_one(r, DedupMode::Realtime))
+            .collect();
+        assert_eq!(deduped.len(), 2);
+
+        // 流式去重
+        dedup.reset();
+        let arc_dedup = Arc::new(dedup);
+        let s = stream::iter(vec![
+            DummyRecord { symbol: "ETH".to_string(), ts: 10 },
+            DummyRecord { symbol: "ETH".to_string(), ts: 11 },
+            DummyRecord { symbol: "ETH".to_string(), ts: 10 },
+        ]);
+        let result: Vec<_> = arc_dedup.deduplicate_stream(s, DedupMode::Realtime).collect().await;
+        assert_eq!(result.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_deduplicator_unified() {
+        let dedup = Deduplicator::<DummyRecord>::new(60_000);
+        let records = vec![
+            DummyRecord { symbol: "XRP".to_string(), ts: 100 },
+            DummyRecord { symbol: "XRP".to_string(), ts: 101 },
+            DummyRecord { symbol: "XRP".to_string(), ts: 100 }, // duplicate
+        ];
+
+        let result = dedup.deduplicate(records, DedupMode::Unified);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_deduplicator_concurrent() {
+        let dedup = Arc::new(Deduplicator::<DummyRecord>::new(60_000));
+
+        let mut handles = vec![];
+        for i in 0..10 {
+            let dedup_clone = Arc::clone(&dedup);
+            handles.push(task::spawn(async move {
+                let records: Vec<_> = (0..1000).map(|j| DummyRecord { symbol: "BTC".to_string(), ts: j }).collect();
+                dedup_clone.deduplicate(records, DedupMode::Unified)
+            }));
+        }
+
+        let mut total_count = 0;
+        for h in handles {
+            let res = h.await.unwrap();
+            total_count += res.len();
+        }
+
+        // 每个 ts 只会被保留一次
+        assert_eq!(total_count, 1000);
+    }
+}
