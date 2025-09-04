@@ -1,6 +1,7 @@
 use crab_types::TimeRange;
 use std::sync::Arc;
 use chrono::Utc;
+use crate::ingestor::dedup::Deduplicatable;
 
 /**
 4. 实践建议
@@ -125,6 +126,20 @@ pub struct OHLCVRecord {
 /// Helper type for batch inserts.
 pub type TickBatch = Vec<TickRecord>;
 pub type OHLCVBatch = Vec<OHLCVRecord>;
+
+impl Deduplicatable for OHLCVRecord {
+    fn unique_key(&self) -> Arc<str> {
+        // symbol + period + ts
+        Arc::from(format!("{}:{}:{}", self.symbol, self.period, self.ts))
+    }
+}
+
+impl Deduplicatable for TickRecord {
+    fn unique_key(&self) -> Arc<str> {
+        // symbol + ts
+        Arc::from(format!("{}:{}", self.symbol, self.ts))
+    }
+}
 
 //==============HistoricalFetcher Base Model=================
 
