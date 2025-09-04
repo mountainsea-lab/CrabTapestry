@@ -9,6 +9,9 @@ tokio = {workspace = true}
 async-trait = {workspace = true}
 futures-util = { workspace = true }
 crossbeam = { workspace = true }
+async-stream = "0.3.6"
+# tracing
+ms-tracing = { workspace = true }
 
 # CrabTapestry Ecosystem
 crab-common-utils = { workspace = true }
@@ -23,3 +26,6 @@ chrono = {workspace = true}
 
 # SerDe Data
 dashmap =  { workspace = true }
+crossbeam-queue = "0.3.12"
+log = "0.4.27"
+
