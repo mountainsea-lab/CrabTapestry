@@ -144,8 +144,8 @@ where
         if inserted { Some(record) } else { None }
     }
 
-    /// 批量去重
-    /// Deduplicate a batch of records
+    /// 批量去重（统一模式使用 bulk 插入双 backend）
+    /// Deduplicate a batch of records (unified mode uses bulk insert on both backends)
     pub fn deduplicate(&self, records: Vec<T>, mode: DedupMode) -> Vec<T> {
         match mode {
             DedupMode::Historical => {
@@ -167,27 +167,31 @@ where
                     .collect()
             }
             DedupMode::Unified => {
-                let mut result = Vec::with_capacity(records.len());
-                for r in records {
-                    if self.dedup_one(r.clone(), DedupMode::Unified).is_some() {
-                        result.push(r);
-                    }
-                }
-                result
+                // Unified 批量插入双 backend
+                let keys: Vec<_> = records.iter().map(|r| r.unique_key()).collect();
+                let keys_ts: Vec<_> = records.iter().map(|r| (r.unique_key(), r.timestamp())).collect();
+
+                let results_hist = self.historical.bulk_insert(&keys);
+                let results_realtime = self.realtime.bulk_insert(&keys_ts);
+
+                records
+                    .into_iter()
+                    .zip(results_hist.into_iter().zip(results_realtime))
+                    .filter_map(|(r, (h, rt))| if h || rt { Some(r) } else { None })
+                    .collect()
             }
         }
     }
 
     /// 流式去重
     /// Deduplicate streaming data
-    pub fn deduplicate_stream<S>(&self, stream: S, mode: DedupMode) -> BoxStream<'static, T>
+    pub fn deduplicate_stream<S>(self: Arc<Self>, stream: S, mode: DedupMode) -> BoxStream<'static, T>
     where
         S: Stream<Item = T> + Send + 'static,
     {
-        let dedup = Arc::new(self.clone());
         stream
             .filter_map(move |record| {
-                let dedup = Arc::clone(&dedup);
+                let dedup = Arc::clone(&self);
                 async move { dedup.dedup_one(record, mode) }
             })
             .boxed()
