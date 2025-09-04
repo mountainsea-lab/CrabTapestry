@@ -9,6 +9,7 @@ use ms_tracing::tracing_utils::internal::error;
 use reqwest::RequestBuilder;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 mod constant;
 pub mod market;
@@ -29,7 +30,19 @@ where
     Strategy: BuildStrategy,
     Parser: HttpParser,
 {
-    rest_client: RestClient<'a, Strategy, Parser>,
+    rest_client: Arc<RestClient<'a, Strategy, Parser>>,
+}
+
+impl<'a, Strategy, Parser> Clone for BinanceExchange<'a, Strategy, Parser>
+where
+    Strategy: BuildStrategy,
+    Parser: HttpParser,
+{
+    fn clone(&self) -> Self {
+        Self {
+            rest_client: Arc::clone(&self.rest_client),
+        }
+    }
 }
 
 pub type DefaultBinanceExchange<'a> = BinanceExchange<'a, BinanceSigner, CommonExternalParser>;
@@ -37,7 +50,7 @@ pub type DefaultBinanceExchange<'a> = BinanceExchange<'a, BinanceSigner, CommonE
 impl<'a> Default for DefaultBinanceExchange<'a> {
     fn default() -> Self {
         Self {
-            rest_client: RestClient::new(constant::BASE_URL, BinanceSigner, CommonExternalParser),
+            rest_client: Arc::new(RestClient::new(constant::BASE_URL, BinanceSigner, CommonExternalParser)),
         }
     }
 }
@@ -54,7 +67,7 @@ where
         Parser: HttpParser,
     {
         Self {
-            rest_client: RestClient::new(constant::BASE_URL, strategy, parser),
+            rest_client: Arc::new(RestClient::new(constant::BASE_URL, strategy, parser)),
         }
     }
 

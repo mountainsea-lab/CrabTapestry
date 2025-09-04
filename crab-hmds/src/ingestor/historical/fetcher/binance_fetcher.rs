@@ -9,13 +9,13 @@ use std::sync::Arc;
 
 /// Binance 历史数据拉取器
 pub struct BinanceFetcher {
-    client: DefaultBinanceExchange<'static>,
+    client: Arc<DefaultBinanceExchange<'static>>,
 }
 
 impl BinanceFetcher {
     pub fn new() -> Self {
         Self {
-            client: DefaultBinanceExchange::default(),
+            client: Arc::new(DefaultBinanceExchange::default()),
         }
     }
 
@@ -72,47 +72,17 @@ impl BinanceFetcher {
 
 #[async_trait]
 impl HistoricalFetcher for BinanceFetcher {
-    // /// 流式拉取 OHLCV
-    // async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-    //     // 分批拉取，每批 1000 条（Binance 限制）
-    //     let chunk_ms = 60 * 60 * 1000; // 1小时为例
-    //     let ranges = ctx.range.split(chunk_ms);
-    //     let client = self.client;
-    //     let ctx_clone = ctx.clone();
-    //
-    //     // 创建异步 Stream
-    //     let s = stream::iter(ranges.into_iter())
-    //         .then(move |range| {
-    //             let ctx = ctx_clone.clone();
-    //             let client = client.clone();
-    //             async move {
-    //                 let fetcher = BinanceFetcher { client };
-    //                 fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
-    //             }
-    //         })
-    //         .flat_map(|res| match res {
-    //             Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
-    //             Err(e) => stream::iter(vec![Err(e)]).boxed(),
-    //         });
-    //
-    //     Ok(s.boxed())
-    // }
-
     /// 流式拉取 OHLCV
-    pub async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-        // 分批拉取，每批 1小时（Binance 限制）
-        let chunk_ms = 60 * 60 * 1000;
+    async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
+        let chunk_ms = 60 * 60 * 1000; // 每小时为例
         let ranges = ctx.range.split(chunk_ms);
         let ctx_clone = ctx.clone();
+        let client = Arc::clone(&self.client);
 
-        // 使用 Arc 包装 client，避免移动问题
-        let client = Arc::new(self.client.clone());
-
-        // 创建异步 Stream
         let s = stream::iter(ranges.into_iter())
             .then(move |range| {
                 let ctx = ctx_clone.clone();
-                let client = client.clone(); // 每个任务持有 Arc 副本
+                let client = Arc::clone(&client);
                 async move {
                     let fetcher = BinanceFetcher { client };
                     fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
@@ -128,15 +98,15 @@ impl HistoricalFetcher for BinanceFetcher {
 
     /// 流式拉取 Tick
     async fn stream_ticks(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<TickRecord>>> {
-        let chunk_ms = 60 * 60 * 1000; // 1小时为例
+        let chunk_ms = 60 * 60 * 1000; // 每小时为例
         let ranges = ctx.range.split(chunk_ms);
-        let client = self.client.clone();
         let ctx_clone = ctx.clone();
+        let client = Arc::clone(&self.client);
 
         let s = stream::iter(ranges.into_iter())
             .then(move |range| {
                 let ctx = ctx_clone.clone();
-                let client = client.clone();
+                let client = Arc::clone(&client);
                 async move {
                     let fetcher = BinanceFetcher { client };
                     fetcher.fetch_ticks_page(&ctx, range.start, range.end).await
