@@ -115,6 +115,11 @@ pub struct TickRecord {
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
 
+/// 设计占位
+#[derive(Debug, Clone)]
+pub struct TradeRecord {
+    // TODO
+}
 /// 低频 OHLCV 数据库映射
 /// OHLCV data mapping for low-frequency database storage.
 #[derive(Debug, Clone)]
