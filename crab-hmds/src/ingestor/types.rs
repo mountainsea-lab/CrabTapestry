@@ -1,8 +1,14 @@
 use crate::ingestor::dedup::Deduplicatable;
+use barter_data::barter_instrument::Side;
+use barter_data::barter_instrument::exchange::ExchangeId;
+use barter_data::barter_instrument::instrument::market_data::MarketDataInstrument;
+use barter_data::event::MarketEvent;
+use barter_data::streams::reconnect::Event;
 use barter_data::subscription::trade::PublicTrade;
 use chrono::Utc;
 use crab_types::TimeRange;
 use std::sync::Arc;
+use trade_aggregation::M1;
 
 /**
 4. 实践建议
@@ -50,6 +56,38 @@ pub struct PublicTradeEvent {
     pub trade: PublicTrade, // market realtime trade data
     pub timestamp: i64,     // data timestamp
     pub time_period: u64,
+}
+
+/// from barter trade data event to PublicTradeEvent
+impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
+    fn from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Self {
+        match event {
+            Event::Item(market_event) => {
+                PublicTradeEvent {
+                    exchange: market_event.exchange.to_string(),
+                    symbol: format!("{}{}", market_event.instrument.base, market_event.instrument.quote), // 根据你的需求调整
+                    trade: market_event.kind,                                                             // PublicTrade
+                    timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
+                    time_period: M1.get(),
+                }
+            }
+            _ => {
+                // if not PublicTrade data，return default
+                PublicTradeEvent {
+                    exchange: String::new(),
+                    symbol: String::new(),
+                    trade: PublicTrade {
+                        id: String::new(),
+                        price: 0.0,
+                        amount: 0.0,
+                        side: Side::Buy,
+                    },
+                    timestamp: 0,
+                    time_period: M1.get(),
+                }
+            }
+        }
+    }
 }
 
 /// 内存中流转的市场数据事件

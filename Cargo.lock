@@ -610,10 +610,12 @@ dependencies = [
  "criterion",
  "crossbeam",
  "dashmap",
+ "futures",
  "futures-util",
  "ms-tracing",
  "serde_json",
  "tokio",
+ "trade_aggregation",
 ]
 
 [[package]]

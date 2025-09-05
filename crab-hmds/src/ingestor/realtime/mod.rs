@@ -14,6 +14,7 @@ pub enum SubscriberStatus {
 }
 
 /// 实时订阅配置
+#[derive(Debug, Clone)]
 pub struct Subscription {
     pub exchange: Arc<str>,
     pub symbol: Arc<str>,

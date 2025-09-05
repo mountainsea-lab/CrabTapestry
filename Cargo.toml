@@ -24,6 +24,9 @@ crab-common-utils = { path = "libs/crab-common-utils", version = "0.1.0" }
 crab-types = { path = "libs/crab-types", version = "0.1.0" }
 crab-infras = { path = "libs/crab-infras", version = "0.1.0" }
 
+# Cryto
+trade_aggregation = "13.0.1"
+
 # Async
 tokio = { version = "1.44.2", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
 futures-util = "0.3.31"
