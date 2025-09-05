@@ -1,9 +1,9 @@
 mod binance_subscriber;
 
-use std::sync::Arc;
 use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::types::PublicTradeEvent;
 use async_trait::async_trait;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 /// 实时数据订阅器接口
