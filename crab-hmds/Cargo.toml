@@ -11,6 +11,9 @@ futures-util = { workspace = true }
 crossbeam = { workspace = true }
 async-stream = "0.3.6"
 
+# barter-data
+barter-data = { workspace = true }
+
 # tracing
 ms-tracing = { workspace = true }
 

@@ -1,4 +1,5 @@
 use crate::ingestor::dedup::Deduplicatable;
+use barter_data::subscription::trade::PublicTrade;
 use chrono::Utc;
 use crab_types::TimeRange;
 use std::sync::Arc;
@@ -42,41 +43,13 @@ pub struct Tick {
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
 
-/// K线数据
-/// Represents a single OHLCV candlestick (K-line).
-#[derive(Debug, Clone)]
-pub struct OHLCV {
-    pub ts: i64,                      // K线结束时间
-    pub period_start_ts: Option<i64>, // K线开始时间，可选
-    pub symbol: Arc<str>,
-    pub exchange: Arc<str>,
-    pub period: String, // K线周期 "1m", "5m", "1h"
-    pub open: f64,
-    pub high: f64,
-    pub low: f64,
-    pub close: f64,
-    pub volume: f64,
-    pub turnover: Option<f64>,   // 成交额，可选
-    pub num_trades: Option<u32>, // 成交笔数，可选
-    pub vwap: Option<f64>,       // 成交量加权价格，可选
-}
-/// 注意：实时聚合组件已经处理了数据缓存这个结构可以不使用，暂时保留后续可能用到
-/// 实时维护最新一条 K线
-/// Maintains the latest real-time K-line in memory.
-#[derive(Debug, Clone)]
-pub struct RealtimeOHLCV {
-    pub ts: i64,              // K线结束时间
-    pub period_start_ts: i64, // K线开始时间
-    pub symbol: Arc<str>,
-    pub exchange: Arc<str>,
-    pub period: String, // "1m", "5m" 等
-    pub open: f64,
-    pub high: f64,
-    pub low: f64,
-    pub close: f64,
-    pub volume: f64,
-    pub turnover: f64,
-    pub num_trades: u32,
+#[derive(Clone, Debug)]
+pub struct PublicTradeEvent {
+    pub exchange: String,
+    pub symbol: String,
+    pub trade: PublicTrade, // market realtime trade data
+    pub timestamp: i64,     // data timestamp
+    pub time_period: u64,
 }
 
 /// 内存中流转的市场数据事件
@@ -85,7 +58,7 @@ pub struct RealtimeOHLCV {
 pub enum MarketDataEvent {
     // Trade(Trade),
     Tick(Tick),
-    OHLCV(OHLCV),
+    // OHLCV(OHLCV),
 }
 
 //==========================storage strucutre===========================
