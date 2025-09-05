@@ -1,6 +1,6 @@
 use async_stream::stream;
 use crossbeam::queue::SegQueue;
-use futures_util::{Stream, StreamExt, stream::BoxStream};
+use futures_util::{StreamExt, stream::BoxStream};
 use ms_tracing::tracing_utils::internal::warn;
 use std::sync::{
     Arc,

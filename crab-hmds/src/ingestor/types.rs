@@ -81,6 +81,7 @@ pub struct RealtimeOHLCV {
 
 /// 内存中流转的市场数据事件
 /// memory-based market data event.
+#[warn(dead_code)]
 pub enum MarketDataEvent {
     // Trade(Trade),
     Tick(Tick),
