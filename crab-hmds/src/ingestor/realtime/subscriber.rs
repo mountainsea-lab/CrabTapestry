@@ -1,5 +1,6 @@
 mod binance_subscriber;
 
+use std::sync::Arc;
 use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::types::PublicTradeEvent;
 use async_trait::async_trait;
@@ -13,7 +14,7 @@ pub trait RealtimeSubscriber: Send + Sync {
 
     /// 批量订阅 symbol，返回 TradeEvent channel
     async fn subscribe_symbols(
-        &self,
+        self: Arc<Self>,
         symbols: &[&str],
     ) -> anyhow::Result<mpsc::Receiver<PublicTradeEvent>, anyhow::Error>;
 

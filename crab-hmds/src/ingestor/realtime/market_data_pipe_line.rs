@@ -11,12 +11,14 @@ use tokio::sync::{Mutex, broadcast, oneshot, watch};
 use tokio::task::JoinHandle;
 
 /// 管理每个 symbol 的订阅任务
+/// manage each symbol's subscription task
 struct SymbolTask {
     handle: JoinHandle<()>,
     cancel_tx: watch::Sender<bool>, // 支持多次发送取消信号
 }
 
 /// Pipeline 主体：负责实时订阅、聚合和广播
+/// Pipeline core: responsible for real-time subscription, aggregation and broadcasting
 pub struct MarketDataPipeline {
     /// exchange -> subscriber
     subscribers: HashMap<String, Arc<dyn RealtimeSubscriber + Send + Sync>>,
@@ -39,6 +41,7 @@ pub struct MarketDataPipeline {
 
 impl MarketDataPipeline {
     /// 创建 Pipeline
+    /// create a new pipeline
     pub fn new(
         subscribers: HashMap<String, Arc<dyn RealtimeSubscriber + Send + Sync>>,
         broadcast_capacity: usize,
@@ -214,7 +217,7 @@ impl MarketDataPipeline {
             });
 
             // 每个 symbol 独立 TradeEvent 流
-            let mut trade_rx = subscriber.subscribe_symbols(&[sub.symbol.as_ref()]).await?;
+            let mut trade_rx = subscriber.clone().subscribe_symbols(&[sub.symbol.as_ref()]).await?;
 
             // 克隆 Arc 用于任务
             let aggregators = self.aggregators.clone();
