@@ -1,6 +1,6 @@
 mod aggregator;
-mod market_data_pipe_line;
-mod subscriber;
+pub mod market_data_pipe_line;
+pub mod subscriber;
 
 use std::sync::Arc;
 

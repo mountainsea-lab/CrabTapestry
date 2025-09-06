@@ -322,4 +322,9 @@ impl MarketDataPipeline {
             .get(exchange)
             .map(|map| map.iter().map(|kv| kv.key().clone()).collect())
     }
+
+    // 获取订阅总数
+    pub fn subscribed_count(&self) -> usize {
+        self.subscribed.len()
+    }
 }

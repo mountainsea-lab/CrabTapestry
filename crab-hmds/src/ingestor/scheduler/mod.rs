@@ -1,9 +1,10 @@
 use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRecord, TradeRecord};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 
-mod back_fill_dag;
+pub mod back_fill_dag;
 
 /// 数据类型枚举
 #[derive(Debug, Clone, Copy)]
@@ -21,19 +22,24 @@ pub enum HistoricalBatchEnum {
     Trade(HistoricalBatch<TradeRecord>),
 }
 
-/// 节点状态
-#[derive(Debug, Clone, Copy)]
+/// Node execution status
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeStatus {
     Pending,
     Running,
     Completed,
     Failed,
+    Skipped,
 }
 
-#[derive(Debug)]
-struct NodeMeta {
-    status: NodeStatus,
-    retry_count: usize,
+/// Node meta for monitoring
+#[derive(Debug, Clone)]
+pub struct NodeMeta {
+    pub status: NodeStatus,
+    pub retry_count: usize,
+    pub last_error: Option<String>,
+    pub started_at: Option<Instant>,
+    pub finished_at: Option<Instant>,
 }
 
 /// DAG 节点

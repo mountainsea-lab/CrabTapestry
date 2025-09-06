@@ -3,6 +3,8 @@ use dashmap::{DashMap, DashSet};
 use futures_util::stream::BoxStream;
 use futures_util::{Stream, StreamExt};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::time::interval;
 
 /// Deduplicator 支持历史/实时/统一去重模式
 /// dedup supports historical/realtime/unified deduplication mode
@@ -39,6 +41,10 @@ impl DashSetBackend {
     /// Support bulk insertion
     pub fn bulk_insert(&self, keys: &[Arc<str>]) -> Vec<bool> {
         keys.iter().map(|k| self.seen.insert(k.clone())).collect()
+    }
+    /// 缓存大小
+    pub fn len(&self) -> usize {
+        self.seen.len()
     }
 }
 
@@ -81,6 +87,10 @@ impl DashMapBackend {
                 _ => false,
             })
             .collect()
+    }
+    /// 缓存大小
+    pub fn len(&self) -> usize {
+        self.seen.len()
     }
 }
 
@@ -125,6 +135,27 @@ where
             realtime: DashMapBackend::new(ttl_ms),
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// 创建 Deduplicator，同时启动自动 GC
+    pub fn new_auto_gc(ttl_ms: i64, gc_interval_ms: u64) -> Arc<Self> {
+        let dedup = Arc::new(Self::new(ttl_ms));
+
+        let dedup_weak = Arc::downgrade(&dedup);
+        tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_millis(gc_interval_ms));
+            loop {
+                ticker.tick().await;
+                if let Some(dedup) = dedup_weak.upgrade() {
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
+                    dedup.gc(now);
+                } else {
+                    break; // Deduplicator 已 drop，自动停止
+                }
+            }
+        });
+
+        dedup
     }
 
     /// 单条去重
@@ -204,6 +235,16 @@ where
 
     pub fn gc(&self, now: i64) {
         self.realtime.gc(now);
+    }
+
+    /// 获取历史缓存大小
+    pub fn historical_size(&self) -> usize {
+        self.historical.len()
+    }
+
+    /// 获取实时缓存大小
+    pub fn realtime_size(&self) -> usize {
+        self.realtime.len()
     }
 }
 

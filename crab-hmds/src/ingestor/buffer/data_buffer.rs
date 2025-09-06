@@ -27,9 +27,9 @@ where
     T: Send + Sync + 'static,
 {
     queue: Arc<SegQueue<Arc<T>>>,
-    notify: Arc<Notify>,
+    pub(crate) notify: Arc<Notify>,
     max_capacity: Option<usize>,
-    batch_notify_size: usize,
+    pub(crate) batch_notify_size: usize,
     batch_counter: AtomicUsize,
     capacity_strategy: CapacityStrategy,
     permits: Option<Arc<Semaphore>>, // Block 策略专用

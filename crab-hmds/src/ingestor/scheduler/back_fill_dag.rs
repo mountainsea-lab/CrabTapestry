@@ -1,4 +1,4 @@
-mod back_fill_scheduler;
+pub mod back_fill_scheduler;
 
 use crate::ingestor::historical::HistoricalFetcherExt;
 use futures::StreamExt;
