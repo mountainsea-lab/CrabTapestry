@@ -327,3 +327,130 @@ impl MarketDataPipeline {
         self.subscribed.len()
     }
 }
+
+//
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use std::sync::Arc;
+//
+//
+//     #[tokio::test]
+//     async fn test_subscribe_symbol() {
+//         let mut pipeline = MarketDataPipeline::new(
+//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
+//             10,
+//         );
+//
+//         let subscription = Subscription {
+//             exchange: Arc::new("exchange1".into()),
+//             symbol: Arc::new("symbol-1".into()),
+//             periods: vec![Arc::new("1m".into())],
+//         };
+//
+//         // Test subscription
+//         assert!(pipeline.subscribe_symbol(subscription.clone()).await.is_ok());
+//
+//         // Verify subscription status
+//         let status = pipeline.get_subscriber_status("exchange1");
+//         assert!(status.is_some());
+//         assert_eq!(status.unwrap().len(), 1);
+//
+//         // Verify subscribed count
+//         assert_eq!(pipeline.subscribed_count(), 1);
+//     }
+//
+//     #[tokio::test]
+//     async fn test_unsubscribe_symbol() {
+//         let mut pipeline = MarketDataPipeline::new(
+//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
+//             10,
+//         );
+//
+//         let subscription = Subscription {
+//             exchange: "exchange1".to_string(),
+//             symbol: "symbol-1".to_string(),
+//             periods: vec!["1m".to_string()],
+//         };
+//
+//         // Subscribe first
+//         pipeline.subscribe_symbol(subscription.clone()).await.unwrap();
+//
+//         // Unsubscribe
+//         assert!(pipeline.unsubscribe_symbol("exchange1", "symbol-1").await.is_ok());
+//
+//         // Verify the status is removed
+//         let status = pipeline.get_subscriber_status("exchange1");
+//         assert!(status.is_some());
+//         assert_eq!(status.unwrap().len(), 0);
+//
+//         // Verify subscribed count
+//         assert_eq!(pipeline.subscribed_count(), 0);
+//     }
+//
+//     #[tokio::test]
+//     async fn test_subscribe_many_symbols() {
+//         let mut pipeline = MarketDataPipeline::new(
+//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
+//             10,
+//         );
+//
+//         let exchange = "exchange1".to_string();
+//         let symbols = vec![
+//             "symbol-1".to_string(),
+//             "symbol-2".to_string(),
+//             "symbol-3".to_string(),
+//         ];
+//         let periods = vec!["1m".to_string()];
+//
+//         // Subscribe multiple symbols
+//         pipeline
+//             .subscribe_many(Arc::from(exchange.clone()), symbols.into_iter().map(Arc::from).collect(), periods)
+//             .await
+//             .unwrap();
+//
+//         // Verify subscription
+//         let status = pipeline.get_subscriber_status(&exchange);
+//         assert!(status.is_some());
+//         assert_eq!(status.unwrap().len(), 3);
+//
+//         // Verify subscribed count
+//         assert_eq!(pipeline.subscribed_count(), 3);
+//     }
+//
+//     #[tokio::test]
+//     async fn test_unsubscribe_many_symbols() {
+//         let mut pipeline = MarketDataPipeline::new(
+//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
+//             10,
+//         );
+//
+//         let exchange = "exchange1".to_string();
+//         let symbols = vec![
+//             "symbol-1".to_string(),
+//             "symbol-2".to_string(),
+//             "symbol-3".to_string(),
+//         ];
+//         let periods = vec!["1m".to_string()];
+//
+//         // Subscribe multiple symbols
+//         pipeline
+//             .subscribe_many(Arc::from(exchange.clone()), symbols.clone().into_iter().map(Arc::from).collect(), periods)
+//             .await
+//             .unwrap();
+//
+//         // Unsubscribe multiple symbols
+//         pipeline
+//             .unsubscribe_many(&exchange, &symbols.iter().map(AsRef::as_ref).collect::<Vec<_>>())
+//             .await
+//             .unwrap();
+//
+//         // Verify status is empty
+//         let status = pipeline.get_subscriber_status(&exchange);
+//         assert!(status.is_some());
+//         assert_eq!(status.unwrap().len(), 0);
+//
+//         // Verify subscribed count is zero
+//         assert_eq!(pipeline.subscribed_count(), 0);
+//     }
+// }
