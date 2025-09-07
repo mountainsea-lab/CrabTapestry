@@ -1,6 +1,3 @@
-use crate::ingestor::dedup::Deduplicatable;
-use crate::ingestor::historical::HistoricalFetcherExt;
-use crate::ingestor::types::{HistoricalBatch, OHLCVRecord};
 use std::sync::Arc;
 
 pub mod control_service;
@@ -60,29 +57,32 @@ pub enum InternalMsg {
     Info(String),
 }
 
-/// 统一市场数据类型（历史批次 / 实时 tick）
-pub enum MarketData<T> {
-    Historical(HistoricalBatch<T>),
-    Realtime(OHLCVRecord),
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MarketDataType {
+    OHLCV,
+    Tick,
+    Trade,
+}
+
+#[derive(Debug, Clone)]
+pub struct DedupStats {
+    pub historical: usize,
+    pub realtime: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferStats {
+    pub len: usize,
 }
 
 /// 服务健康状态
+#[derive(Debug, Clone)]
 pub struct IngestorHealth {
-    /// 当前服务状态（Running / Stopped / Error 等）
     pub state: ServiceState,
-
-    /// Backfill 队列剩余任务数
     pub backfill_pending: usize,
-
-    /// 当前实时订阅 symbol 数量
     pub realtime_subscriptions: usize,
 
-    /// Buffer 当前长度
-    pub buffer_len: usize,
-
-    /// Deduplicator 历史数据缓存大小
-    pub dedup_historical: usize,
-
-    /// Deduplicator 实时数据缓存大小
-    pub dedup_realtime: usize,
+    // 类型为 key 的 HashMap
+    pub buffer_stats: std::collections::HashMap<MarketDataType, BufferStats>,
+    pub dedup_stats: std::collections::HashMap<MarketDataType, DedupStats>,
 }

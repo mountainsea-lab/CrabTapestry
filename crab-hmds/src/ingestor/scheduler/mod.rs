@@ -15,7 +15,7 @@ pub enum BackfillDataType {
 }
 
 /// 泛型历史数据枚举，用于统一输出
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HistoricalBatchEnum {
     OHLCV(HistoricalBatch<OHLCVRecord>),
     Tick(HistoricalBatch<TickRecord>),

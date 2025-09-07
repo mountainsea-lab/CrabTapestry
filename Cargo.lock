@@ -614,6 +614,7 @@ dependencies = [
  "futures-util",
  "ms-tracing",
  "rand 0.9.2",
+ "serde",
  "serde_json",
  "tokio",
  "trade_aggregation",
@@ -642,6 +643,11 @@ dependencies = [
 [[package]]
 name = "crab-types"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "criterion"

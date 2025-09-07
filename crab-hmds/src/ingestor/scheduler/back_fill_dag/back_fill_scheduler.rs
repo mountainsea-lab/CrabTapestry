@@ -1,16 +1,15 @@
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::scheduler::{BackfillDataType, BackfillNode, HistoricalBatchEnum, NodeMeta, NodeStatus};
-use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord};
+use crate::ingestor::types::FetchContext;
 use anyhow::Result;
 use crab_types::TimeRange;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::{error, info, warn};
-use rand::Rng;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, Notify, mpsc};
+use tokio::sync::{Mutex, Notify, broadcast};
 
 /// BaseBackfillScheduler
 pub struct BaseBackfillScheduler<F>
@@ -21,7 +20,7 @@ where
     nodes: DashMap<usize, Arc<BackfillNode>>,
     ready_queue: Mutex<Vec<usize>>,
     notify: Notify,
-    output_tx: mpsc::Sender<HistoricalBatchEnum>,
+    output_tx: broadcast::Sender<HistoricalBatchEnum>, // 改为广播发送器
     shutdown: Arc<AtomicBool>,
     retry_limit: usize,
     next_id: AtomicUsize,
@@ -223,7 +222,9 @@ where
     F: HistoricalFetcherExt + 'static,
 {
     /// 创建调度器
-    pub fn new(fetcher: Arc<F>, output_tx: mpsc::Sender<HistoricalBatchEnum>, retry_limit: usize) -> Arc<Self> {
+    pub fn new(fetcher: Arc<F>, retry_limit: usize) -> Arc<Self> {
+        let (output_tx, _) = broadcast::channel(100); // 创建广播通道‘
+
         Arc::new(Self {
             fetcher,
             nodes: DashMap::new(),
@@ -414,7 +415,7 @@ where
             match fetch_res {
                 Ok(batch) => {
                     // 发送到 output channel
-                    if let Err(e) = self.output_tx.send(batch).await {
+                    if let Err(e) = self.output_tx.send(batch) {
                         error!("Node {} output send failed: {}", node_id, e);
                     }
 
@@ -455,7 +456,7 @@ where
                     // 指数退避 + jitter
                     let exp = attempt.min(10) as u32;
                     let base = 2u64.saturating_pow(exp);
-                    let jitter: u64 = rand::thread_rng().gen_range(0..5);
+                    let jitter: u64 = rand::random_range(0..5);
                     let sleep_secs = std::cmp::min(base, 60) + jitter;
                     tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
                 }
@@ -506,5 +507,10 @@ where
             .count();
 
         queue_len + incomplete_nodes
+    }
+
+    /// 提供输出接收器
+    pub fn output_rx(&self) -> broadcast::Receiver<HistoricalBatchEnum> {
+        self.output_tx.subscribe() // 任何地方都可以订阅
     }
 }

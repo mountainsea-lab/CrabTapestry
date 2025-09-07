@@ -1,3 +1,4 @@
+use crate::ingestor::dedup::Deduplicatable;
 use async_stream::stream;
 use crossbeam::queue::SegQueue;
 use futures_util::{StreamExt, stream::BoxStream};
@@ -24,7 +25,7 @@ pub enum CapacityStrategy {
 #[derive(Debug)]
 pub struct DataBuffer<T>
 where
-    T: Send + Sync + 'static,
+    T: Deduplicatable + Send + Sync + Clone + 'static,
 {
     queue: Arc<SegQueue<Arc<T>>>,
     pub(crate) notify: Arc<Notify>,
@@ -37,7 +38,7 @@ where
 
 impl<T> DataBuffer<T>
 where
-    T: Send + Sync + 'static,
+    T: Deduplicatable + Send + Sync + Clone + 'static,
 {
     /// 创建新 DataBuffer
     pub fn new(
@@ -62,13 +63,13 @@ where
     }
 
     /// 入队单条数据（Block 策略下为异步）
-    pub async fn push(self: &Arc<Self>, item: T) {
+    pub async fn push(self: &Arc<Self>, item: T) -> anyhow::Result<()> {
         if let Some(max) = self.max_capacity {
             if self.queue.len() >= max {
                 match self.capacity_strategy {
                     CapacityStrategy::DropNewest => {
                         warn!("DataBuffer max_capacity {} reached, dropping newest item", max);
-                        return;
+                        return Ok(());
                     }
                     CapacityStrategy::DropOldest => {
                         let _ = self.queue.pop();
@@ -89,10 +90,11 @@ where
             self.batch_counter.store(0, Ordering::Relaxed);
             self.notify.notify_waiters();
         }
+        Ok(())
     }
 
     /// 批量入队
-    pub async fn push_batch(self: &Arc<Self>, items: Vec<T>) {
+    pub async fn push_batch(self: &Arc<Self>, items: Vec<T>) -> anyhow::Result<()> {
         let mut added = 0;
         for item in items {
             if let Some(max) = self.max_capacity {
@@ -121,6 +123,7 @@ where
                 self.notify.notify_waiters();
             }
         }
+        Ok(())
     }
 
     /// 异步流式消费（批量 yield）
@@ -168,6 +171,23 @@ where
                 p.add_permits(max.saturating_sub(self.queue.len()));
             }
         }
+    }
+
+    /// 异步 pop 操作，返回数据
+    pub async fn pop(&self) -> Option<Arc<T>> {
+        self.queue.pop()
+    }
+
+    /// 批量 pop 操作，返回一个 Vec 数据
+    pub async fn pop_batch(&self) -> Vec<Arc<T>> {
+        let mut batch = Vec::new();
+        while let Some(item) = self.pop().await {
+            batch.push(item);
+            if batch.len() >= self.batch_notify_size {
+                break;
+            }
+        }
+        batch
     }
 }
 

@@ -1,5 +1,6 @@
 pub mod multi_period_aggregator;
 pub mod single_aggregator;
+mod types;
 
 use crate::ingestor::types::{OHLCVRecord, PublicTradeEvent};
 

@@ -90,13 +90,31 @@ impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for
     }
 }
 
-/// 内存中流转的市场数据事件
+///  多类型统一封装 内存中流转的市场数据事件
 /// memory-based market data event.
-#[warn(dead_code)]
-pub enum MarketDataEvent {
-    // Trade(Trade),
-    Tick(Tick),
-    // OHLCV(OHLCV),
+#[derive(Debug, Clone)]
+pub enum MarketData {
+    OHLCV(OHLCVRecord),
+    Tick(TickRecord),
+    Trade(TradeRecord),
+}
+
+impl Deduplicatable for MarketData {
+    fn unique_key(&self) -> Arc<str> {
+        match self {
+            MarketData::OHLCV(r) => r.unique_key(),
+            MarketData::Tick(r) => r.unique_key(),
+            MarketData::Trade(r) => r.unique_key(),
+        }
+    }
+
+    fn timestamp(&self) -> i64 {
+        match self {
+            MarketData::OHLCV(r) => r.timestamp(),
+            MarketData::Tick(r) => r.timestamp(),
+            MarketData::Trade(r) => r.timestamp(),
+        }
+    }
 }
 
 //==========================storage strucutre===========================
@@ -168,6 +186,15 @@ impl Deduplicatable for TickRecord {
     }
 }
 
+impl Deduplicatable for TradeRecord {
+    fn unique_key(&self) -> Arc<str> {
+        todo!()
+    }
+
+    fn timestamp(&self) -> i64 {
+        todo!()
+    }
+}
 //==============HistoricalFetcher Base Model=================
 
 /// 历史数据源信息
@@ -197,7 +224,7 @@ pub struct FetchContext {
 
 /// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
 /// Batch of historical data, unified for Trade, Tick, or OHLCV records.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HistoricalBatch<T> {
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,

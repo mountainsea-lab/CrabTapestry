@@ -1,3 +1,5 @@
+pub mod time_frame;
+
 use std::ops::RangeInclusive;
 
 /// 时间范围查询（UTC 毫秒）

@@ -1,8 +1,5 @@
 pub mod back_fill_scheduler;
 
-use crate::ingestor::historical::HistoricalFetcherExt;
-use futures::StreamExt;
-
 // /// 历史数据回填调度器 trait
 // #[async_trait]
 // pub trait BackfillScheduler: Send + Sync {
