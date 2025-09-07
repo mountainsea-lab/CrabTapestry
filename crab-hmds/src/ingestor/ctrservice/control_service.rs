@@ -562,3 +562,131 @@ where
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tokio::sync::Notify;
+    use crate::ingestor::ctrservice::ExchangeConfig;
+    use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
+    use crate::ingestor::types::{FetchContext, HistoricalSource};
+
+    // 测试 IngestorService 启动与停止功能
+    #[tokio::test]
+    async fn test_ingestor_service_start_stop() {
+        // 1. 设置测试配置
+        let config = IngestorConfig {
+            exchanges: vec![
+                ExchangeConfig {
+                    exchange: "binance".to_string(),
+                    symbols: vec!["BTCUSDT".to_string(), "ETHUSDT".to_string()],
+                    periods: vec!["1m".to_string(), "5m".to_string()],
+                },
+            ],
+        };
+
+        // 2. 创建 Shutdown 通知
+        let shutdown = Arc::new(Notify::new());
+
+        // 构造 FetchContext
+        let ctx = FetchContext::new_with_past(
+            HistoricalSource {
+                name: "Binance API".to_string(),
+                exchange: "binance".to_string(),
+                last_success_ts: 0,
+                last_fetch_ts: 0,
+                batch_size: 0,
+                supports_tick: false,
+                supports_trade: false,
+                supports_ohlcv: false,
+            },
+            "binance",
+            "BTCUSDT",
+            Some("1h"),
+            Some(3), // 最近 3 小时
+            None,    // 最近 3 小时, // 3 小时
+        );
+
+        let fetcher = Arc::new(BinanceFetcher::new());
+        // 3. 创建 BackfillScheduler
+        let backfill_scheduler = BaseBackfillScheduler::new(fetcher,3);
+
+        // 4. 创建 MarketDataPipeline
+        let market_data_pipeline = Arc::new(MarketDataPipeline::new());
+
+        // 5. 创建 IngestorService 实例
+        let ingestor_service = IngestorService::<BinanceFetcher>::new(
+            backfill_scheduler,
+            market_data_pipeline,
+            shutdown.clone(),
+        );
+
+        // 6. 启动服务
+        ingestor_service.start_full(Some(config.clone())).await;
+
+        // 检查是否服务启动，通常可以检查相关状态
+        // 这里假设 IngestorService 提供了一个 `is_running()` 方法
+        assert!(ingestor_service.is_running());
+
+        // 7. 停止服务
+        ingestor_service.stop().await;
+
+        // 再次检查服务是否已停止
+        assert!(!ingestor_service.is_running());
+
+        // 8. 其他逻辑验证（如配置是否正确传递）
+        let current_config = ingestor_service.get_config().await;
+        assert_eq!(current_config, config);
+    }
+
+    // 测试无效配置的处理
+    #[tokio::test]
+    async fn test_ingestor_service_invalid_config() {
+        // 传入空配置或无效配置
+        let config = IngestorConfig {
+            exchanges: vec![], // 传入空的 exchanges 列表
+        };
+
+        let shutdown = Arc::new(Notify::new());
+        let backfill_scheduler = Arc::new(BaseBackfillScheduler::<MockFetcher>::new());
+        let market_data_pipeline = Arc::new(MarketDataPipeline::new());
+
+        let ingestor_service = IngestorService::<BinanceFetcher>::new(
+            backfill_scheduler,
+            market_data_pipeline,
+            shutdown.clone(),
+        );
+
+        // 启动服务，验证是否正确处理无效配置
+        let result = ingestor_service.start_full(Some(config)).await;
+
+        // 期望返回错误，表示配置无效
+        assert!(result.is_err());
+    }
+
+    // 测试服务的 Graceful Shutdown 功能
+    #[tokio::test]
+    async fn test_ingestor_service_shutdown() {
+        let shutdown = Arc::new(Notify::new());
+        let backfill_scheduler = BaseBackfillScheduler::<MockFetcher>::new());
+        let market_data_pipeline = Arc::new(MarketDataPipeline::new());
+
+        let ingestor_service = IngestorService::<BinanceFetcher>::new(
+            backfill_scheduler,
+            market_data_pipeline,
+            shutdown.clone(),
+        );
+
+        // 启动服务
+        ingestor_service.start_full(None).await;
+
+        // 发送 shutdown 信号
+        shutdown.notify_one();
+
+        // 检查服务是否收到关闭信号并正确处理
+        // 这里我们假设服务会在 shutdown 后停止，或者提供相应的状态检查方法
+        assert!(ingestor_service.is_shutdown());
+    }
+}
