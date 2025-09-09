@@ -1,6 +1,6 @@
-use crate::ingestor::realtime::Subscription;
 use crate::ingestor::realtime::aggregator::multi_period_aggregator::MultiPeriodAggregator;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
+use crate::ingestor::realtime::Subscription;
 use crate::ingestor::types::OHLCVRecord;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::warn;
@@ -107,6 +107,7 @@ impl MarketDataPipeline {
                 tokio::select! {
                     maybe_trade = trade_rx.recv() => {
                         if let Some(trade) = maybe_trade {
+                             warn!("stream public trade event {:?}", trade);
                             if let Some(mut agg) = aggregators.get_mut(&key_multi) {
                                 // 安全聚合，不 panic
                                 let bars = agg.on_event(trade);
@@ -454,3 +455,100 @@ impl MarketDataPipeline {
 //         assert_eq!(pipeline.subscribed_count(), 0);
 //     }
 // }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::time::{sleep, Duration};
+    use crate::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
+
+    /// 通用测试工具函数
+    /// exchange: 交易所名称
+    /// symbols: 待订阅币种列表
+    /// periods: K线周期列表
+    /// expected_count: 每个币种期望接收的 OHLCV 数量
+    pub async fn run_pipeline_test(
+        exchange: &str,
+        symbols: &[&str],
+        periods: &[&str],
+        expected_count: usize,
+    ) -> anyhow::Result<Vec<OHLCVRecord>> {
+        // -------------------------------
+        // Step 1: 初始化 Subscriber
+        // -------------------------------
+        // 创建 broadcast channel
+        let (broadcast_tx, _broadcast_rx) = broadcast::channel(1024);
+        let subscriber = Arc::new(BinanceSubscriber::new(broadcast_tx.clone()));
+
+        let mut subscribers: HashMap<String, Arc<dyn RealtimeSubscriber + Send + Sync>> = HashMap::new();
+        subscribers.insert(exchange.to_string(), subscriber.clone());
+
+        // -------------------------------
+        // Step 2: 初始化 Pipeline
+        // -------------------------------
+        let pipeline = MarketDataPipeline::new(subscribers, 1024);
+
+        // -------------------------------
+        // Step 3: 创建接收端
+        // -------------------------------
+        let mut ohlcv_rx = pipeline.subscribe_receiver();
+
+        // -------------------------------
+        // Step 4: 批量订阅
+        // -------------------------------
+        let symbols_arc: Vec<Arc<str>> = symbols.iter().map(|s| Arc::from(*s)).collect();
+        let periods_arc: Vec<Arc<str>> = periods.iter().map(|p| Arc::from(*p)).collect();
+
+        pipeline
+            .subscribe_many(Arc::from(exchange), symbols_arc.clone(), periods_arc.clone())
+            .await?;
+
+        // 等待 subscriber 建立 WebSocket 连接
+        tokio::time::sleep(Duration::from_secs(600)).await;
+
+        // -------------------------------
+        // Step 5: 等待接收 OHLCV 数据
+        // -------------------------------
+        let mut received_bars = Vec::new();
+        let start = tokio::time::Instant::now();
+        let max_wait = Duration::from_secs(800); // 超时保护
+
+        while received_bars.len() < expected_count * symbols.len() && start.elapsed() < max_wait {
+            tokio::select! {
+                Ok(bar) = ohlcv_rx.recv() => {
+                    println!("Received OHLCV: {} {} {}", bar.exchange, bar.symbol, bar.open);
+                    received_bars.push(bar);
+                }
+                _ = sleep(Duration::from_millis(500)) => {}
+            }
+        }
+
+        if received_bars.is_empty() {
+            anyhow::bail!("No OHLCV bars received for exchange {}", exchange);
+        }
+
+        // -------------------------------
+        // Step 6: 批量取消订阅
+        // -------------------------------
+        let symbols_str: Vec<&str> = symbols.to_vec();
+        pipeline.unsubscribe_many(exchange, &symbols_str).await?;
+
+        Ok(received_bars)
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_with_tool() {
+        let exchange = "binance";
+        let symbols = &["BTCUSDT", "ETHUSDT"];
+        let periods = &["1m", "5m"];
+        let expected_count = 3;
+
+        let bars = run_pipeline_test(exchange, symbols, periods, expected_count)
+            .await
+            .expect("Pipeline test failed");
+
+        println!("Total OHLCV bars received: {}", bars.len());
+        assert!(bars.len() >= expected_count * symbols.len());
+    }
+}
