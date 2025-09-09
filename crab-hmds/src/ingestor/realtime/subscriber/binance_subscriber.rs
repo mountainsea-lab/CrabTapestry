@@ -1,19 +1,19 @@
-use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
+use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::types::PublicTradeEvent;
 use anyhow::Result;
 use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
-use barter_data::streams::Streams;
 use barter_data::streams::reconnect::stream::ReconnectingStream;
+use barter_data::streams::Streams;
 use barter_data::subscription::trade::PublicTrades;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::{info, warn};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{broadcast, Mutex};
 
 /// Binance 实时订阅器
 pub struct BinanceSubscriber {
@@ -175,3 +175,52 @@ impl RealtimeSubscriber for BinanceSubscriber {
         futures::executor::block_on(self.status())
     }
 }
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use std::sync::Arc;
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn test_binance_subscriber_real() {
+        // 创建 broadcast channel
+        let (broadcast_tx, _broadcast_rx) = broadcast::channel(1024);
+        let subscriber = Arc::new(BinanceSubscriber::new(broadcast_tx.clone()));
+
+        // 指定要订阅的币种
+        let symbols = vec!["btc", "eth", "sol"];
+
+        // 启动订阅，返回 pipeline receiver
+        let mut rx = subscriber.clone().subscribe_symbols(&symbols).await.unwrap();
+
+        // 等待一段时间让事件流入
+        let mut received_count = 0;
+        let max_wait = Duration::from_secs(10);
+        let start = tokio::time::Instant::now();
+
+        while start.elapsed() < max_wait {
+            tokio::select! {
+                Some(event) = rx.recv() => {
+                    println!("Received trade: {} @ {}", event.symbol, event.trade.price);
+                    received_count += 1;
+                    if received_count >= 3 {
+                        break;
+                    }
+                }
+                _ = sleep(Duration::from_secs(1)) => {
+                    // 等待下一轮
+                }
+            }
+        }
+
+        assert!(received_count > 0, "No trades received from Binance stream");
+
+        // 测试 shutdown
+        subscriber.shutdown_subscribe();
+        sleep(Duration::from_millis(100)).await; // 等待状态更新
+        let status = subscriber.status().await;
+        println!("Received status: {:?}", status);
+        assert_eq!(status, SubscriberStatus::Connected);
+    }
+}
+

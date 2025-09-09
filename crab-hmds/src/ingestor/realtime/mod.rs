@@ -5,7 +5,7 @@ pub mod subscriber;
 use std::sync::Arc;
 
 /// Subscriber 状态
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SubscriberStatus {
     Connected,
     Subscribed(Vec<String>),
