@@ -1,12 +1,12 @@
-use crate::ingestor::types::{OHLCVRecord, PublicTradeEvent};
+use std::sync::Arc;
 use barter_data::barter_instrument::Side;
 use barter_data::subscription::trade::PublicTrade;
 use crab_common_utils::time_utils::milliseconds_to_offsetdatetime;
 use crab_infras::cache::BaseBar;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
 use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
+use crate::ingestor::types::{OHLCVRecord, PublicTradeEvent};
 
 #[derive(Debug, Default, Clone)]
 pub struct TradeCandle {

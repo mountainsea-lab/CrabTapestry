@@ -8,7 +8,7 @@ use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::streams::Streams;
 use barter_data::subscription::trade::PublicTrades;
 use futures_util::StreamExt;
-use ms_tracing::tracing_utils::internal::{info, warn};
+use ms_tracing::tracing_utils::internal::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -90,6 +90,7 @@ impl BinanceSubscriber {
                     break;
                 }
                 let trade_event: PublicTradeEvent = event.into();
+                info!("Stream trade_event,{:?}",trade_event);
                 let _ = self.broadcast_tx.send(trade_event);
             }
 
@@ -112,23 +113,35 @@ impl BinanceSubscriber {
     }
 
     /// 启动 pipeline 转发任务（单一任务）
+    // fn start_forward_task(&self, tx: mpsc::Sender<PublicTradeEvent>) {
+    //     if self.forward_task_started.swap(true, Ordering::Relaxed) {
+    //         // 已经启动过，无需重复启动
+    //         return;
+    //     }
+    //
+    //     let mut broadcast_rx = self.broadcast_tx.subscribe();
+    //
+    //     tokio::spawn(async move {
+    //         while let Ok(trade) = broadcast_rx.recv().await {
+    //             if tx.send(trade).await.is_err() {
+    //                 info!("Pipeline receiver closed, stopping forward task.");
+    //                 break;
+    //             }
+    //         }
+    //     });
+    // }
     fn start_forward_task(&self, tx: mpsc::Sender<PublicTradeEvent>) {
-        if self.forward_task_started.swap(true, Ordering::Relaxed) {
-            // 已经启动过，无需重复启动
-            return;
-        }
-
+        // 每次调用都新建一个 broadcast 订阅者
         let mut broadcast_rx = self.broadcast_tx.subscribe();
-
         tokio::spawn(async move {
             while let Ok(trade) = broadcast_rx.recv().await {
                 if tx.send(trade).await.is_err() {
-                    info!("Pipeline receiver closed, stopping forward task.");
                     break;
                 }
             }
         });
     }
+
 
     /// 停止订阅
     pub fn shutdown_subscribe(&self) {
@@ -150,14 +163,12 @@ impl RealtimeSubscriber for BinanceSubscriber {
     /// 高性能批量订阅（返回 mpsc 给 pipeline）
     async fn subscribe_symbols(self: Arc<Self>, symbols: &[&str]) -> Result<mpsc::Receiver<PublicTradeEvent>> {
         let symbols_vec: Vec<Arc<str>> = symbols.iter().map(|s| Arc::from(*s)).collect();
-
         // 启动后台订阅线程
         self.start_subscribe_thread(symbols_vec);
 
         // 创建 pipeline channel
         let (tx, rx) = mpsc::channel(1024);
         self.start_forward_task(tx);
-
         Ok(rx)
     }
 
@@ -183,6 +194,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_binance_subscriber_real() {
+
+        ms_tracing::setup_tracing();
+
         // 创建 broadcast channel
         let (broadcast_tx, _broadcast_rx) = broadcast::channel(1024);
         let subscriber = Arc::new(BinanceSubscriber::new(broadcast_tx.clone()));

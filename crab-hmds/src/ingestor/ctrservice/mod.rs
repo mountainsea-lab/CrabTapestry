@@ -14,15 +14,15 @@ pub enum ServiceState {
 /// 控制消息用于统一管理子服务的启动/停止/错误传播。
 #[derive(Debug)]
 pub enum ControlMsg {
-    Subscribe {
-        exchange: Arc<str>,
-        symbol: Arc<str>,
-        periods: Vec<Arc<str>>,
-    },
-    Unsubscribe {
-        exchange: Arc<str>,
-        symbol: Arc<str>,
-    },
+    // Subscribe {
+    //     exchange: Arc<str>,
+    //     symbol: Arc<str>,
+    //     periods: Vec<Arc<str>>,
+    // },
+    // Unsubscribe {
+    //     exchange: Arc<str>,
+    //     symbol: Arc<str>,
+    // },
     SubscribeMany {
         exchange: Arc<str>,
         symbols: Vec<Arc<str>>,

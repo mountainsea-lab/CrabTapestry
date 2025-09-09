@@ -179,12 +179,12 @@ where
                 // 处理消息（此时已释放锁）
                 if let Some(msg) = msg {
                     match msg {
-                        ControlMsg::Subscribe { exchange, symbol, periods } => {
-                            let subscription = Subscription { exchange, symbol, periods };
-                            if let Err(e) = pipeline.subscribe_symbol(subscription).await {
-                                let _ = internal_tx.send(InternalMsg::Error(format!("Subscribe error: {}", e))).await;
-                            }
-                        }
+                        // ControlMsg::Subscribe { exchange, symbol, periods } => {
+                        //     let subscription = Subscription { exchange, symbol, periods };
+                        //     if let Err(e) = pipeline.subscribe_symbol(subscription).await {
+                        //         let _ = internal_tx.send(InternalMsg::Error(format!("Subscribe error: {}", e))).await;
+                        //     }
+                        // }
                         ControlMsg::SubscribeMany { exchange, symbols, periods } => {
                             if let Err(e) = pipeline.subscribe_many(exchange, symbols, periods).await {
                                 let _ = internal_tx
@@ -192,9 +192,9 @@ where
                                     .await;
                             }
                         }
-                        ControlMsg::Unsubscribe { exchange, symbol } => {
-                            let _ = pipeline.unsubscribe_symbol(exchange.as_ref(), symbol.as_ref());
-                        }
+                        // ControlMsg::Unsubscribe { exchange, symbol } => {
+                        //     let _ = pipeline.unsubscribe_symbol(exchange.as_ref(), symbol.as_ref());
+                        // }
                         ControlMsg::UnsubscribeMany { exchange, symbols } => {
                             let symbol_refs: Vec<&str> = symbols.iter().map(|s| s.as_ref()).collect();
                             let _ = pipeline.unsubscribe_many(exchange.as_ref(), &symbol_refs);
