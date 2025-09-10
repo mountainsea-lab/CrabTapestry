@@ -90,7 +90,7 @@ impl BinanceSubscriber {
                     break;
                 }
                 let trade_event: PublicTradeEvent = event.into();
-                info!("Stream trade_event,{:?}",trade_event);
+                // info!("Stream trade_event,{:?}",trade_event);
                 let _ = self.broadcast_tx.send(trade_event);
             }
 

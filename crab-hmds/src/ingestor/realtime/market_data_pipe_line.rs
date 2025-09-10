@@ -166,103 +166,6 @@ impl MarketDataPipeline {
     //     Ok(())
     // }
 
-    // pub async fn subscribe_many(
-    //     &self,
-    //     exchange: Arc<str>,
-    //     symbols: Vec<Arc<str>>,
-    //     periods: Vec<Arc<str>>,
-    // ) -> anyhow::Result<()> {
-    //     let exchange_s = exchange.to_string();
-    //
-    //     // 获取 subscriber
-    //     let subscriber = self
-    //         .subscribers
-    //         .get(&exchange_s)
-    //         .ok_or_else(|| anyhow::anyhow!("No subscriber for {}", exchange_s))?
-    //         .clone();
-    //
-    //     // 获取或创建状态
-    //     let exch_status = self
-    //         .status
-    //         .entry(exchange_s.clone())
-    //         .or_insert_with(|| Arc::new(DashMap::new()));
-    //
-    //     // 筛选未订阅的
-    //     let symbols_to_subscribe: Vec<_> = symbols
-    //         .into_iter()
-    //         .filter(|sym| {
-    //             let key = (exchange_s.clone(), sym.to_string());
-    //             !self.subscribed.contains_key(&key)
-    //         })
-    //         .collect();
-    //
-    //     if symbols_to_subscribe.is_empty() {
-    //         return Ok(());
-    //     }
-    //
-    //     // 保存订阅信息 & 初始化聚合器
-    //     for sym in &symbols_to_subscribe {
-    //         let key = (exchange_s.clone(), sym.to_string());
-    //         let sub = Subscription {
-    //             exchange: exchange.clone(),
-    //             symbol: sym.clone(),
-    //             periods: periods.clone(),
-    //         };
-    //         self.subscribed.insert(key.clone(), sub.clone());
-    //         exch_status.insert(sym.to_string(), ());
-    //
-    //         let key_multi = (exchange_s.clone(), sym.to_string(), "multi".to_string());
-    //         self.aggregators.entry(key_multi.clone()).or_insert_with(|| {
-    //             MultiPeriodAggregator::new(sub.exchange.clone(), sub.symbol.clone(), sub.periods.clone())
-    //         });
-    //     }
-    //     // 批量订阅 trade 流
-    //     let mut trade_rx = subscriber
-    //         .subscribe_symbols(&symbols_to_subscribe.iter().map(|s| s.as_ref()).collect::<Vec<_>>())
-    //         .await?;
-    //
-    //     let aggregators = self.aggregators.clone();
-    //     let ohlcv_tx = self.ohlcv_tx.clone();
-    //     let exchange_clone = exchange_s.clone();
-    //
-    //     let (cancel_tx, mut cancel_rx) = watch::channel(false);
-    //
-    //     let handle = tokio::spawn(async move {
-    //         loop {
-    //             tokio::select! {
-    //             maybe_trade = trade_rx.recv() => {
-    //                 if let Some(trade) = maybe_trade {
-    //                     let key_multi = (exchange_clone.clone(), trade.symbol.clone(), "multi".to_string());
-    //                     if let Some(mut agg) = aggregators.get_mut(&key_multi) {
-    //                         let bars = agg.on_event(trade);
-    //                         for bar in bars {
-    //                             info!("agg stream public trade event {:?}", bar);
-    //                             let _ = ohlcv_tx.send(bar);
-    //                         }
-    //                     } else {
-    //                        warn!("stream public trade event key_multi not found");
-    //                     }
-    //
-    //                 } else {
-    //                     break;
-    //                 }
-    //             }
-    //             _ = cancel_rx.changed() => {
-    //                 if *cancel_rx.borrow() { break; }
-    //             }
-    //         }
-    //         }
-    //         warn!("stream closed for {} symbols: {}", exchange_clone, symbols_to_subscribe.len());
-    //     });
-    //
-    //     // 保存任务（用 exchange 作为 key）
-    //     self.tasks.insert(
-    //         (exchange_s.clone(), "__all__".into()),
-    //         SymbolTask { handle, cancel_tx },
-    //     );
-    //
-    //     Ok(())
-    // }
     pub async fn subscribe_many(
         &self,
         exchange: Arc<str>,
@@ -332,7 +235,7 @@ impl MarketDataPipeline {
                 tokio::select! {
             maybe_trade = trade_rx.recv() => {
                 if let Some(trade) = maybe_trade {
-                    // 从已订阅信息获取该 symbol 对应的周期列表  todo symbol不匹配
+                    // 从已订阅信息获取该 symbol 对应的周期列表
                     if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
                         for period in &sub.periods {
                             let period_sec = parse_period_to_secs(period).unwrap_or(60);
@@ -351,6 +254,7 @@ impl MarketDataPipeline {
                             if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
                                 if guard.candle_count >= 1 {
                                     let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
+                                   // info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
                                     let _ = ohlcv_tx.send(ohlcv_record);
                                 }
                                 guard.candle_count += 1;
@@ -383,7 +287,7 @@ impl MarketDataPipeline {
     }
 
     /// 批量取消多个 symbol（同一个 exchange，高性能模板）
-    pub async fn unsubscribe_many(&self, exchange: &str, symbols: &[&str]) -> anyhow::Result<()> {
+    pub async fn unsubscribe_many(&self, _exchange: &str, _symbols: &[&str]) -> anyhow::Result<()> {
     //     let exchange_s = exchange.to_string();
     //
     //     // 获取交易所状态集合
@@ -445,132 +349,7 @@ impl MarketDataPipeline {
     }
 }
 
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::sync::Arc;
-//
-//
-//     #[tokio::test]
-//     async fn test_subscribe_symbol() {
-//         let mut pipeline = MarketDataPipeline::new(
-//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
-//             10,
-//         );
-//
-//         let subscription = Subscription {
-//             exchange: Arc::new("exchange1".into()),
-//             symbol: Arc::new("symbol-1".into()),
-//             periods: vec![Arc::new("1m".into())],
-//         };
-//
-//         // Test subscription
-//         assert!(pipeline.subscribe_symbol(subscription.clone()).await.is_ok());
-//
-//         // Verify subscription status
-//         let status = pipeline.get_subscriber_status("exchange1");
-//         assert!(status.is_some());
-//         assert_eq!(status.unwrap().len(), 1);
-//
-//         // Verify subscribed count
-//         assert_eq!(pipeline.subscribed_count(), 1);
-//     }
-//
-//     #[tokio::test]
-//     async fn test_unsubscribe_symbol() {
-//         let mut pipeline = MarketDataPipeline::new(
-//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
-//             10,
-//         );
-//
-//         let subscription = Subscription {
-//             exchange: "exchange1".to_string(),
-//             symbol: "symbol-1".to_string(),
-//             periods: vec!["1m".to_string()],
-//         };
-//
-//         // Subscribe first
-//         pipeline.subscribe_symbol(subscription.clone()).await.unwrap();
-//
-//         // Unsubscribe
-//         assert!(pipeline.unsubscribe_symbol("exchange1", "symbol-1").await.is_ok());
-//
-//         // Verify the status is removed
-//         let status = pipeline.get_subscriber_status("exchange1");
-//         assert!(status.is_some());
-//         assert_eq!(status.unwrap().len(), 0);
-//
-//         // Verify subscribed count
-//         assert_eq!(pipeline.subscribed_count(), 0);
-//     }
-//
-//     #[tokio::test]
-//     async fn test_subscribe_many_symbols() {
-//         let mut pipeline = MarketDataPipeline::new(
-//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
-//             10,
-//         );
-//
-//         let exchange = "exchange1".to_string();
-//         let symbols = vec![
-//             "symbol-1".to_string(),
-//             "symbol-2".to_string(),
-//             "symbol-3".to_string(),
-//         ];
-//         let periods = vec!["1m".to_string()];
-//
-//         // Subscribe multiple symbols
-//         pipeline
-//             .subscribe_many(Arc::from(exchange.clone()), symbols.into_iter().map(Arc::from).collect(), periods)
-//             .await
-//             .unwrap();
-//
-//         // Verify subscription
-//         let status = pipeline.get_subscriber_status(&exchange);
-//         assert!(status.is_some());
-//         assert_eq!(status.unwrap().len(), 3);
-//
-//         // Verify subscribed count
-//         assert_eq!(pipeline.subscribed_count(), 3);
-//     }
-//
-//     #[tokio::test]
-//     async fn test_unsubscribe_many_symbols() {
-//         let mut pipeline = MarketDataPipeline::new(
-//             vec![("exchange1".to_string(), Arc::new(MockSubscriber::new(10)))].into_iter().collect(),
-//             10,
-//         );
-//
-//         let exchange = "exchange1".to_string();
-//         let symbols = vec![
-//             "symbol-1".to_string(),
-//             "symbol-2".to_string(),
-//             "symbol-3".to_string(),
-//         ];
-//         let periods = vec!["1m".to_string()];
-//
-//         // Subscribe multiple symbols
-//         pipeline
-//             .subscribe_many(Arc::from(exchange.clone()), symbols.clone().into_iter().map(Arc::from).collect(), periods)
-//             .await
-//             .unwrap();
-//
-//         // Unsubscribe multiple symbols
-//         pipeline
-//             .unsubscribe_many(&exchange, &symbols.iter().map(AsRef::as_ref).collect::<Vec<_>>())
-//             .await
-//             .unwrap();
-//
-//         // Verify status is empty
-//         let status = pipeline.get_subscriber_status(&exchange);
-//         assert!(status.is_some());
-//         assert_eq!(status.unwrap().len(), 0);
-//
-//         // Verify subscribed count is zero
-//         assert_eq!(pipeline.subscribed_count(), 0);
-//     }
-// }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -674,16 +453,16 @@ mod tests {
         // Step 6: 批量取消订阅
         // -------------------------------
         let symbols_str: Vec<&str> = symbols.to_vec();
-        // pipeline.unsubscribe_many(exchange, &symbols_str).await?;
+        pipeline.unsubscribe_many(exchange, &symbols_str).await?;
 
         Ok(received_bars)
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_pipeline_with_tool() {
         ms_tracing::setup_tracing();
 
-        let exchange = "binance";
+        let exchange = "BinanceFuturesUsd";
         let symbols = &["btc", "eth" , "sol"];
         let periods = &["1m", "5m"];
         let expected_count = 3;
