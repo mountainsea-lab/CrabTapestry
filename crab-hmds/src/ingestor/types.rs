@@ -66,7 +66,7 @@ impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for
                 PublicTradeEvent {
                     exchange: market_event.exchange.to_string(),
                     symbol: format!("{}", market_event.instrument.base), // 根据你的需求调整
-                    trade: market_event.kind,                                                             // PublicTrade
+                    trade: market_event.kind,                            // PublicTrade
                     timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
                     time_period: M1.get(),
                 }

@@ -297,10 +297,9 @@ where
 
     /// 获取节点状态
     pub async fn get_node_meta(&self, node_id: usize) -> Option<NodeMeta> {
-        self.nodes
-            .get(&node_id)
-            .map(|node| async move { node.meta.lock().await.clone() })
-            .map(|fut| tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(fut)))
+        let node = self.nodes.get(&node_id)?;
+        let guard = node.meta.lock().await;
+        Some(guard.clone())
     }
 
     /// 获取 pending 任务数量（就绪队列 + 未完成节点）
@@ -321,5 +320,182 @@ where
     /// 提供输出接收器
     pub fn output_rx(&self) -> broadcast::Receiver<HistoricalBatchEnum> {
         self.output_tx.subscribe() // 任何地方都可以订阅
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
+    use crate::ingestor::types::HistoricalSource;
+    use anyhow::Result;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    fn make_source() -> HistoricalSource {
+        HistoricalSource {
+            name: "Binance API".to_string(),
+            exchange: "binance".to_string(),
+            last_success_ts: 0,
+            last_fetch_ts: 0,
+            batch_size: 0,
+            supports_tick: false,
+            supports_trade: false,
+            supports_ohlcv: true,
+        }
+    }
+
+    fn make_ctx(period: &str, past_hours: i64) -> Arc<FetchContext> {
+        FetchContext::new_with_past(
+            make_source(),
+            "binance",
+            "BTCUSDT",
+            Some(period),
+            Some(past_hours),
+            None,
+        )
+    }
+
+    #[tokio::test]
+    async fn test_single_task_with_binance_fetcher() -> Result<()> {
+        let fetcher = Arc::new(BinanceFetcher::new());
+        let scheduler = BaseBackfillScheduler::new(fetcher, 2);
+
+        let ctx = make_ctx("1h", 3);
+        let task_id = scheduler.add_task(ctx, BackfillDataType::OHLCV, vec![]).await;
+
+        // 启动 worker
+        let sched = scheduler.clone();
+        tokio::spawn(async move { sched.run(1).await.unwrap() });
+
+        // 订阅输出
+        let mut rx = scheduler.output_rx();
+        let batch_enum = timeout(Duration::from_secs(15), rx.recv()).await??;
+        match batch_enum {
+            HistoricalBatchEnum::OHLCV(batch) => {
+                println!("Fetched OHLCV (single task): {:?} records", batch.data);
+                assert!(!batch.data.is_empty());
+            }
+            _ => panic!("Expected OHLCV batch"),
+        }
+
+        let meta = scheduler.get_node_meta(task_id).await.unwrap();
+        assert!(matches!(meta.status, NodeStatus::Completed));
+
+        scheduler.stop();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_batch_tasks_with_binance_fetcher() -> Result<()> {
+        let fetcher = Arc::new(BinanceFetcher::new());
+        let scheduler = BaseBackfillScheduler::new(fetcher, 2);
+
+        let base_ctx = make_ctx("1h", 6); // 6 小时数据
+        let task_ids = scheduler
+            .add_batch_tasks(base_ctx, BackfillDataType::OHLCV, 2 * 60 * 60 * 1000, vec![]) // 每 2 小时切片
+            .await;
+
+        assert!(task_ids.len() >= 3, "batch task count >= 3");
+
+        let sched = scheduler.clone();
+        tokio::spawn(async move { sched.run(2).await.unwrap() });
+
+        let mut rx = scheduler.output_rx();
+        let mut received = 0;
+        while received < task_ids.len() {
+            if let Ok(Ok(batch_enum)) = timeout(Duration::from_secs(30), rx.recv()).await {
+                match batch_enum {
+                    HistoricalBatchEnum::OHLCV(batch) => {
+                        println!(
+                            "Fetched OHLCV batch slice: {} records (range {:?})",
+                            batch.data.len(),
+                            batch.range
+                        );
+                        assert!(!batch.data.is_empty());
+                        received += 1;
+                    }
+                    _ => panic!("Expected OHLCV batch"),
+                }
+            }
+        }
+
+        // 检查所有任务完成
+        for id in task_ids {
+            let meta = scheduler.get_node_meta(id).await.unwrap();
+            assert!(matches!(meta.status, NodeStatus::Completed));
+        }
+
+        scheduler.stop();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_dependency_with_binance_fetcher() -> Result<()> {
+        let fetcher = Arc::new(BinanceFetcher::new());
+        let scheduler = BaseBackfillScheduler::new(fetcher, 2);
+
+        let parent_id = scheduler.add_task(make_ctx("1h", 1), BackfillDataType::OHLCV, vec![]).await;
+        let child_id = scheduler
+            .add_task(make_ctx("1h", 1), BackfillDataType::OHLCV, vec![parent_id])
+            .await;
+
+        let sched = scheduler.clone();
+        tokio::spawn(async move { sched.run(2).await.unwrap() });
+
+        let mut rx = scheduler.output_rx();
+        let mut completed_ids = Vec::new();
+        while completed_ids.len() < 2 {
+            let batch_enum = timeout(Duration::from_secs(15), rx.recv()).await??;
+            match batch_enum {
+                HistoricalBatchEnum::OHLCV(batch) => {
+                    println!("Task completed for range {:?}", batch.range);
+                    completed_ids.push(batch.range);
+                }
+                _ => panic!("Expected OHLCV batch"),
+            }
+        }
+
+        let parent_meta = scheduler.get_node_meta(parent_id).await.unwrap();
+        let child_meta = scheduler.get_node_meta(child_id).await.unwrap();
+        assert!(matches!(parent_meta.status, NodeStatus::Completed));
+        assert!(matches!(child_meta.status, NodeStatus::Completed));
+
+        scheduler.stop();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_multiple_subscribers() -> Result<()> {
+        let fetcher = Arc::new(BinanceFetcher::new());
+        let scheduler = BaseBackfillScheduler::new(fetcher, 2);
+
+        let ctx = make_ctx("1h", 1);
+        scheduler.add_task(ctx, BackfillDataType::OHLCV, vec![]).await;
+
+        let sched = scheduler.clone();
+        tokio::spawn(async move { sched.run(1).await.unwrap() });
+
+        // 两个订阅者
+        let mut rx1 = scheduler.output_rx();
+        let mut rx2 = scheduler.output_rx();
+
+        let b1 = timeout(Duration::from_secs(10), rx1.recv()).await??;
+        let b2 = timeout(Duration::from_secs(10), rx2.recv()).await??;
+
+        match (b1, b2) {
+            (HistoricalBatchEnum::OHLCV(batch1), HistoricalBatchEnum::OHLCV(batch2)) => {
+                println!(
+                    "Subscriber1 got {} records, Subscriber2 got {} records",
+                    batch1.data.len(),
+                    batch2.data.len()
+                );
+                assert_eq!(batch1.data.len(), batch2.data.len());
+            }
+            _ => panic!("Expected OHLCV batch for both subscribers"),
+        }
+
+        scheduler.stop();
+        Ok(())
     }
 }

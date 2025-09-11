@@ -1,3 +1,5 @@
+use crate::ingestor::realtime::aggregator::types::TradeCandle;
+use crate::ingestor::types::PublicTradeEvent;
 use crab_infras::cache::BaseBar;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
@@ -8,8 +10,6 @@ use tokio::sync::mpsc;
 use trade_aggregation::{
     Aggregator, AlignedTimeRule, GenericAggregator, MillisecondPeriod, TimestampResolution, Trade,
 };
-use crate::ingestor::realtime::aggregator::types::TradeCandle;
-use crate::ingestor::types::PublicTradeEvent;
 
 pub type AggregatorKey = (String, String, u64); // (exchange, symbol, timeframe)
 

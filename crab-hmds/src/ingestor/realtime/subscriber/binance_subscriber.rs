@@ -1,19 +1,19 @@
-use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::realtime::SubscriberStatus;
+use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::PublicTradeEvent;
 use anyhow::Result;
 use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
-use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::streams::Streams;
+use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::{error, info, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 
 /// Binance 实时订阅器
 pub struct BinanceSubscriber {
@@ -142,7 +142,6 @@ impl BinanceSubscriber {
         });
     }
 
-
     /// 停止订阅
     pub fn shutdown_subscribe(&self) {
         self.shutdown.store(true, Ordering::Relaxed);
@@ -190,11 +189,10 @@ impl RealtimeSubscriber for BinanceSubscriber {
 mod integration_tests {
     use super::*;
     use std::sync::Arc;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_binance_subscriber_real() {
-
         ms_tracing::setup_tracing();
 
         // 创建 broadcast channel
@@ -237,4 +235,3 @@ mod integration_tests {
         assert_eq!(status, SubscriberStatus::Connected);
     }
 }
-

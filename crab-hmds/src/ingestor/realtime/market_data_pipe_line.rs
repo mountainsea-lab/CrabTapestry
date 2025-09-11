@@ -1,6 +1,10 @@
-use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::realtime::Subscription;
+use crate::ingestor::realtime::aggregator::trade_aggregator::TradeAggregatorPool;
+use crate::ingestor::realtime::market_data_pipe_line::tests::parse_period_to_secs;
+use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
+use crab_infras::cache::BaseBar;
+use crab_types::time_frame::TimeFrame;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::{info, warn};
 use std::collections::HashMap;
@@ -9,10 +13,6 @@ use std::time::Instant;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
 use trade_aggregation::{Aggregator, Trade};
-use crab_infras::cache::BaseBar;
-use crab_types::time_frame::TimeFrame;
-use crate::ingestor::realtime::aggregator::trade_aggregator::TradeAggregatorPool;
-use crate::ingestor::realtime::market_data_pipe_line::tests::parse_period_to_secs;
 
 /// 管理每个 symbol 的订阅任务
 /// manage each symbol's subscription task
@@ -214,12 +214,7 @@ impl MarketDataPipeline {
 
         // 批量订阅 trade 流
         let mut trade_rx = subscriber
-            .subscribe_symbols(
-                &symbols_to_subscribe
-                    .iter()
-                    .map(|s| s.as_ref())
-                    .collect::<Vec<_>>(),
-            )
+            .subscribe_symbols(&symbols_to_subscribe.iter().map(|s| s.as_ref()).collect::<Vec<_>>())
             .await?;
 
         let aggregator_pool = self.aggregators.clone(); // TradeAggregatorPool
@@ -233,101 +228,102 @@ impl MarketDataPipeline {
         let handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
-            maybe_trade = trade_rx.recv() => {
-                if let Some(trade) = maybe_trade {
-                    // 从已订阅信息获取该 symbol 对应的周期列表
-                    if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
-                        for period in &sub.periods {
-                            let period_sec = parse_period_to_secs(period).unwrap_or(60);
+                    maybe_trade = trade_rx.recv() => {
+                        if let Some(trade) = maybe_trade {
+                            // 从已订阅信息获取该 symbol 对应的周期列表
+                            if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
+                                for period in &sub.periods {
+                                    let period_sec = parse_period_to_secs(period).unwrap_or(60);
 
-                            // 获取或创建聚合器
-                            let aggregator = aggregator_pool.get_or_create_aggregator(
-                                &exchange_clone,
-                                &trade.symbol,
-                                period_sec,
-                            );
+                                    // 获取或创建聚合器
+                                    let aggregator = aggregator_pool.get_or_create_aggregator(
+                                        &exchange_clone,
+                                        &trade.symbol,
+                                        period_sec,
+                                    );
 
-                            let mut guard = aggregator.write().unwrap();
-                            guard.last_update = Instant::now();
-                             let trade_clone = trade.clone();
-                            let trade_obj: Trade = (&trade).into();
-                            if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
-                                if guard.candle_count >= 1 {
-                                    let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
-                                   // info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
-                                    let _ = ohlcv_tx.send(ohlcv_record);
+                                    let mut guard = aggregator.write().unwrap();
+                                    guard.last_update = Instant::now();
+                                     let trade_clone = trade.clone();
+                                    let trade_obj: Trade = (&trade).into();
+                                    if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
+                                        if guard.candle_count >= 1 {
+                                            let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
+                                           // info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
+                                            let _ = ohlcv_tx.send(ohlcv_record);
+                                        }
+                                        guard.candle_count += 1;
+                                    }
                                 }
-                                guard.candle_count += 1;
+                            } else {
+                                warn!("Received trade for unsubscribed symbol {}", trade.symbol);
                             }
+                        } else {
+                            break;
                         }
-                    } else {
-                        warn!("Received trade for unsubscribed symbol {}", trade.symbol);
                     }
-                } else {
-                    break;
+                    _ = cancel_rx.changed() => {
+                        if *cancel_rx.borrow() { break; }
+                    }
                 }
             }
-            _ = cancel_rx.changed() => {
-                if *cancel_rx.borrow() { break; }
-            }
-        }
-            }
 
-            warn!("stream closed for {} symbols: {}", exchange_clone, symbols_to_subscribe.len());
+            warn!(
+                "stream closed for {} symbols: {}",
+                exchange_clone,
+                symbols_to_subscribe.len()
+            );
         });
 
-
         // 保存任务（用 exchange 作为 key）
-        self.tasks.insert(
-            (exchange_s.clone(), "__all__".into()),
-            SymbolTask { handle, cancel_tx },
-        );
+        self.tasks
+            .insert((exchange_s.clone(), "__all__".into()), SymbolTask { handle, cancel_tx });
 
         Ok(())
     }
 
     /// 批量取消多个 symbol（同一个 exchange，高性能模板）
     pub async fn unsubscribe_many(&self, _exchange: &str, _symbols: &[&str]) -> anyhow::Result<()> {
-    //     let exchange_s = exchange.to_string();
-    //
-    //     // 获取交易所状态集合
-    //     let exch_status_opt = self.status.get(&exchange_s);
-    //
-    //     // 并发取消每个 symbol 的任务
-    //     let mut handles = Vec::with_capacity(symbols.len());
-    //     for &sym in symbols {
-    //         let key = (exchange_s.clone(), sym.to_string());
-    //
-    //         // 移除订阅信息和聚合器
-    //         self.subscribed.remove(&key);
-    //         self.aggregators
-    //             .remove(&(exchange_s.clone(), sym.to_string(), "multi".to_string()));
-    //
-    //         // 取消 symbol 任务
-    //         if let Some((_, task)) = self.tasks.remove(&key) {
-    //             let h = tokio::spawn(async move {
-    //                 let _ = task.cancel_tx.send(true);
-    //                 let _ = task.handle.await;
-    //             });
-    //             handles.push(h);
-    //         }
-    //
-    //         // 更新交易所状态集合
-    //         if let Some(exch_status) = exch_status_opt.as_ref() {
-    //             exch_status.remove(sym);
-    //         }
-    //     }
-    //
-    //     // 等待所有取消任务完成
-    //     for h in handles {
-    //         let _ = h.await;
-    //     }
-    //
-    //     // 调用 subscriber 批量取消（可选）
-    //     if let Some(subscriber) = self.subscribers.get(&exchange_s) {
-    //         let _ = subscriber.unsubscribe_symbols(symbols).await;
-    //     }
-    //
+        //     let exchange_s = exchange.to_string();
+        //
+        //     // 获取交易所状态集合
+        //     let exch_status_opt = self.status.get(&exchange_s);
+        //
+        //     // 并发取消每个 symbol 的任务
+        //     let mut handles = Vec::with_capacity(symbols.len());
+        //     for &sym in symbols {
+        //         let key = (exchange_s.clone(), sym.to_string());
+        //
+        //         // 移除订阅信息和聚合器
+        //         self.subscribed.remove(&key);
+        //         self.aggregators
+        //             .remove(&(exchange_s.clone(), sym.to_string(), "multi".to_string()));
+        //
+        //         // 取消 symbol 任务
+        //         if let Some((_, task)) = self.tasks.remove(&key) {
+        //             let h = tokio::spawn(async move {
+        //                 let _ = task.cancel_tx.send(true);
+        //                 let _ = task.handle.await;
+        //             });
+        //             handles.push(h);
+        //         }
+        //
+        //         // 更新交易所状态集合
+        //         if let Some(exch_status) = exch_status_opt.as_ref() {
+        //             exch_status.remove(sym);
+        //         }
+        //     }
+        //
+        //     // 等待所有取消任务完成
+        //     for h in handles {
+        //         let _ = h.await;
+        //     }
+        //
+        //     // 调用 subscriber 批量取消（可选）
+        //     if let Some(subscriber) = self.subscribers.get(&exchange_s) {
+        //         let _ = subscriber.unsubscribe_symbols(symbols).await;
+        //     }
+        //
         Ok(())
     }
 
@@ -349,14 +345,13 @@ impl MarketDataPipeline {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use tokio::time::{sleep, Duration};
-    use crate::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
+    use tokio::time::{Duration, sleep};
 
     /// 将 K 线周期字符串转换为秒数
     pub fn parse_period_to_secs(period: &str) -> Option<u64> {
@@ -376,7 +371,6 @@ mod tests {
             _ => None,
         }
     }
-
 
     /// 通用测试工具函数
     /// exchange: 交易所名称
@@ -423,8 +417,8 @@ mod tests {
         let max_period_sec: u64 = periods
             .iter()
             .filter_map(|p| parse_period_to_secs(p)) // 返回 Option<u64>，失败的过滤掉
-            .max()                                   // 找到最大的
-            .unwrap_or(60);                          // 如果全都解析失败，默认 60 秒
+            .max() // 找到最大的
+            .unwrap_or(60); // 如果全都解析失败，默认 60 秒
 
         tokio::time::sleep(Duration::from_secs(max_period_sec + 10)).await;
 
@@ -463,7 +457,7 @@ mod tests {
         ms_tracing::setup_tracing();
 
         let exchange = "BinanceFuturesUsd";
-        let symbols = &["btc", "eth" , "sol"];
+        let symbols = &["btc", "eth", "sol"];
         let periods = &["1m", "5m"];
         let expected_count = 3;
 
