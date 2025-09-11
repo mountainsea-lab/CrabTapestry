@@ -2,7 +2,7 @@ use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRec
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 
 pub mod back_fill_dag;
 

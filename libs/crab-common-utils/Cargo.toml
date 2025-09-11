@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# CrabTapestry Ecosystem
+crab-types  = {workspace = true}
 # Time
 time = {workspace = true}
 # tracing

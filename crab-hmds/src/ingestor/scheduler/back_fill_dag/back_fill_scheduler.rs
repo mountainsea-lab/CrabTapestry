@@ -1,5 +1,7 @@
 use crate::ingestor::historical::HistoricalFetcherExt;
-use crate::ingestor::scheduler::{BackfillDataType, BackfillNode, HistoricalBatchEnum, NodeMeta, NodeStatus, OutputSubscriber};
+use crate::ingestor::scheduler::{
+    BackfillDataType, BackfillNode, HistoricalBatchEnum, NodeMeta, NodeStatus, OutputSubscriber,
+};
 use crate::ingestor::types::FetchContext;
 use anyhow::Result;
 use crab_types::TimeRange;
@@ -503,5 +505,4 @@ mod tests {
         handle.await.unwrap(); // 确保 worker 退出
         Ok(())
     }
-
 }

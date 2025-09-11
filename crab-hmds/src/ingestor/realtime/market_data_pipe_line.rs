@@ -1,8 +1,8 @@
 use crate::ingestor::realtime::Subscription;
 use crate::ingestor::realtime::aggregator::trade_aggregator::TradeAggregatorPool;
-use crate::ingestor::realtime::market_data_pipe_line::tests::parse_period_to_secs;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
+use crab_common_utils::time_utils::parse_period_to_secs;
 use crab_infras::cache::BaseBar;
 use crab_types::time_frame::TimeFrame;
 use dashmap::DashMap;
@@ -352,25 +352,6 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::time::{Duration, sleep};
-
-    /// 将 K 线周期字符串转换为秒数
-    pub fn parse_period_to_secs(period: &str) -> Option<u64> {
-        if period.is_empty() {
-            return None;
-        }
-
-        // 最后一位是单位（m=分钟, h=小时, d=天, s=秒）
-        let (num_part, unit_part) = period.split_at(period.len() - 1);
-        let num: u64 = num_part.parse().ok()?;
-
-        match unit_part {
-            "s" | "S" => Some(num),
-            "m" | "M" => Some(num * 60),
-            "h" | "H" => Some(num * 60 * 60),
-            "d" | "D" => Some(num * 24 * 60 * 60),
-            _ => None,
-        }
-    }
 
     /// 通用测试工具函数
     /// exchange: 交易所名称

@@ -1,5 +1,7 @@
+use crab_types::time_frame::TimeFrame;
 use ms_tracing::tracing_utils::internal::warn;
 use std::ops::Add;
+use std::str::FromStr;
 use time::OffsetDateTime;
 
 pub fn milliseconds_to_offsetdatetime(milliseconds: i64) -> OffsetDateTime {
@@ -13,4 +15,12 @@ pub fn milliseconds_to_offsetdatetime(milliseconds: i64) -> OffsetDateTime {
             OffsetDateTime::UNIX_EPOCH
         })
         .add(time::Duration::nanoseconds(nanoseconds))
+}
+
+/// 将 K 线周期字符串转换为秒数
+pub fn parse_period_to_secs(period: &str) -> Option<u64> {
+    match TimeFrame::from_str(period) {
+        Ok(tf) => Some((tf.to_millis() / 1000) as u64), // 转换成秒
+        Err(_) => None,
+    }
 }

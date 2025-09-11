@@ -568,6 +568,7 @@ dependencies = [
 name = "crab-common-utils"
 version = "0.1.0"
 dependencies = [
+ "crab-types",
  "ms-tracing",
  "time",
 ]

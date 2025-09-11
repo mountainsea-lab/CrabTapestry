@@ -5,4 +5,4 @@ pub mod historical;
 pub mod realtime;
 pub mod scheduler;
 pub mod storage;
-mod types;
+pub mod types;
