@@ -1,5 +1,5 @@
 use crate::ingestor::historical::HistoricalFetcherExt;
-use crate::ingestor::scheduler::{BackfillDataType, BackfillNode, HistoricalBatchEnum, NodeMeta, NodeStatus};
+use crate::ingestor::scheduler::{BackfillDataType, BackfillNode, HistoricalBatchEnum, NodeMeta, NodeStatus, OutputSubscriber};
 use crate::ingestor::types::FetchContext;
 use anyhow::Result;
 use crab_types::TimeRange;
@@ -321,6 +321,10 @@ where
     pub fn output_rx(&self) -> broadcast::Receiver<HistoricalBatchEnum> {
         self.output_tx.subscribe() // 任何地方都可以订阅
     }
+
+    pub fn subscribe(&self) -> OutputSubscriber {
+        OutputSubscriber::new(self.output_tx.subscribe())
+    }
 }
 
 #[cfg(test)]
@@ -474,28 +478,30 @@ mod tests {
         scheduler.add_task(ctx, BackfillDataType::OHLCV, vec![]).await;
 
         let sched = scheduler.clone();
-        tokio::spawn(async move { sched.run(1).await.unwrap() });
+        let handle = tokio::spawn(async move { sched.run(1).await.unwrap() });
 
         // 两个订阅者
-        let mut rx1 = scheduler.output_rx();
-        let mut rx2 = scheduler.output_rx();
+        let mut rx1 = scheduler.subscribe();
+        let mut rx2 = scheduler.subscribe();
 
-        let b1 = timeout(Duration::from_secs(10), rx1.recv()).await??;
-        let b2 = timeout(Duration::from_secs(10), rx2.recv()).await??;
+        let b1 = timeout(Duration::from_secs(10), rx1.recv()).await?;
+        let b2 = timeout(Duration::from_secs(10), rx2.recv()).await?;
 
-        match (b1, b2) {
-            (HistoricalBatchEnum::OHLCV(batch1), HistoricalBatchEnum::OHLCV(batch2)) => {
-                println!(
-                    "Subscriber1 got {} records, Subscriber2 got {} records",
-                    batch1.data.len(),
-                    batch2.data.len()
-                );
-                assert_eq!(batch1.data.len(), batch2.data.len());
-            }
-            _ => panic!("Expected OHLCV batch for both subscribers"),
+        // ✅ 解包 Option 并匹配
+        if let (Some(HistoricalBatchEnum::OHLCV(batch1)), Some(HistoricalBatchEnum::OHLCV(batch2))) = (b1, b2) {
+            println!(
+                "Subscriber1 got {} records, Subscriber2 got {} records",
+                batch1.data.len(),
+                batch2.data.len()
+            );
+            assert_eq!(batch1.data.len(), batch2.data.len());
+        } else {
+            panic!("Expected OHLCV batch for both subscribers");
         }
 
         scheduler.stop();
+        handle.await.unwrap(); // 确保 worker 退出
         Ok(())
     }
+
 }

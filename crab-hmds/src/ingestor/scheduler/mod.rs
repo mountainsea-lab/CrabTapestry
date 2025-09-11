@@ -2,7 +2,7 @@ use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRec
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
 pub mod back_fill_dag;
 
@@ -52,10 +52,31 @@ pub struct BackfillNode {
     pub dependents: Mutex<HashSet<usize>>, // ✅ 线程安全可变
 }
 
-// /// 节点依赖信息
-// #[derive(Debug, Clone)]
-// pub struct BackfillTask {
-//     pub ctx: Arc<FetchContext>,      // 拉取上下文
-//     pub data_type: BackfillDataType, // 数据类型
-//     pub depends_on: Vec<usize>,      // DAG 前置节点 ID
-// }
+/// 包装后的订阅者
+pub struct OutputSubscriber {
+    inner: broadcast::Receiver<HistoricalBatchEnum>,
+}
+
+impl OutputSubscriber {
+    pub fn new(inner: broadcast::Receiver<HistoricalBatchEnum>) -> Self {
+        Self { inner }
+    }
+
+    /// 安全 recv：自动处理 Lagged 和 Closed
+    pub async fn recv(&mut self) -> Option<HistoricalBatchEnum> {
+        loop {
+            match self.inner.recv().await {
+                Ok(batch) => return Some(batch),
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    eprintln!("⚠️ Subscriber lagged and missed {n} messages");
+                    // 跳过，继续等下一条
+                    continue;
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    eprintln!("❌ Channel closed");
+                    return None;
+                }
+            }
+        }
+    }
+}
