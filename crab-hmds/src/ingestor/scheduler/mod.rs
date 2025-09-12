@@ -1,8 +1,13 @@
 use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRecord, TradeRecord};
+use futures_util::{Stream, stream};
+use ms_tracing::tracing_utils::internal::{error, warn};
 use std::collections::HashSet;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Instant;
+use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, broadcast};
+use tokio::time::timeout;
 
 pub mod back_fill_dag;
 
@@ -68,15 +73,51 @@ impl OutputSubscriber {
             match self.inner.recv().await {
                 Ok(batch) => return Some(batch),
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    eprintln!("⚠️ Subscriber lagged and missed {n} messages");
+                    warn!("⚠️ Subscriber lagged and missed {n} messages");
                     // 跳过，继续等下一条
                     continue;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    eprintln!("❌ Channel closed");
+                    error!("❌ Channel closed");
                     return None;
                 }
             }
         }
+    }
+    /// 带超时的异步接收
+    pub async fn recv_timeout(&mut self, dur: Duration) -> Option<HistoricalBatchEnum> {
+        match timeout(dur, self.recv()).await {
+            Ok(res) => res,
+            Err(_) => {
+                warn!("⏰ recv timed out after {:?}", dur);
+                None
+            }
+        }
+    }
+
+    /// 非阻塞接收（立即返回）
+    pub fn try_recv(&mut self) -> Option<HistoricalBatchEnum> {
+        match self.inner.try_recv() {
+            Ok(batch) => Some(batch),
+            Err(broadcast::error::TryRecvError::Empty) => None,
+            Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                warn!("⚠️ Subscriber lagged and missed {n} messages");
+                None
+            }
+            Err(broadcast::error::TryRecvError::Closed) => {
+                error!("❌ Channel closed");
+                None
+            }
+        }
+    }
+
+    /// 将 Subscriber 转换为 Stream
+    pub fn into_stream(mut self) -> impl Stream<Item = HistoricalBatchEnum> {
+        stream::unfold(self, |mut sub| async move {
+            match sub.recv().await {
+                Some(batch) => Some((batch, sub)),
+                None => None,
+            }
+        })
     }
 }

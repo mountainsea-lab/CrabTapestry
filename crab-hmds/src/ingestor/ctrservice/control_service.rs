@@ -12,6 +12,7 @@ use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfill
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Notify, RwLock, broadcast, mpsc};
 use tokio::task::JoinHandle;
 
@@ -95,7 +96,7 @@ where
     }
 
     /// 启动完整服务
-    pub async fn start_full(&self, config: Option<IngestorConfig>) {
+    pub async fn start_full(self: &Arc<Self>, config: Option<IngestorConfig>) {
         *self.state.write().await = ServiceState::Running;
 
         // 启动 Control Task
@@ -103,7 +104,7 @@ where
         self.handles.write().await.push(control_task);
 
         // 启动 Backfill Task
-        let backfill_task = self.spawn_backfill_task();
+        let backfill_task = self.spawn_backfill_task(10, 3);
         self.handles.write().await.push(backfill_task);
 
         // 启动 Realtime Task
@@ -121,7 +122,7 @@ where
     }
 
     /// 停止服务（graceful shutdown）
-    pub async fn stop(&self) {
+    pub async fn stop(self: &Arc<Self>) {
         self.shutdown.notify_waiters();
 
         let mut handles = self.handles.write().await;
@@ -133,7 +134,7 @@ where
     }
 
     /// 初始化订阅配置（按交易所批量订阅）
-    pub async fn initialize_subscriptions(&self, config: &IngestorConfig) {
+    pub async fn initialize_subscriptions(self: &Arc<Self>, config: &IngestorConfig) {
         for exch in &config.exchanges {
             // 批量发送一条 ControlMsg::SubscribeMany
             if let Err(e) = self
@@ -157,7 +158,7 @@ where
     }
 
     /// Control Task: 处理 Subscribe / Unsubscribe / HealthCheck
-    fn spawn_control_task(&self) -> JoinHandle<()> {
+    fn spawn_control_task(self: &Arc<Self>) -> JoinHandle<()> {
         let rx = self.control_rx.clone(); // 不需要 mut，因为我们在循环内重新获取
         let pipeline = self.pipeline.clone();
         let shutdown = self.shutdown.clone();
@@ -179,12 +180,6 @@ where
                 // 处理消息（此时已释放锁）
                 if let Some(msg) = msg {
                     match msg {
-                        // ControlMsg::Subscribe { exchange, symbol, periods } => {
-                        //     let subscription = Subscription { exchange, symbol, periods };
-                        //     if let Err(e) = pipeline.subscribe_symbol(subscription).await {
-                        //         let _ = internal_tx.send(InternalMsg::Error(format!("Subscribe error: {}", e))).await;
-                        //     }
-                        // }
                         ControlMsg::SubscribeMany { exchange, symbols, periods } => {
                             if let Err(e) = pipeline.subscribe_many(exchange, symbols, periods).await {
                                 let _ = internal_tx
@@ -192,9 +187,6 @@ where
                                     .await;
                             }
                         }
-                        // ControlMsg::Unsubscribe { exchange, symbol } => {
-                        //     let _ = pipeline.unsubscribe_symbol(exchange.as_ref(), symbol.as_ref());
-                        // }
                         ControlMsg::UnsubscribeMany { exchange, symbols } => {
                             let symbol_refs: Vec<&str> = symbols.iter().map(|s| s.as_ref()).collect();
                             let _ = pipeline.unsubscribe_many(exchange.as_ref(), &symbol_refs);
@@ -215,84 +207,118 @@ where
     }
 
     /// Backfill Task: 批量消费历史数据: 拉取 + 批量去重 + 入 Buffer
-    pub fn spawn_backfill_task(&self) -> JoinHandle<()> {
-        let backfill = self.backfill.clone();
-        let dedup_ohlcv = self.dedup_ohlcv.clone();
-        let dedup_tick = self.dedup_tick.clone();
-        let dedup_trade = self.dedup_trade.clone();
-        let buffer_ohlcv = self.buffer_ohlcv.clone();
-        let buffer_tick = self.buffer_tick.clone();
-        let buffer_trade = self.buffer_trade.clone();
-        let shutdown = self.shutdown.clone();
-        let internal_tx = self.internal_tx.clone();
+    pub fn spawn_backfill_task(
+        self: &Arc<Self>,
+        timeout_secs: u64,   // 可配置超时
+        log_interval: usize, // 超时日志打印间隔
+    ) -> JoinHandle<()> {
+        let service = Arc::clone(self); // Arc<Self>，保证跨 await 点安全
 
         tokio::spawn(async move {
-            let mut rx = backfill.output_rx();
+            let mut rx = service.backfill.subscribe();
+
+            info!("Backfill task started");
+
+            let mut timeout_counter = 0usize;
+
             loop {
                 tokio::select! {
-                    _ = shutdown.notified() => {
+                    // 优先处理 shutdown
+                    _ = service.shutdown.notified() => {
                         info!("Backfill task shutdown triggered");
                         break;
                     },
-                    maybe_batch = rx.recv() => {
-                    let batch = match maybe_batch {
-                        Ok(b) => b,
-                        Err(broadcast::error::RecvError::Closed) => {
-                            info!("Backfill output channel closed, exiting task");
-                            break;
-                        }
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            warn!("Lagging behind by {} messages, skipping", n);
-                            continue;
-                        }
-                    };
 
-                        if let Err(e) = async {
-                            match batch {
-                                HistoricalBatchEnum::OHLCV(hb) => {
-                                    let deduped = dedup_ohlcv.deduplicate(hb.data.clone(), DedupMode::Historical);
-                                    if !deduped.is_empty() {
-                                        let _ = buffer_ohlcv.push_batch(deduped).await;
-                                        info!("Backfill OHLCV batch pushed: symbol={}, period={}, size={}",
-                                            hb.symbol, hb.period.as_deref().unwrap_or("n/a"), hb.data.len());
-                                    } else {
-                                        debug!("OHLCV batch fully deduplicated: symbol={}, period={}", hb.symbol, hb.period.as_deref().unwrap_or("n/a"));
-                                    }
-                                },
-                                HistoricalBatchEnum::Tick(hb) => {
-                                    let deduped = dedup_tick.deduplicate(hb.data.clone(), DedupMode::Historical);
-                                    if !deduped.is_empty() {
-                                        let _ = buffer_tick.push_batch(deduped).await;
-                                        info!("Backfill Tick batch pushed: symbol={}, size={}", hb.symbol, hb.data.len());
-                                    } else {
-                                        debug!("Tick batch fully deduplicated: symbol={}", hb.symbol);
-                                    }
-                                },
-                                HistoricalBatchEnum::Trade(hb) => {
-                                    let deduped = dedup_trade.deduplicate(hb.data.clone(), DedupMode::Historical);
-                                    if !deduped.is_empty() {
-                                        let _ = buffer_trade.push_batch(deduped).await;
-                                        info!("Backfill Trade batch pushed: symbol={}, size={}", hb.symbol, hb.data.len());
-                                    } else {
-                                        debug!("Trade batch fully deduplicated: symbol={}", hb.symbol);
-                                    }
-                                },
+                    // 使用 OutputSubscriber 的 recv_timeout 处理批次
+                    maybe_batch = rx.recv_timeout(Duration::from_secs(timeout_secs)) => {
+                        match maybe_batch {
+                            Some(batch) => {
+                                // 收到批次，重置超时计数
+                                timeout_counter = 0;
+
+                                if let Err(e) = Self::handle_batch(batch, &service).await {
+                                    let _ = service.internal_tx.send(
+                                        InternalMsg::Error(format!("Backfill task error: {}", e))
+                                    ).await;
+                                    error!("Backfill task error: {}", e);
+                                }
                             }
-                            Ok::<(), anyhow::Error>(())
-                        }.await {
-                            let _ = internal_tx.send(InternalMsg::Error(format!("Backfill task error: {}", e))).await;
-                            error!("Backfill task error: {}", e);
+                            None => {
+                                // 超时未收到批次
+                                timeout_counter += 1;
+                                if timeout_counter % log_interval == 0 {
+                                    debug!(
+                                        "Backfill recv_timeout reached {}s without message ({} times)",
+                                        timeout_secs,
+                                        timeout_counter
+                                    );
+                                }
+                            }
                         }
                     }
                 }
             }
+
             info!("Backfill task exited cleanly");
         })
     }
 
-    /// Realtime Task: 流式消费实时数据 -> 去重 -> Buffer
-    /// Realtime Task: 目前仅处理 OHLCV 实时数据
-    pub fn spawn_realtime_task(&self) -> JoinHandle<()> {
+    /// 批次处理函数封装，直接访问 service 内部字段
+    async fn handle_batch(batch: HistoricalBatchEnum, service: &Arc<Self>) -> anyhow::Result<()> {
+        match batch {
+            HistoricalBatchEnum::OHLCV(hb) => {
+                let deduped = service.dedup_ohlcv.deduplicate(hb.data.clone(), DedupMode::Historical);
+                if !deduped.is_empty() {
+                    service.buffer_ohlcv.push_batch(deduped).await?;
+                    info!(
+                        "Backfill OHLCV batch pushed: symbol={}, period={}, size={}",
+                        hb.symbol,
+                        hb.period.as_deref().unwrap_or("n/a"),
+                        hb.data.len()
+                    );
+                } else {
+                    debug!(
+                        "OHLCV batch fully deduplicated: symbol={}, period={}",
+                        hb.symbol,
+                        hb.period.as_deref().unwrap_or("n/a")
+                    );
+                }
+            }
+
+            HistoricalBatchEnum::Tick(hb) => {
+                let deduped = service.dedup_tick.deduplicate(hb.data.clone(), DedupMode::Historical);
+                if !deduped.is_empty() {
+                    service.buffer_tick.push_batch(deduped).await?;
+                    info!(
+                        "Backfill Tick batch pushed: symbol={}, size={}",
+                        hb.symbol,
+                        hb.data.len()
+                    );
+                } else {
+                    debug!("Tick batch fully deduplicated: symbol={}", hb.symbol);
+                }
+            }
+
+            HistoricalBatchEnum::Trade(hb) => {
+                let deduped = service.dedup_trade.deduplicate(hb.data.clone(), DedupMode::Historical);
+                if !deduped.is_empty() {
+                    service.buffer_trade.push_batch(deduped).await?;
+                    info!(
+                        "Backfill Trade batch pushed: symbol={}, size={}",
+                        hb.symbol,
+                        hb.data.len()
+                    );
+                } else {
+                    debug!("Trade batch fully deduplicated: symbol={}", hb.symbol);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Realtime Task: 流式消费实时(OHLCV)数据 -> 去重 -> Buffer
+    pub fn spawn_realtime_task(self: &Arc<Self>) -> JoinHandle<()> {
         let pipeline = self.pipeline.clone();
         let dedup_ohlcv = self.dedup_ohlcv.clone();
         let buffer_ohlcv = self.buffer_ohlcv.clone();
@@ -336,86 +362,8 @@ where
         })
     }
 
-    // /// Buffer 批量消费 Task，分别处理 OHLCV/Tick/Trade
-    // pub fn spawn_buffer_consumer_task(&self) -> JoinHandle<()> {
-    //     let buffer_ohlcv = self.buffer_ohlcv.clone();
-    //     let buffer_tick = self.buffer_tick.clone();
-    //     let buffer_trade = self.buffer_trade.clone();
-    //     let shutdown = self.shutdown.clone();
-    //     let internal_tx = self.internal_tx.clone();
-    //
-    //     tokio::spawn(async move {
-    //         loop {
-    //             tokio::select! {
-    //                 _ = shutdown.notified() => break,
-    //                 _ = buffer_ohlcv.notify.notified() => {
-    //                     let mut batch = Vec::new();
-    //                     while let Some(item) = buffer_ohlcv.pop() {
-    //                         batch.push(item);
-    //                         if batch.len() >= buffer_ohlcv.batch_notify_size {
-    //                             break;
-    //                         }
-    //                     }
-    //
-    //                     if !batch.is_empty() {
-    //                         if let Err(e) = async {
-    //                             println!("Processing OHLCV batch of size {}", batch.len());
-    //                             Ok::<(), anyhow::Error>(())
-    //                         }.await {
-    //                             let _ = internal_tx.send(
-    //                                 InternalMsg::Error(format!("OHLCV buffer processing error: {}", e))
-    //                             ).await;
-    //                         }
-    //                     }
-    //                 },
-    //                 _ = buffer_tick.notify.notified() => {
-    //                     let mut batch = Vec::new();
-    //                     while let Some(item) = buffer_tick.pop() {
-    //                         batch.push(item);
-    //                         if batch.len() >= buffer_tick.batch_notify_size {
-    //                             break;
-    //                         }
-    //                     }
-    //
-    //                     if !batch.is_empty() {
-    //                         if let Err(e) = async {
-    //                             println!("Processing Tick batch of size {}", batch.len());
-    //                             Ok::<(), anyhow::Error>(())
-    //                         }.await {
-    //                             let _ = internal_tx.send(
-    //                                 InternalMsg::Error(format!("Tick buffer processing error: {}", e))
-    //                             ).await;
-    //                         }
-    //                     }
-    //                 },
-    //                 _ = buffer_trade.notify.notified() => {
-    //                     let mut batch = Vec::new();
-    //                     while let Some(item) = buffer_trade.pop() {
-    //                         batch.push(item);
-    //                         if batch.len() >= buffer_trade.batch_notify_size {
-    //                             break;
-    //                         }
-    //                     }
-    //
-    //                     if !batch.is_empty() {
-    //                         if let Err(e) = async {
-    //                             println!("Processing Trade batch of size {}", batch.len());
-    //                             Ok::<(), anyhow::Error>(())
-    //                         }.await {
-    //                             let _ = internal_tx.send(
-    //                                 InternalMsg::Error(format!("Trade buffer processing error: {}", e))
-    //                             ).await;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //
-    //         info!("Buffer consumer task stopped");
-    //     })
-    // }
     /// Buffer 批量消费 Task，分别处理 OHLCV/Tick/Trade
-    pub fn spawn_buffer_consumer_task(&self) -> JoinHandle<()> {
+    pub fn spawn_buffer_consumer_task(self: &Arc<Self>) -> JoinHandle<()> {
         let buffer_ohlcv = self.buffer_ohlcv.clone();
         let buffer_tick = self.buffer_tick.clone();
         let buffer_trade = self.buffer_trade.clone();
@@ -504,7 +452,7 @@ where
     }
 
     /// 健康状态接口
-    pub async fn health_status(&self) -> IngestorHealth {
+    pub async fn health_status(self: &Arc<Self>) -> IngestorHealth {
         let state = { self.state.read().await.clone() };
         let backfill_pending = self.backfill.pending_tasks().await;
         let realtime_subscriptions = self.pipeline.subscribed_count();
@@ -547,7 +495,7 @@ where
     }
 
     /// 错误监听接口
-    pub async fn monitor_errors(&self) {
+    pub async fn monitor_errors(self: &Arc<Self>) {
         let mut rx = self.internal_rx.write().await;
         while let Some(msg) = rx.recv().await {
             match msg {
@@ -562,131 +510,3 @@ where
         }
     }
 }
-
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::sync::Arc;
-//     use tokio::sync::Notify;
-//     use crate::ingestor::ctrservice::ExchangeConfig;
-//     use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
-//     use crate::ingestor::types::{FetchContext, HistoricalSource};
-//
-//     // 测试 IngestorService 启动与停止功能
-//     #[tokio::test]
-//     async fn test_ingestor_service_start_stop() {
-//         // 1. 设置测试配置
-//         let config = IngestorConfig {
-//             exchanges: vec![
-//                 ExchangeConfig {
-//                     exchange: "binance".to_string(),
-//                     symbols: vec!["BTCUSDT".to_string(), "ETHUSDT".to_string()],
-//                     periods: vec!["1m".to_string(), "5m".to_string()],
-//                 },
-//             ],
-//         };
-//
-//         // 2. 创建 Shutdown 通知
-//         let shutdown = Arc::new(Notify::new());
-//
-//         // 构造 FetchContext
-//         let ctx = FetchContext::new_with_past(
-//             HistoricalSource {
-//                 name: "Binance API".to_string(),
-//                 exchange: "binance".to_string(),
-//                 last_success_ts: 0,
-//                 last_fetch_ts: 0,
-//                 batch_size: 0,
-//                 supports_tick: false,
-//                 supports_trade: false,
-//                 supports_ohlcv: false,
-//             },
-//             "binance",
-//             "BTCUSDT",
-//             Some("1h"),
-//             Some(3), // 最近 3 小时
-//             None,    // 最近 3 小时, // 3 小时
-//         );
-//
-//         let fetcher = Arc::new(BinanceFetcher::new());
-//         // 3. 创建 BackfillScheduler
-//         let backfill_scheduler = BaseBackfillScheduler::new(fetcher,3);
-//
-//         // 4. 创建 MarketDataPipeline
-//         let market_data_pipeline = Arc::new(MarketDataPipeline::new());
-//
-//         // 5. 创建 IngestorService 实例
-//         let ingestor_service = IngestorService::<BinanceFetcher>::new(
-//             backfill_scheduler,
-//             market_data_pipeline,
-//             shutdown.clone(),
-//         );
-//
-//         // 6. 启动服务
-//         ingestor_service.start_full(Some(config.clone())).await;
-//
-//         // 检查是否服务启动，通常可以检查相关状态
-//         // 这里假设 IngestorService 提供了一个 `is_running()` 方法
-//         assert!(ingestor_service.is_running());
-//
-//         // 7. 停止服务
-//         ingestor_service.stop().await;
-//
-//         // 再次检查服务是否已停止
-//         assert!(!ingestor_service.is_running());
-//
-//         // 8. 其他逻辑验证（如配置是否正确传递）
-//         let current_config = ingestor_service.get_config().await;
-//         assert_eq!(current_config, config);
-//     }
-//
-//     // 测试无效配置的处理
-//     #[tokio::test]
-//     async fn test_ingestor_service_invalid_config() {
-//         // 传入空配置或无效配置
-//         let config = IngestorConfig {
-//             exchanges: vec![], // 传入空的 exchanges 列表
-//         };
-//
-//         let shutdown = Arc::new(Notify::new());
-//         let backfill_scheduler = Arc::new(BaseBackfillScheduler::<MockFetcher>::new());
-//         let market_data_pipeline = Arc::new(MarketDataPipeline::new());
-//
-//         let ingestor_service = IngestorService::<BinanceFetcher>::new(
-//             backfill_scheduler,
-//             market_data_pipeline,
-//             shutdown.clone(),
-//         );
-//
-//         // 启动服务，验证是否正确处理无效配置
-//         let result = ingestor_service.start_full(Some(config)).await;
-//
-//         // 期望返回错误，表示配置无效
-//         assert!(result.is_err());
-//     }
-//
-//     // 测试服务的 Graceful Shutdown 功能
-//     #[tokio::test]
-//     async fn test_ingestor_service_shutdown() {
-//         let shutdown = Arc::new(Notify::new());
-//         let backfill_scheduler = BaseBackfillScheduler::<MockFetcher>::new();
-//         let market_data_pipeline = Arc::new(MarketDataPipeline::new());
-//
-//         let ingestor_service = IngestorService::<BinanceFetcher>::new(
-//             backfill_scheduler,
-//             market_data_pipeline,
-//             shutdown.clone(),
-//         );
-//
-//         // 启动服务
-//         ingestor_service.start_full(None).await;
-//
-//         // 发送 shutdown 信号
-//         shutdown.notify_one();
-//
-//         // 检查服务是否收到关闭信号并正确处理
-//         // 这里我们假设服务会在 shutdown 后停止，或者提供相应的状态检查方法
-//         assert!(ingestor_service.is_shutdown());
-//     }
-// }

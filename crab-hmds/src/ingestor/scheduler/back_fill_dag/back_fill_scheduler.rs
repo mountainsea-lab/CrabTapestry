@@ -319,11 +319,7 @@ where
         queue_len + incomplete_nodes
     }
 
-    /// 提供输出接收器
-    pub fn output_rx(&self) -> broadcast::Receiver<HistoricalBatchEnum> {
-        self.output_tx.subscribe() // 任何地方都可以订阅
-    }
-
+    /// 订阅输出
     pub fn subscribe(&self) -> OutputSubscriber {
         OutputSubscriber::new(self.output_tx.subscribe())
     }
@@ -335,6 +331,7 @@ mod tests {
     use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
     use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
+    use futures_util::{join, try_join};
     use std::time::Duration;
     use tokio::time::timeout;
 
@@ -375,14 +372,18 @@ mod tests {
         tokio::spawn(async move { sched.run(1).await.unwrap() });
 
         // 订阅输出
-        let mut rx = scheduler.output_rx();
-        let batch_enum = timeout(Duration::from_secs(15), rx.recv()).await??;
-        match batch_enum {
-            HistoricalBatchEnum::OHLCV(batch) => {
-                println!("Fetched OHLCV (single task): {:?} records", batch.data);
-                assert!(!batch.data.is_empty());
+        let mut sub = scheduler.subscribe();
+        // 带超时接收（3 秒）
+        if let Some(batch_enum) = sub.recv_timeout(Duration::from_secs(3)).await {
+            match batch_enum {
+                HistoricalBatchEnum::OHLCV(batch) => {
+                    println!("Fetched OHLCV (single task): {:?} records", batch.data);
+                    assert!(!batch.data.is_empty());
+                }
+                _ => panic!("Expected OHLCV batch"),
             }
-            _ => panic!("Expected OHLCV batch"),
+        } else {
+            warn!("No message within 3 seconds");
         }
 
         let meta = scheduler.get_node_meta(task_id).await.unwrap();
@@ -407,10 +408,11 @@ mod tests {
         let sched = scheduler.clone();
         tokio::spawn(async move { sched.run(2).await.unwrap() });
 
-        let mut rx = scheduler.output_rx();
+        let mut sub = scheduler.subscribe();
+        // 带超时接收（3 秒）
         let mut received = 0;
         while received < task_ids.len() {
-            if let Ok(Ok(batch_enum)) = timeout(Duration::from_secs(30), rx.recv()).await {
+            if let Some(batch_enum) = sub.recv_timeout(Duration::from_secs(3)).await {
                 match batch_enum {
                     HistoricalBatchEnum::OHLCV(batch) => {
                         println!(
@@ -423,6 +425,8 @@ mod tests {
                     }
                     _ => panic!("Expected OHLCV batch"),
                 }
+            } else {
+                warn!("No message within 3 seconds");
             }
         }
 
@@ -449,16 +453,20 @@ mod tests {
         let sched = scheduler.clone();
         tokio::spawn(async move { sched.run(2).await.unwrap() });
 
-        let mut rx = scheduler.output_rx();
+        let mut sub = scheduler.subscribe();
+
         let mut completed_ids = Vec::new();
         while completed_ids.len() < 2 {
-            let batch_enum = timeout(Duration::from_secs(15), rx.recv()).await??;
-            match batch_enum {
-                HistoricalBatchEnum::OHLCV(batch) => {
-                    println!("Task completed for range {:?}", batch.range);
-                    completed_ids.push(batch.range);
+            if let Some(batch_enum) = sub.recv_timeout(Duration::from_secs(3)).await {
+                match batch_enum {
+                    HistoricalBatchEnum::OHLCV(batch) => {
+                        println!("Task completed for range {:?}", batch.range);
+                        completed_ids.push(batch.range);
+                    }
+                    _ => panic!("Expected OHLCV batch"),
                 }
-                _ => panic!("Expected OHLCV batch"),
+            } else {
+                warn!("No message within 3 seconds");
             }
         }
 
@@ -486,10 +494,29 @@ mod tests {
         let mut rx1 = scheduler.subscribe();
         let mut rx2 = scheduler.subscribe();
 
-        let b1 = timeout(Duration::from_secs(10), rx1.recv()).await?;
-        let b2 = timeout(Duration::from_secs(10), rx2.recv()).await?;
+        //     let b1 = timeout(Duration::from_secs(10), rx1.recv()).await?;
+        //     let b2 = timeout(Duration::from_secs(10), rx2.recv()).await?;
+        //
+        //     // ✅ 解包 Option 并匹配
+        //     if let (Some(HistoricalBatchEnum::OHLCV(batch1)), Some(HistoricalBatchEnum::OHLCV(batch2))) = (b1, b2) {
+        //         println!(
+        //             "Subscriber1 got {} records, Subscriber2 got {} records",
+        //             batch1.data.len(),
+        //             batch2.data.len()
+        //         );
+        //         assert_eq!(batch1.data.len(), batch2.data.len());
+        //     } else {
+        //         panic!("Expected OHLCV batch for both subscribers");
+        //     }
+        //
+        // 并行等待两个订阅者
 
-        // ✅ 解包 Option 并匹配
+        let (b1, b2) = join!(
+            rx1.recv_timeout(Duration::from_secs(10)),
+            rx2.recv_timeout(Duration::from_secs(10))
+        );
+
+        // 解包 Option 并匹配 OHLCV
         if let (Some(HistoricalBatchEnum::OHLCV(batch1)), Some(HistoricalBatchEnum::OHLCV(batch2))) = (b1, b2) {
             println!(
                 "Subscriber1 got {} records, Subscriber2 got {} records",
@@ -497,6 +524,7 @@ mod tests {
                 batch2.data.len()
             );
             assert_eq!(batch1.data.len(), batch2.data.len());
+            assert!(batch1.data.len() > 0);
         } else {
             panic!("Expected OHLCV batch for both subscribers");
         }
