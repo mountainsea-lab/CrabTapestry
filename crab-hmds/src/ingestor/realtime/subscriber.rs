@@ -1,4 +1,4 @@
-pub(crate) mod binance_subscriber;
+pub mod binance_subscriber;
 
 use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::types::PublicTradeEvent;
