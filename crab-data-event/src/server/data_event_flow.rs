@@ -1,7 +1,7 @@
-use crate::aggregator::trade_aggregator::TradeAggregatorPool;
 use crate::global::get_redis_store;
 use crate::ingestion::Ingestor;
 use crate::ingestion::barter_ingestor::BarterIngestor;
+use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
 use crab_infras::cache::redis_helper::RedisPubSubHelper;
 use crab_infras::cache::{BaseBar, RedisMessage};
 use crossbeam::channel::unbounded;

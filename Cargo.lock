@@ -632,6 +632,8 @@ dependencies = [
  "bb8",
  "bb8-redis",
  "crab-common-utils",
+ "crossbeam",
+ "dashmap",
  "futures",
  "ms-tracing",
  "reqwest",
@@ -640,6 +642,7 @@ dependencies = [
  "thiserror 2.0.16",
  "time",
  "tokio",
+ "trade_aggregation",
 ]
 
 [[package]]

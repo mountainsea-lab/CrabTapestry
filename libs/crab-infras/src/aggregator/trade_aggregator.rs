@@ -1,6 +1,5 @@
-use crate::aggregator::types::TradeCandle;
-use crate::ingestion::types::PublicTradeEvent;
-use crab_infras::cache::BaseBar;
+use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
+use crate::cache::BaseBar;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::{error, info};
