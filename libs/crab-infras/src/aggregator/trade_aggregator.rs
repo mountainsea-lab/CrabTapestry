@@ -1,10 +1,10 @@
 use crate::aggregator::AggregatorOutput;
-use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
+use crate::aggregator::types::{PublicTradeEvent, Subscription, TradeCandle};
 use crate::cache::BaseBar;
 use crab_common_utils::time_utils::parse_period_to_millis;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
-use ms_tracing::tracing_utils::internal::{error, info};
+use ms_tracing::tracing_utils::internal::info;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, mpsc};
@@ -104,7 +104,7 @@ impl TradeAggregatorPool {
         crossbeam_rx: Option<Arc<Receiver<PublicTradeEvent>>>, // crossbeam 可选
         tokio_rx: Option<mpsc::Receiver<PublicTradeEvent>>,    // tokio 可选
         output_tx: mpsc::Sender<O>,                            // 泛型输出
-        periods: Arc<Vec<Arc<str>>>,                           // 多周期聚合
+        subscribed: Arc<DashMap<(String, String), Subscription>>,
     ) where
         O: AggregatorOutput,
     {
@@ -127,10 +127,10 @@ impl TradeAggregatorPool {
         let bridge_rx = Arc::new(Mutex::new(bridge_rx));
 
         // 2️⃣ 弹性异步 worker
-        for worker_id in 0..worker_num {
+        for _worker_id in 0..worker_num {
+            let subscribed = Arc::clone(&subscribed.clone());
             let pool = self.clone();
             let tx = output_tx.clone();
-            let periods = periods.clone();
             let rx = bridge_rx.clone();
 
             task::spawn(async move {
@@ -146,29 +146,31 @@ impl TradeAggregatorPool {
                     };
 
                     // 遍历周期
-                    for period in periods.iter() {
-                        let period_sec = parse_period_to_millis(period).unwrap_or(60 * 1000);
+                    if let Some(sub) = subscribed.get(&(event.exchange.clone(), event.symbol.clone())) {
+                        for period in sub.periods.iter() {
+                            let period_sec = parse_period_to_millis(period).unwrap_or(60 * 1000);
 
-                        // 获取或创建聚合器
-                        let aggregator = pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
+                            // 获取或创建聚合器
+                            let aggregator = pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
 
-                        // 异步写锁
-                        let mut guard = aggregator.write().await;
-                        guard.last_update = Instant::now();
+                            // 异步写锁
+                            let mut guard = aggregator.write().await;
+                            guard.last_update = Instant::now();
 
-                        let trade: Trade = (&event).into();
-                        if let Some(trade_candle) = guard.aggregator.update(&trade) {
-                            info!("agg trade candle {:?}", trade_candle);
-                            if guard.candle_count >= 1 {
-                                // 输出泛型
-                                let _ = tx.send(O::from(trade_candle.clone())).await;
+                            let trade: Trade = (&event).into();
+                            if let Some(trade_candle) = guard.aggregator.update(&trade) {
+                                if guard.candle_count >= 1 {
+                                    info!("agg trade candle {:?}", trade_candle);
+                                    // 输出泛型
+                                    let _ = tx.send(O::from(trade_candle.clone())).await;
+                                }
+                                guard.candle_count += 1;
                             }
-                            guard.candle_count += 1;
                         }
                     }
                 }
 
-                info!("[Worker-{worker_id}] exiting");
+                // info!("[Worker-{worker_id}] exiting");
             });
         }
     }

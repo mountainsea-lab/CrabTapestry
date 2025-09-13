@@ -2,16 +2,28 @@ use crate::global::get_redis_store;
 use crate::ingestion::Ingestor;
 use crate::ingestion::barter_ingestor::BarterIngestor;
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
+use crab_infras::aggregator::types::Subscription;
 use crab_infras::cache::redis_helper::RedisPubSubHelper;
 use crab_infras::cache::{BaseBar, RedisMessage};
 use crossbeam::channel::unbounded;
+use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::info;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub async fn start_data_event_flow() {
+    // 订阅配置信息
+    let subs = vec![
+        Subscription::new("BinanceFuturesUsd", "btc", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "eth", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "sol", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "xrp", &["1m"]),
+    ];
+    let subscribed: Arc<DashMap<(String, String), Subscription>> = Subscription::init_subscriptions(subs);
+
     let (sender, receiver) = unbounded();
-    let ingestor = Arc::new(BarterIngestor::new(sender));
+
+    let ingestor = Arc::new(BarterIngestor::new(sender, subscribed.clone()));
 
     // 启动订阅
     ingestor.clone().start();
@@ -19,13 +31,7 @@ pub async fn start_data_event_flow() {
     // 启动聚合池
     let aggregator_pool = Arc::new(TradeAggregatorPool::new());
     let (output_tx, mut output_rx) = mpsc::channel::<BaseBar>(100);
-    aggregator_pool.start_workers_generic::<BaseBar>(
-        4,
-        Some(Arc::new(receiver)),
-        None,
-        output_tx,
-        Arc::new(vec![Arc::from("1m")]),
-    );
+    aggregator_pool.start_workers_generic::<BaseBar>(4, Some(Arc::new(receiver)), None, output_tx, subscribed);
 
     // Redis 发布器
     let redis_cache = get_redis_store().expect("get_redis_store failed");

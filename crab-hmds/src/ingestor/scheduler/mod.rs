@@ -2,9 +2,7 @@ use crate::ingestor::types::{FetchContext, HistoricalBatch, OHLCVRecord, TickRec
 use futures_util::{Stream, stream};
 use ms_tracing::tracing_utils::internal::{error, warn};
 use std::collections::HashSet;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, broadcast};
 use tokio::time::timeout;

@@ -1,18 +1,14 @@
-use crate::ingestor::realtime::Subscription;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
 use crab_common_utils::time_utils::parse_period_to_secs;
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
-use crab_infras::cache::BaseBar;
-use crab_types::time_frame::TimeFrame;
+use crab_infras::aggregator::types::Subscription;
 use dashmap::DashMap;
-use ms_tracing::tracing_utils::internal::{info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
-use trade_aggregation::{Aggregator, Trade};
+use trade_aggregation::Aggregator;
 
 /// 管理每个 symbol 的订阅任务
 /// manage each symbol's subscription task
@@ -110,7 +106,7 @@ impl MarketDataPipeline {
         }
 
         // 批量订阅 trade 流
-        let mut trade_rx = subscriber
+        let trade_rx = subscriber
             .subscribe_symbols(&symbols_to_subscribe.iter().map(|s| s.as_ref()).collect::<Vec<_>>())
             .await?;
 
@@ -120,61 +116,66 @@ impl MarketDataPipeline {
 
         let (cancel_tx, mut cancel_rx) = watch::channel(false);
 
-        let subscribed = Arc::clone(&self.subscribed);
-
-        let handle = tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    maybe_trade = trade_rx.recv() => {
-                        if let Some(trade) = maybe_trade {
-                            // 从已订阅信息获取该 symbol 对应的周期列表
-                            if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
-                                for period in &sub.periods {
-                                    let period_sec = parse_period_to_secs(period).unwrap_or(60);
-
-                                    // 获取或创建聚合器
-                                    let aggregator = aggregator_pool.get_or_create_aggregator(
-                                        &exchange_clone,
-                                        &trade.symbol,
-                                        period_sec,
-                                    );
-
-                                    let mut guard = aggregator.write().await;
-                                    guard.last_update = Instant::now();
-                                     let trade_clone = trade.clone();
-                                    let trade_obj: Trade = (&trade).into();
-                                    if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
-                                        if guard.candle_count >= 1 {
-                                            let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
-                                           info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
-                                            let _ = ohlcv_tx.send(ohlcv_record);
-                                        }
-                                        guard.candle_count += 1;
-                                    }
-                                }
-                            } else {
-                                warn!("Received trade for unsubscribed symbol {}", trade.symbol);
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    _ = cancel_rx.changed() => {
-                        if *cancel_rx.borrow() { break; }
-                    }
-                }
-            }
-
-            warn!(
-                "stream closed for {} symbols: {}",
-                exchange_clone,
-                symbols_to_subscribe.len()
-            );
-        });
+        // aggregator_pool.start_workers_generic::<OHLCVRecord>(
+        //     4,
+        //     None,
+        //     Some(Arc::new(trade_rx)),
+        //     self.ohlcv_tx.clone(),
+        //     Arc::clone(&self.subscribed),
+        // );
+        // let handle = tokio::spawn(async move {
+        //     loop {
+        //         tokio::select! {
+        //             maybe_trade = trade_rx.recv() => {
+        //                 if let Some(trade) = maybe_trade {
+        //                     // 从已订阅信息获取该 symbol 对应的周期列表
+        //                     if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
+        //                         for period in &sub.periods {
+        //                             let period_sec = parse_period_to_secs(period).unwrap_or(60);
+        //
+        //                             // 获取或创建聚合器
+        //                             let aggregator = aggregator_pool.get_or_create_aggregator(
+        //                                 &exchange_clone,
+        //                                 &trade.symbol,
+        //                                 period_sec,
+        //                             );
+        //
+        //                             let mut guard = aggregator.write().await;
+        //                             guard.last_update = Instant::now();
+        //                              let trade_clone = trade.clone();
+        //                             let trade_obj: Trade = (&trade).into();
+        //                             if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
+        //                                 if guard.candle_count >= 1 {
+        //                                     let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
+        //                                    info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
+        //                                     let _ = ohlcv_tx.send(ohlcv_record);
+        //                                 }
+        //                                 guard.candle_count += 1;
+        //                             }
+        //                         }
+        //                     } else {
+        //                         warn!("Received trade for unsubscribed symbol {}", trade.symbol);
+        //                     }
+        //                 } else {
+        //                     break;
+        //                 }
+        //             }
+        //             _ = cancel_rx.changed() => {
+        //                 if *cancel_rx.borrow() { break; }
+        //             }
+        //         }
+        //     }
+        //
+        //     warn!(
+        //         "stream closed for {} symbols: {}",
+        //         exchange_clone,
+        //         symbols_to_subscribe.len()
+        //     );
+        // });
 
         // 保存任务（用 exchange 作为 key）
-        self.tasks
-            .insert((exchange_s.clone(), "__all__".into()), SymbolTask { handle, cancel_tx });
+        // self.tasks
+        //     .insert((exchange_s.clone(), "__all__".into()), SymbolTask { handle, cancel_tx });
 
         Ok(())
     }
@@ -246,6 +247,7 @@ impl MarketDataPipeline {
 mod tests {
     use super::*;
     use crate::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
+    use crab_common_utils::time_utils::parse_period_to_millis;
     use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::time::{Duration, sleep};
@@ -294,9 +296,9 @@ mod tests {
         // 等待 subscriber 建立 WebSocket 连接 + 周期聚合
         let max_period_sec: u64 = periods
             .iter()
-            .filter_map(|p| parse_period_to_secs(p)) // 返回 Option<u64>，失败的过滤掉
+            .filter_map(|p| parse_period_to_millis(p)) // 返回 Option<u64>，失败的过滤掉
             .max() // 找到最大的
-            .unwrap_or(60); // 如果全都解析失败，默认 60 秒
+            .unwrap_or(60000); // 如果全都解析失败，默认 60 秒
 
         tokio::time::sleep(Duration::from_secs(max_period_sec + 10)).await;
 

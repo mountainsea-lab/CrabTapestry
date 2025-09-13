@@ -4,8 +4,9 @@ use barter_data::exchange::binance::futures::BinanceFuturesUsd;
 use barter_data::streams::Streams;
 use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
-use crab_infras::aggregator::types::PublicTradeEvent;
+use crab_infras::aggregator::types::{PublicTradeEvent, Subscription};
 use crossbeam::channel::Sender;
+use dashmap::DashMap;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::warn;
 use std::sync::Arc;
@@ -14,17 +15,18 @@ use std::time::Duration;
 /// BarterIngestor acquires real-time trade data events from the exchange
 pub struct BarterIngestor {
     sender: Sender<PublicTradeEvent>, // trade data transfer channel
+    /// 已订阅交易对 (exchange, symbol) -> Subscription
+    subscribed: Arc<DashMap<(String, String), Subscription>>,
 }
 
 impl BarterIngestor {
-    pub fn new(sender: Sender<PublicTradeEvent>) -> Self {
-        BarterIngestor { sender }
+    pub fn new(sender: Sender<PublicTradeEvent>, subscribed: Arc<DashMap<(String, String), Subscription>>) -> Self {
+        BarterIngestor { sender, subscribed }
     }
 
     async fn subscribe(&self) {
         let sender = self.sender.clone();
-        // get symbols（examples）
-        let symbols = vec!["btc", "eth", "xrp", "sol", "avax", "ltc"];
+        let symbols = Subscription::get_symbols_for_exchange(&self.subscribed, "BinanceFuturesUsd");
 
         let mut retry_count = 0;
         let max_retries = 5; // 最大重试次数
@@ -33,12 +35,11 @@ impl BarterIngestor {
             // 批量订阅多个币种的市场数据流
             let streams = Streams::<PublicTrades>::builder().subscribe(
                 symbols
-                    .clone()
-                    .into_iter()
-                    .map(|symbol| {
+                    .iter()
+                    .map(|symbol_arc| {
                         (
                             BinanceFuturesUsd::default(),
-                            symbol,
+                            symbol_arc.as_ref(), // &str
                             "usdt",
                             MarketDataInstrumentKind::Perpetual,
                             PublicTrades,

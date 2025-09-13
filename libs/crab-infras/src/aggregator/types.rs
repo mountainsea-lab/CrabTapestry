@@ -7,7 +7,9 @@ use barter_data::event::MarketEvent;
 use barter_data::streams::reconnect::Event;
 use barter_data::subscription::trade::PublicTrade;
 use crab_common_utils::time_utils::milliseconds_to_offsetdatetime;
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
 use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
 
@@ -146,8 +148,8 @@ impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for
             Event::Item(market_event) => {
                 PublicTradeEvent {
                     exchange: market_event.exchange.to_string(),
-                    symbol: format!("{}{}", market_event.instrument.base, market_event.instrument.quote), // 根据你的需求调整
-                    trade: market_event.kind,                                                             // PublicTrade
+                    symbol: format!("{}", market_event.instrument.base), // 根据需求调整 format!("{}{}", market_event.instrument.base, market_event.instrument.quote)
+                    trade: market_event.kind,                            // PublicTrade
                     timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
                     time_period: M1.get(),
                 }
@@ -200,3 +202,77 @@ impl From<TradeCandle> for BaseBar {
 }
 
 impl<T: From<TradeCandle> + Send + 'static> AggregatorOutput for T {}
+
+/// 实时订阅配置
+#[derive(Debug, Clone)]
+pub struct Subscription {
+    pub exchange: Arc<str>,
+    pub symbol: Arc<str>,
+    pub periods: Vec<Arc<str>>, // 多周期 ["1m","5m","1h"]
+}
+
+impl Subscription {
+    /// 创建单周期订阅
+    pub fn new(exchange: &str, symbol: &str, periods: &[&str]) -> Self {
+        Self {
+            exchange: Arc::from(exchange),
+            symbol: Arc::from(symbol),
+            periods: periods.iter().map(|p| Arc::from(*p)).collect(),
+        }
+    }
+
+    /// 批量初始化 Vec
+    pub fn batch_subscribe(exchange: &str, symbols: &[&str], periods: &[&str]) -> Vec<Subscription> {
+        symbols.iter().map(|sym| Subscription::new(exchange, sym, periods)).collect()
+    }
+
+    /// 批量初始化订阅，返回 Arc<DashMap>
+    pub fn init_subscriptions(subs: Vec<Subscription>) -> Arc<DashMap<(String, String), Subscription>> {
+        let sub_map = Arc::new(DashMap::new());
+
+        for sub in subs {
+            let key = (sub.exchange.to_string(), sub.symbol.to_string());
+            sub_map.insert(key, sub);
+        }
+
+        sub_map
+    }
+
+    /// 获取指定交易所的所有 symbol
+    pub fn get_symbols_for_exchange(
+        sub_map: &Arc<DashMap<(String, String), Subscription>>,
+        exchange: &str,
+    ) -> Arc<Vec<Arc<str>>> {
+        let symbols = sub_map
+            .iter()
+            .filter_map(|entry| {
+                let (exch, symbol) = entry.key();
+                if exch == exchange {
+                    Some(Arc::from(symbol.as_str()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        Arc::new(symbols)
+    }
+
+    /// 获取指定交易所的所有 Subscription
+    pub fn get_subscriptions_for_exchange(
+        sub_map: &Arc<DashMap<(String, String), Subscription>>,
+        exchange: &str,
+    ) -> Arc<Vec<Subscription>> {
+        let subs = sub_map
+            .iter()
+            .filter_map(|entry| {
+                let (exch, _) = entry.key();
+                if exch == exchange {
+                    Some(entry.value().clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        Arc::new(subs)
+    }
+}

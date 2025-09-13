@@ -8,7 +8,7 @@ use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
 use crab_infras::aggregator::types::PublicTradeEvent;
 use futures_util::StreamExt;
-use ms_tracing::tracing_utils::internal::{error, info, warn};
+use ms_tracing::tracing_utils::internal::{info, warn};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -113,23 +113,6 @@ impl BinanceSubscriber {
     }
 
     /// 启动 pipeline 转发任务（单一任务）
-    // fn start_forward_task(&self, tx: mpsc::Sender<PublicTradeEvent>) {
-    //     if self.forward_task_started.swap(true, Ordering::Relaxed) {
-    //         // 已经启动过，无需重复启动
-    //         return;
-    //     }
-    //
-    //     let mut broadcast_rx = self.broadcast_tx.subscribe();
-    //
-    //     tokio::spawn(async move {
-    //         while let Ok(trade) = broadcast_rx.recv().await {
-    //             if tx.send(trade).await.is_err() {
-    //                 info!("Pipeline receiver closed, stopping forward task.");
-    //                 break;
-    //             }
-    //         }
-    //     });
-    // }
     fn start_forward_task(&self, tx: mpsc::Sender<PublicTradeEvent>) {
         // 每次调用都新建一个 broadcast 订阅者
         let mut broadcast_rx = self.broadcast_tx.subscribe();
