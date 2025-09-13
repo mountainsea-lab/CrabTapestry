@@ -1,6 +1,7 @@
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{
-    BufferStats, ControlMsg, DedupStats, IngestorConfig, IngestorHealth, InternalMsg, MarketDataType, ServiceState,
+    BufferStats, ControlMsg, DedupStats, IngestorConfig, IngestorHealth, InternalMsg, MarketDataType, ServiceParams,
+    ServiceState,
 };
 use crate::ingestor::dedup::Deduplicatable;
 use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
@@ -95,30 +96,65 @@ where
         }
     }
 
-    /// 启动完整服务
-    pub async fn start_full(self: &Arc<Self>, config: Option<IngestorConfig>) {
-        *self.state.write().await = ServiceState::Running;
+    /// 用参数初始化服务实例
+    pub fn with_params(
+        backfill: Arc<BaseBackfillScheduler<F>>,
+        pipeline: Arc<MarketDataPipeline>,
+        shutdown: Arc<Notify>,
+        params: ServiceParams,
+    ) -> Self {
+        let (control_tx, control_rx) = mpsc::channel(params.control_channel_size);
+        let (internal_tx, internal_rx) = mpsc::channel(params.internal_channel_size);
 
-        // 启动 Control Task
-        let control_task = self.spawn_control_task();
-        self.handles.write().await.push(control_task);
+        let dedup_ohlcv = Arc::new(Deduplicator::<OHLCVRecord>::new(params.dedup_window_ms));
+        let dedup_tick = Arc::new(Deduplicator::<TickRecord>::new(params.dedup_window_ms));
+        let dedup_trade = Arc::new(Deduplicator::<TradeRecord>::new(params.dedup_window_ms));
 
-        // 启动 Backfill Task
-        let backfill_task = self.spawn_backfill_task(10, 3);
-        self.handles.write().await.push(backfill_task);
+        let buffer_ohlcv = DataBuffer::new(
+            Some(params.buffer_cap_ohlcv),
+            params.buffer_batch_size_ohlcv,
+            CapacityStrategy::DropOldest,
+        );
+        let buffer_tick = DataBuffer::new(
+            Some(params.buffer_cap_tick),
+            params.buffer_batch_size_tick,
+            CapacityStrategy::Block,
+        );
+        let buffer_trade = DataBuffer::new(
+            Some(params.buffer_cap_trade),
+            params.buffer_batch_size_trade,
+            CapacityStrategy::Block,
+        );
 
-        // 启动 Realtime Task
-        let realtime_task = self.spawn_realtime_task();
-        self.handles.write().await.push(realtime_task);
-
-        // 启动 Buffer 批量消费 Task
-        let buffer_task = self.spawn_buffer_consumer_task();
-        self.handles.write().await.push(buffer_task);
-
-        // 初始化订阅配置
-        if let Some(cfg) = config {
-            self.initialize_subscriptions(&cfg).await;
+        Self {
+            state: Arc::new(RwLock::new(ServiceState::Initialized)),
+            control_tx,
+            control_rx: Arc::new(RwLock::new(control_rx)),
+            internal_tx,
+            internal_rx: Arc::new(RwLock::new(internal_rx)),
+            handles: Arc::new(RwLock::new(Vec::new())),
+            dedup_ohlcv,
+            dedup_tick,
+            dedup_trade,
+            buffer_ohlcv,
+            buffer_tick,
+            buffer_trade,
+            shutdown,
+            backfill,
+            pipeline,
         }
+    }
+
+    pub async fn with_params_and_subscriptions(
+        backfill: Arc<BaseBackfillScheduler<F>>,
+        pipeline: Arc<MarketDataPipeline>,
+        shutdown: Arc<Notify>,
+        params: ServiceParams,
+        config: &IngestorConfig,
+    ) -> Arc<Self> {
+        let service = Arc::new(Self::with_params(backfill, pipeline, shutdown, params));
+        service.initialize_subscriptions(config).await;
+        service
     }
 
     /// 停止服务（graceful shutdown）
@@ -420,7 +456,7 @@ where
         }
 
         // 处理批量数据
-        println!("Processing {} batch of size {}", buffer_name, batch.len());
+        info!("Processing {} batch of size {}", buffer_name, batch.len());
 
         // 模拟处理，成功后可以发送一个成功处理的通知
         if let Err(e) = async {
@@ -508,5 +544,44 @@ where
                 }
             }
         }
+    }
+
+    /// 启动所有子任务 + 错误监听
+    pub async fn start(self: &Arc<Self>, config: Option<IngestorConfig>) {
+        *self.state.write().await = ServiceState::Running;
+
+        // 启动后台任务
+        let mut handles = Vec::new();
+        handles.push(self.spawn_control_task());
+        handles.push(self.spawn_backfill_task(10, 3));
+        handles.push(self.spawn_realtime_task());
+        handles.push(self.spawn_buffer_consumer_task());
+        handles.push(self.spawn_error_monitor_task()); // 错误监听
+
+        *self.handles.write().await = handles;
+
+        // 初始化订阅配置
+        if let Some(cfg) = config {
+            self.initialize_subscriptions(&cfg).await;
+        }
+    }
+
+    /// 错误监听任务，随服务启动
+    fn spawn_error_monitor_task(self: &Arc<Self>) -> JoinHandle<()> {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            let mut rx = service.internal_rx.write().await;
+            while let Some(msg) = rx.recv().await {
+                match msg {
+                    InternalMsg::Error(e) => {
+                        error!("[IngestorService] {}", e);
+                        *service.state.write().await = ServiceState::Error(e);
+                    }
+                    InternalMsg::Info(info) => {
+                        debug!("[IngestorService] {}", info);
+                    }
+                }
+            }
+        })
     }
 }

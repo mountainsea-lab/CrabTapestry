@@ -77,3 +77,38 @@ pub struct IngestorHealth {
     pub buffer_stats: std::collections::HashMap<MarketDataType, BufferStats>,
     pub dedup_stats: std::collections::HashMap<MarketDataType, DedupStats>,
 }
+
+/// 服务参数配置
+pub struct ServiceParams {
+    pub dedup_window_ms: i64,
+
+    pub buffer_cap_ohlcv: usize,
+    pub buffer_cap_tick: usize,
+    pub buffer_cap_trade: usize,
+
+    pub buffer_batch_size_ohlcv: usize,
+    pub buffer_batch_size_tick: usize,
+    pub buffer_batch_size_trade: usize,
+
+    pub control_channel_size: usize,
+    pub internal_channel_size: usize,
+}
+
+impl Default for ServiceParams {
+    fn default() -> Self {
+        Self {
+            dedup_window_ms: 60_000,
+
+            buffer_cap_ohlcv: 1000,
+            buffer_cap_tick: 10_000,
+            buffer_cap_trade: 10_000,
+
+            buffer_batch_size_ohlcv: 10,
+            buffer_batch_size_tick: 50,
+            buffer_batch_size_trade: 50,
+
+            control_channel_size: 1024,
+            internal_channel_size: 64,
+        }
+    }
+}

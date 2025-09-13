@@ -249,7 +249,7 @@ impl MarketDataPipeline {
                                     if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
                                         if guard.candle_count >= 1 {
                                             let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
-                                           // info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
+                                           info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
                                             let _ = ohlcv_tx.send(ohlcv_record);
                                         }
                                         guard.candle_count += 1;

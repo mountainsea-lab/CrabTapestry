@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
     // Step 6: 启动服务
     // -----------------------------
     println!("Starting IngestorService...");
-    service.start_full(Some(config)).await;
+    service.start(Some(config)).await;
 
     // -----------------------------
     // Step 7: 运行服务一定时间，观察输出
@@ -83,4 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("IngestorService stopped cleanly.");
     Ok(())
+
+    // let service = Arc::new(IngestorService::with_params(...));
+    // service.start(Some(config)).await;
 }
