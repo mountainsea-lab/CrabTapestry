@@ -21,8 +21,6 @@ pub struct BinanceSubscriber {
     broadcast_tx: broadcast::Sender<PublicTradeEvent>,
     status: Arc<Mutex<SubscriberStatus>>,
     shutdown: Arc<AtomicBool>,
-    /// 单一转发任务标志
-    forward_task_started: Arc<AtomicBool>,
 }
 
 impl BinanceSubscriber {
@@ -32,7 +30,6 @@ impl BinanceSubscriber {
             broadcast_tx,
             status: Arc::new(Mutex::new(SubscriberStatus::Disconnected)),
             shutdown: Arc::new(AtomicBool::new(false)),
-            forward_task_started: Arc::new(AtomicBool::new(false)),
         }
     }
 

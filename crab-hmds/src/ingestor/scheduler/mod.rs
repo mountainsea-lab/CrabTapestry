@@ -8,6 +8,7 @@ use tokio::sync::{Mutex, broadcast};
 use tokio::time::timeout;
 
 pub mod back_fill_dag;
+pub mod service;
 
 /// 数据类型枚举
 #[derive(Debug, Clone, Copy)]

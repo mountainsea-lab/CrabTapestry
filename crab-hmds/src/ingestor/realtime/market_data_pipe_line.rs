@@ -2,21 +2,12 @@ use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
 use crab_common_utils::time_utils::parse_period_to_millis;
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
-use crab_infras::aggregator::types::Subscription;
+use crab_infras::config::sub_config::Subscription;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::{broadcast, watch};
-use tokio::task::JoinHandle;
-use trade_aggregation::Aggregator;
-
-/// 管理每个 symbol 的订阅任务
-/// manage each symbol's subscription task
-struct SymbolTask {
-    handle: JoinHandle<()>,
-    cancel_tx: watch::Sender<bool>, // 支持多次发送取消信号
-}
 
 /// Pipeline 主体：负责实时订阅、聚合和广播
 /// Pipeline core: responsible for real-time subscription, aggregation and broadcasting

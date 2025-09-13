@@ -1,5 +1,4 @@
 use crate::aggregator::types::TradeCandle;
-use futures::SinkExt;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod trade_aggregator;

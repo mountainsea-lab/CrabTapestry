@@ -39,3 +39,6 @@ time = {workspace = true}
 
 trade_aggregation = "13.0.1"
 async-trait = "0.1.89"
+
+# config
+toml =  { workspace = true }

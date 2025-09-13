@@ -1,6 +1,6 @@
-use crate::aggregator::types::{PublicTradeEvent, Subscription, TradeCandle};
+use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crate::aggregator::{AggregatorOutput, OutputSink};
-use crate::cache::BaseBar;
+use crate::config::sub_config::Subscription;
 use crab_common_utils::time_utils::parse_period_to_millis;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;

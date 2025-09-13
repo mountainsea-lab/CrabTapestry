@@ -1,0 +1,14 @@
+[[subscriptions]]
+exchange = "BinanceFuturesUsd"
+default_periods = ["1m", "5m", "1h"]
+symbols = [
+    { name = "btc", periods = ["1m", "5m", "1h"] },
+    { name = "eth", periods = ["1m"] }
+]
+
+[[subscriptions]]
+exchange = "okx"
+default_periods = ["1m", "5m", "1h"]
+symbols = [
+    { name = "BTC/USDT", periods = ["15m"] }
+]
