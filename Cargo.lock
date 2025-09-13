@@ -580,9 +580,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "barter-data",
- "crab-common-utils",
  "crab-infras",
- "crab-types",
  "crossbeam",
  "dashmap",
  "dotenvy",
@@ -591,9 +589,7 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "time",
  "tokio",
- "trade_aggregation",
  "warp",
 ]
 

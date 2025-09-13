@@ -7,8 +7,6 @@ edition = "2024"
 # Web
 warp =  { workspace = true }
 # CrabTapestry Ecosystem
-crab-types = { workspace = true }
-crab-common-utils = { workspace = true }
 crab-infras = { workspace = true }
 
 # Async
@@ -28,11 +26,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 dashmap =  { workspace = true }
 
-# Time
-time = {workspace = true}
-
-# Cryto
-trade_aggregation = "13.0.1"
 # error
 anyhow = { workspace = true}
 async-stream = "0.3.6"
