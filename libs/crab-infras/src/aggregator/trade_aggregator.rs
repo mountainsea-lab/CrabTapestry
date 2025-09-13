@@ -6,11 +6,12 @@ use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::{error, info};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc, Mutex};
 use tokio::task;
 use trade_aggregation::{
     Aggregator, AlignedTimeRule, GenericAggregator, MillisecondPeriod, TimestampResolution, Trade,
 };
+use crate::aggregator::AggregatorOutput;
 
 pub type AggregatorKey = (String, String, u64); // (exchange, symbol, timeframe)
 
@@ -178,74 +179,74 @@ impl TradeAggregatorPool {
     //     }
     // }
 
-    pub fn start_workers_bridge(
-        self: Arc<Self>,
-        worker_num: usize,
-        crossbeam_rx: Arc<Receiver<PublicTradeEvent>>,
-        output_tx: mpsc::Sender<BaseBar>, // 或 TradeCandle
-        periods: Arc<Vec<Arc<str>>>,      // 多周期聚合
-    ) {
-        // 1️⃣ 创建 tokio channel 桥接 crossbeam
-        let (bridge_tx, bridge_rx) = mpsc::channel::<PublicTradeEvent>(1024);
-        let crossbeam_rx_clone = crossbeam_rx.clone();
+    // pub fn start_workers_bridge(
+    //     self: Arc<Self>,
+    //     worker_num: usize,
+    //     crossbeam_rx: Arc<Receiver<PublicTradeEvent>>,
+    //     output_tx: mpsc::Sender<BaseBar>, // 或 TradeCandle
+    //     periods: Arc<Vec<Arc<str>>>,      // 多周期聚合
+    // ) {
+    //     // 1️⃣ 创建 tokio channel 桥接 crossbeam
+    //     let (bridge_tx, bridge_rx) = mpsc::channel::<PublicTradeEvent>(1024);
+    //     let crossbeam_rx_clone = crossbeam_rx.clone();
+    //
+    //     // 桥接线程：阻塞接收 crossbeam 消息，发送到 tokio channel
+    //     std::thread::spawn(move || {
+    //         while let Ok(event) = crossbeam_rx_clone.recv() {
+    //             let _ = bridge_tx.blocking_send(event);
+    //         }
+    //     });
+    //
+    //     let bridge_rx = Arc::new(tokio::sync::Mutex::new(bridge_rx));
+    //
+    //     // 2️⃣ 启动 worker_num 个 async worker
+    //     for worker_id in 0..worker_num {
+    //         let pool = self.clone();
+    //         let tx = output_tx.clone();
+    //         let periods = periods.clone();
+    //         let rx = bridge_rx.clone();
+    //
+    //         task::spawn(async move {
+    //             loop {
+    //                 let maybe_event = {
+    //                     // 锁住 tokio mpsc Receiver，安全取消息
+    //                     let mut rx_lock = rx.lock().await;
+    //                     rx_lock.recv().await
+    //                 };
+    //
+    //                 let event = match maybe_event {
+    //                     Some(ev) => ev,
+    //                     None => break, // channel 已关闭，退出 worker
+    //                 };
+    //
+    //                 // 遍历所有周期
+    //                 for period in periods.iter() {
+    //                     let period_sec = parse_period_to_secs(period).unwrap_or(60);
+    //
+    //                     // 获取或创建聚合器
+    //                     let aggregator = pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
+    //
+    //                     let mut guard = aggregator.write().await;
+    //                     guard.last_update = Instant::now();
+    //
+    //                     let trade: Trade = (&event).into();
+    //                     if let Some(trade_candle) = guard.aggregator.update(&trade) {
+    //                         if guard.candle_count >= 1 {
+    //                             // 输出 BaseBar 或 TradeCandle
+    //                             let base_bar: BaseBar = trade_candle.clone().into();
+    //                             let _ = tx.send(base_bar).await;
+    //                         }
+    //                         guard.candle_count += 1;
+    //                     }
+    //                 }
+    //             }
+    //
+    //             info!("[Worker-{worker_id}] exiting");
+    //         });
+    //     }
+    // }
 
-        // 桥接线程：阻塞接收 crossbeam 消息，发送到 tokio channel
-        std::thread::spawn(move || {
-            while let Ok(event) = crossbeam_rx_clone.recv() {
-                let _ = bridge_tx.blocking_send(event);
-            }
-        });
-
-        let bridge_rx = Arc::new(tokio::sync::Mutex::new(bridge_rx));
-
-        // 2️⃣ 启动 worker_num 个 async worker
-        for worker_id in 0..worker_num {
-            let pool = self.clone();
-            let tx = output_tx.clone();
-            let periods = periods.clone();
-            let rx = bridge_rx.clone();
-
-            task::spawn(async move {
-                loop {
-                    let maybe_event = {
-                        // 锁住 tokio mpsc Receiver，安全取消息
-                        let mut rx_lock = rx.lock().await;
-                        rx_lock.recv().await
-                    };
-
-                    let event = match maybe_event {
-                        Some(ev) => ev,
-                        None => break, // channel 已关闭，退出 worker
-                    };
-
-                    // 遍历所有周期
-                    for period in periods.iter() {
-                        let period_sec = parse_period_to_secs(period).unwrap_or(60);
-
-                        // 获取或创建聚合器
-                        let aggregator = pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
-
-                        let mut guard = aggregator.write().await;
-                        guard.last_update = Instant::now();
-
-                        let trade: Trade = (&event).into();
-                        if let Some(trade_candle) = guard.aggregator.update(&trade) {
-                            if guard.candle_count >= 1 {
-                                // 输出 BaseBar 或 TradeCandle
-                                let base_bar: BaseBar = trade_candle.clone().into();
-                                let _ = tx.send(base_bar).await;
-                            }
-                            guard.candle_count += 1;
-                        }
-                    }
-                }
-
-                info!("[Worker-{worker_id}] exiting");
-            });
-        }
-    }
-
-    /// 弹性异步 worker，输出 TradeCandle
+    // /// 弹性异步 worker，输出 TradeCandle
     // pub fn start_workers_final(
     //     self: Arc<Self>,
     //     periods: Arc<Vec<Arc<str>>>,
@@ -254,15 +255,17 @@ impl TradeAggregatorPool {
     // ) {
     //     let pool = self.clone();
     //
-    //     // 单独 task 监听 input_rx
+    //     // 单独任务监听 input_rx
     //     task::spawn(async move {
     //         while let Some(event) = input_rx.recv().await {
     //             let pool = pool.clone();
     //             let tx = output_tx.clone();
     //             let periods = periods.clone();
+    //             let event = Arc::new(event); // Arc 包装避免 move
+    //
     //             // 弹性 spawn 处理每个 trade
     //             task::spawn(async move {
-    //                 pool.process_trade_event(periods, event, &tx).await;
+    //                 pool.process_trade_event(periods, Arc::clone(&event), &tx).await;
     //             });
     //         }
     //     });
@@ -272,82 +275,104 @@ impl TradeAggregatorPool {
     // async fn process_trade_event(
     //     &self,
     //     periods: Arc<Vec<Arc<str>>>,
-    //     event: PublicTradeEvent,
+    //     event: Arc<PublicTradeEvent>,
     //     output_tx: &mpsc::Sender<TradeCandle>,
     // ) {
-    //     // 遍历事件对应的所有周期
     //     for period_sec in periods.iter().map(|p| parse_period_to_secs(p).unwrap_or(60)) {
     //         // 获取或创建聚合器
-    //         let aggregator = self.get_or_create_aggregator(
-    //             &event.exchange,
-    //             &event.symbol,
-    //             period_sec, // Use the event's own time period
-    //         );
+    //         let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
     //
-    //         let mut guard = aggregator.write().unwrap();
+    //         // 异步写锁
+    //         let mut guard = aggregator.write().await;
     //         guard.last_update = Instant::now();
     //
-    //         let trade: Trade = (&event).into();
+    //         let trade: Trade = (&*event).into();
     //
     //         if let Some(trade_candle) = guard.aggregator.update(&trade) {
-    //             // 初始第一根可能数据不全 丢弃掉
-    //             if guard.candle_count >= 1 {
-    //                 // 输出 TradeCandle
-    //                 let _ = output_tx.send(trade_candle);
-    //             }
     //             guard.candle_count += 1;
+    //
+    //             // 输出 TradeCandle
+    //             let _ = output_tx.send(trade_candle).await;
     //         }
     //     }
     // }
 
-    /// 弹性异步 worker，输出 TradeCandle
-    pub fn start_workers_final(
+    /// 弹性异步 worker，支持 crossbeam 或 tokio 输入，泛型输出 BaseBar 或 TradeCandle
+    pub fn start_workers_generic<O>(
         self: Arc<Self>,
-        periods: Arc<Vec<Arc<str>>>,
-        mut input_rx: mpsc::Receiver<PublicTradeEvent>,
-        output_tx: mpsc::Sender<TradeCandle>,
-    ) {
-        let pool = self.clone();
+        worker_num: usize,
+        crossbeam_rx: Option<Arc<Receiver<PublicTradeEvent>>>, // crossbeam 可选
+        tokio_rx: Option<mpsc::Receiver<PublicTradeEvent>>,    // tokio 可选
+        output_tx: mpsc::Sender<O>,                            // 泛型输出
+        periods: Arc<Vec<Arc<str>>>,                          // 多周期聚合
+    )
+    where
+        O: AggregatorOutput,
+    {
+        // 1️⃣ 桥接 crossbeam -> tokio channel
+        let bridge_rx = if let Some(cb_rx) = crossbeam_rx {
+            let (bridge_tx, bridge_rx) = mpsc::channel::<PublicTradeEvent>(1024);
+            let cb_rx_clone = cb_rx.clone();
+            std::thread::spawn(move || {
+                while let Ok(event) = cb_rx_clone.recv() {
+                    let _ = bridge_tx.blocking_send(event);
+                }
+            });
+            bridge_rx
+        } else if let Some(tokio_rx) = tokio_rx {
+            tokio_rx
+        } else {
+            panic!("Either crossbeam_rx or tokio_rx must be provided");
+        };
 
-        // 单独任务监听 input_rx
-        task::spawn(async move {
-            while let Some(event) = input_rx.recv().await {
-                let pool = pool.clone();
-                let tx = output_tx.clone();
-                let periods = periods.clone();
-                let event = Arc::new(event); // Arc 包装避免 move
+        let bridge_rx = Arc::new(Mutex::new(bridge_rx));
 
-                // 弹性 spawn 处理每个 trade
-                task::spawn(async move {
-                    pool.process_trade_event(periods, Arc::clone(&event), &tx).await;
-                });
-            }
-        });
-    }
+        // 2️⃣ 弹性异步 worker
+        for worker_id in 0..worker_num {
+            let pool = self.clone();
+            let tx = output_tx.clone();
+            let periods = periods.clone();
+            let rx = bridge_rx.clone();
 
-    /// 处理单个 trade 事件
-    async fn process_trade_event(
-        &self,
-        periods: Arc<Vec<Arc<str>>>,
-        event: Arc<PublicTradeEvent>,
-        output_tx: &mpsc::Sender<TradeCandle>,
-    ) {
-        for period_sec in periods.iter().map(|p| parse_period_to_secs(p).unwrap_or(60)) {
-            // 获取或创建聚合器
-            let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
+            task::spawn(async move {
+                loop {
+                    let maybe_event = {
+                        let mut rx_lock = rx.lock().await;
+                        rx_lock.recv().await
+                    };
 
-            // 异步写锁
-            let mut guard = aggregator.write().await;
-            guard.last_update = Instant::now();
+                    let event = match maybe_event {
+                        Some(ev) => ev,
+                        None => break, // channel 关闭退出
+                    };
 
-            let trade: Trade = (&*event).into();
+                    // 遍历周期
+                    for period in periods.iter() {
+                        let period_sec = parse_period_to_secs(period).unwrap_or(60);
 
-            if let Some(trade_candle) = guard.aggregator.update(&trade) {
-                guard.candle_count += 1;
+                        // 获取或创建聚合器
+                        let aggregator = pool.get_or_create_aggregator(
+                            &event.exchange,
+                            &event.symbol,
+                            period_sec,
+                        );
 
-                // 输出 TradeCandle
-                let _ = output_tx.send(trade_candle).await;
-            }
+                        // 异步写锁
+                        let mut guard = aggregator.write().await;
+                        guard.last_update = Instant::now();
+
+                        let trade: Trade = (&event).into();
+                        if let Some(trade_candle) = guard.aggregator.update(&trade) {
+                            guard.candle_count += 1;
+
+                            // 输出泛型
+                            let _ = tx.send(O::from(trade_candle.clone())).await;
+                        }
+                    }
+                }
+
+                info!("[Worker-{worker_id}] exiting");
+            });
         }
     }
 }
