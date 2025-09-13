@@ -1,15 +1,15 @@
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
-use crab_common_utils::time_utils::parse_period_to_secs;
+use crab_common_utils::time_utils::parse_period_to_millis;
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
-use crab_infras::aggregator::types::{Subscription, TradeCandle};
+use crab_infras::aggregator::types::Subscription;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
-use trade_aggregation::{Aggregator, Trade};
+use trade_aggregation::Aggregator;
 
 /// 管理每个 symbol 的订阅任务
 /// manage each symbol's subscription task
@@ -25,17 +25,13 @@ pub struct MarketDataPipeline {
     subscribers: HashMap<String, Arc<dyn RealtimeSubscriber + Send + Sync>>,
 
     /// (exchange, symbol, "multi") -> MultiPeriodAggregator
-    // aggregators: Arc<DashMap<(String, String, String), MultiPeriodAggregator>>,
     aggregators: Arc<TradeAggregatorPool>,
 
     /// broadcast 输出给多个消费者
-    ohlcv_tx: broadcast::Sender<OHLCVRecord>,
+    ohlcv_tx: Sender<OHLCVRecord>,
 
     /// 已订阅交易对 (exchange, symbol) -> Subscription
     subscribed: Arc<DashMap<(String, String), Subscription>>,
-
-    /// symbol 的任务句柄
-    tasks: Arc<DashMap<(String, String), SymbolTask>>,
 
     /// 每个交易所已订阅币种集合
     status: Arc<DashMap<String, Arc<DashMap<String, ()>>>>,
@@ -54,11 +50,11 @@ impl MarketDataPipeline {
             aggregators: Arc::new(TradeAggregatorPool::new()),
             ohlcv_tx: tx,
             subscribed: Arc::new(DashMap::new()),
-            tasks: Arc::new(DashMap::new()),
             status: Arc::new(DashMap::new()),
         }
     }
 
+    /// 批量订阅多个 symbol
     /// 批量订阅多个 symbol
     pub async fn subscribe_many(
         &self,
@@ -75,13 +71,13 @@ impl MarketDataPipeline {
             .ok_or_else(|| anyhow::anyhow!("No subscriber for {}", exchange_s))?
             .clone();
 
-        // 获取或创建状态
+        // 获取或创建交易所状态
         let exch_status = self
             .status
             .entry(exchange_s.clone())
             .or_insert_with(|| Arc::new(DashMap::new()));
 
-        // 筛选未订阅的
+        // 筛选未订阅的 symbols
         let symbols_to_subscribe: Vec<_> = symbols
             .into_iter()
             .filter(|sym| {
@@ -111,117 +107,55 @@ impl MarketDataPipeline {
             .subscribe_symbols(&symbols_to_subscribe.iter().map(|s| s.as_ref()).collect::<Vec<_>>())
             .await?;
 
+        // 克隆必要对象
         let ohlcv_tx = self.ohlcv_tx.clone();
+        let aggregator_pool = self.aggregators.clone();
+        let subscribed_map = Arc::clone(&self.subscribed);
 
-        let (cancel_tx, mut cancel_rx) = watch::channel(false);
-
-        let aggregator_pool = self.aggregators.clone(); // TradeAggregatorPool
+        // 启动泛型 worker，支持 mpsc 或 broadcast 输出
         aggregator_pool.start_workers_generic::<Sender<OHLCVRecord>>(
-            4,
-            None,
-            Some(trade_rx),
-            ohlcv_tx,
-            Arc::clone(&self.subscribed),
+            4,              // worker 数量
+            None,           // crossbeam_rx 可选
+            Some(trade_rx), // tokio_rx
+            ohlcv_tx,       // 输出 sink
+            subscribed_map, // 已订阅信息
         );
-        // let handle = tokio::spawn(async move {
-        //     loop {
-        //         tokio::select! {
-        //             maybe_trade = trade_rx.recv() => {
-        //                 if let Some(trade) = maybe_trade {
-        //                     // 从已订阅信息获取该 symbol 对应的周期列表
-        //                     if let Some(sub) = subscribed.get(&(exchange_clone.clone(), trade.symbol.clone())) {
-        //                         for period in &sub.periods {
-        //                             let period_sec = parse_period_to_secs(period).unwrap_or(60);
-        //
-        //                             // 获取或创建聚合器
-        //                             let aggregator = aggregator_pool.get_or_create_aggregator(
-        //                                 &exchange_clone,
-        //                                 &trade.symbol,
-        //                                 period_sec,
-        //                             );
-        //
-        //                             let mut guard = aggregator.write().await;
-        //                             guard.last_update = Instant::now();
-        //                              let trade_clone = trade.clone();
-        //                             let trade_obj: Trade = (&trade).into();
-        //                             if let Some(trade_candle) = guard.aggregator.update(&trade_obj) {
-        //                                 if guard.candle_count >= 1 {
-        //                                     let ohlcv_record = OHLCVRecord::from_event_and_candle(trade_clone, trade_candle, period);
-        //                                    info!("agg stream public trade event and candle update: {:?}, candle_count: {}", ohlcv_record, guard.candle_count);
-        //                                     let _ = ohlcv_tx.send(ohlcv_record);
-        //                                 }
-        //                                 guard.candle_count += 1;
-        //                             }
-        //                         }
-        //                     } else {
-        //                         warn!("Received trade for unsubscribed symbol {}", trade.symbol);
-        //                     }
-        //                 } else {
-        //                     break;
-        //                 }
-        //             }
-        //             _ = cancel_rx.changed() => {
-        //                 if *cancel_rx.borrow() { break; }
-        //             }
-        //         }
-        //     }
-        //
-        //     warn!(
-        //         "stream closed for {} symbols: {}",
-        //         exchange_clone,
-        //         symbols_to_subscribe.len()
-        //     );
-        // });
-
-        // 保存任务（用 exchange 作为 key）
-        // self.tasks
-        //     .insert((exchange_s.clone(), "__all__".into()), SymbolTask { handle, cancel_tx });
 
         Ok(())
     }
 
-    /// 批量取消多个 symbol（同一个 exchange，高性能模板）
-    pub async fn unsubscribe_many(&self, _exchange: &str, _symbols: &[&str]) -> anyhow::Result<()> {
-        //     let exchange_s = exchange.to_string();
-        //
-        //     // 获取交易所状态集合
-        //     let exch_status_opt = self.status.get(&exchange_s);
-        //
-        //     // 并发取消每个 symbol 的任务
-        //     let mut handles = Vec::with_capacity(symbols.len());
-        //     for &sym in symbols {
-        //         let key = (exchange_s.clone(), sym.to_string());
-        //
-        //         // 移除订阅信息和聚合器
-        //         self.subscribed.remove(&key);
-        //         self.aggregators
-        //             .remove(&(exchange_s.clone(), sym.to_string(), "multi".to_string()));
-        //
-        //         // 取消 symbol 任务
-        //         if let Some((_, task)) = self.tasks.remove(&key) {
-        //             let h = tokio::spawn(async move {
-        //                 let _ = task.cancel_tx.send(true);
-        //                 let _ = task.handle.await;
-        //             });
-        //             handles.push(h);
-        //         }
-        //
-        //         // 更新交易所状态集合
-        //         if let Some(exch_status) = exch_status_opt.as_ref() {
-        //             exch_status.remove(sym);
-        //         }
-        //     }
-        //
-        //     // 等待所有取消任务完成
-        //     for h in handles {
-        //         let _ = h.await;
-        //     }
-        //
-        //     // 调用 subscriber 批量取消（可选）
-        //     if let Some(subscriber) = self.subscribers.get(&exchange_s) {
-        //         let _ = subscriber.unsubscribe_symbols(symbols).await;
-        //     }
-        //
+    /// 批量取消多个 symbol（同一个 exchange）
+    pub async fn unsubscribe_many(&self, exchange: &str, symbols: &[&str]) -> anyhow::Result<()> {
+        let exchange_s = exchange.to_string();
+
+        // 获取交易所状态集合
+        let exch_status_opt = self.status.get(&exchange_s);
+
+        // 移除订阅信息和聚合器
+        for &sym in symbols {
+            let key = (exchange_s.clone(), sym.to_string());
+
+            // 获取周期
+            if let Some(sub) = self.subscribed.get(&key) {
+                for period in &sub.periods {
+                    let period_ms = parse_period_to_millis(period).unwrap_or(60_000) as u64;
+                    let agg_key = (exchange_s.clone(), sym.to_string(), period_ms);
+                    self.aggregators.remove(&agg_key);
+                }
+            }
+
+            // 删除订阅信息和交易所状态
+            self.subscribed.remove(&key);
+            if let Some(exch_status) = exch_status_opt.as_ref() {
+                exch_status.remove(sym);
+            }
+        }
+
+        // 调用 subscriber 批量取消（可选）
+        if let Some(subscriber) = self.subscribers.get(&exchange_s) {
+            let _ = subscriber.unsubscribe_symbols(symbols).await;
+        }
+
         Ok(())
     }
 
@@ -298,7 +232,7 @@ mod tests {
             .iter()
             .filter_map(|p| parse_period_to_millis(p)) // 返回 Option<u64>，失败的过滤掉
             .max() // 找到最大的
-            .unwrap_or(60000); // 如果全都解析失败，默认 60 秒
+            .unwrap_or(60000) as u64; // 如果全都解析失败，默认 60 秒
 
         tokio::time::sleep(Duration::from_secs(max_period_sec + 10)).await;
 

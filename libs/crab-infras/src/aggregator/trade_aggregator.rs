@@ -181,4 +181,21 @@ impl TradeAggregatorPool {
             });
         }
     }
+
+    /// 移除指定聚合器
+    /// key = (exchange, symbol, period)
+    pub fn remove(&self, key: &AggregatorKey) -> Option<Arc<RwLock<AggregatorWithCounter>>> {
+        self.aggregators.remove(key).map(|(_, v)| v)
+    }
+
+    /// 可选：批量移除
+    pub fn remove_many(&self, keys: &[AggregatorKey]) -> usize {
+        let mut removed = 0;
+        for key in keys {
+            if self.remove(key).is_some() {
+                removed += 1;
+            }
+        }
+        removed
+    }
 }
