@@ -1,3 +1,4 @@
+use crate::aggregator::AggregatorOutput;
 use crate::cache::BaseBar;
 use barter_data::barter_instrument::Side;
 use barter_data::barter_instrument::exchange::ExchangeId;
@@ -9,7 +10,6 @@ use crab_common_utils::time_utils::milliseconds_to_offsetdatetime;
 use serde::{Deserialize, Serialize};
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
 use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
-use crate::aggregator::AggregatorOutput;
 
 #[derive(Debug, Default, Clone)]
 pub struct TradeCandle {
@@ -198,6 +198,5 @@ impl From<TradeCandle> for BaseBar {
         }
     }
 }
-
 
 impl<T: From<TradeCandle> + Send + 'static> AggregatorOutput for T {}

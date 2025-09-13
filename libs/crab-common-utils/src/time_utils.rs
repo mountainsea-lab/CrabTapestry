@@ -24,3 +24,11 @@ pub fn parse_period_to_secs(period: &str) -> Option<u64> {
         Err(_) => None,
     }
 }
+
+/// 将 K 线周期字符串转换为毫秒数
+pub fn parse_period_to_millis(period: &str) -> Option<u64> {
+    match TimeFrame::from_str(period) {
+        Ok(tf) => Some(tf.to_millis() as u64), // 转换成秒
+        Err(_) => None,
+    }
+}
