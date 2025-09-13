@@ -1,14 +1,9 @@
 use crate::ingestor::dedup::Deduplicatable;
-use barter_data::barter_instrument::Side;
-use barter_data::barter_instrument::exchange::ExchangeId;
-use barter_data::barter_instrument::instrument::market_data::MarketDataInstrument;
-use barter_data::event::MarketEvent;
-use barter_data::streams::reconnect::Event;
-use barter_data::subscription::trade::PublicTrade;
 use chrono::Utc;
+use crab_infras::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crab_types::TimeRange;
 use std::sync::Arc;
-use trade_aggregation::M1;
+use trade_aggregation::CandleComponent;
 
 /**
 4. 实践建议
@@ -48,47 +43,47 @@ pub struct Tick {
     pub order_id: Option<String>, // 原始订单号，可选
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
-
-#[derive(Clone, Debug)]
-pub struct PublicTradeEvent {
-    pub exchange: String,
-    pub symbol: String,
-    pub trade: PublicTrade, // market realtime trade data
-    pub timestamp: i64,     // data timestamp
-    pub time_period: u64,
-}
-
-/// from barter trade data event to PublicTradeEvent
-impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
-    fn from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Self {
-        match event {
-            Event::Item(market_event) => {
-                PublicTradeEvent {
-                    exchange: market_event.exchange.to_string(),
-                    symbol: format!("{}", market_event.instrument.base), // 根据你的需求调整
-                    trade: market_event.kind,                            // PublicTrade
-                    timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
-                    time_period: M1.get(),
-                }
-            }
-            _ => {
-                // if not PublicTrade data，return default
-                PublicTradeEvent {
-                    exchange: String::new(),
-                    symbol: String::new(),
-                    trade: PublicTrade {
-                        id: String::new(),
-                        price: 0.0,
-                        amount: 0.0,
-                        side: Side::Buy,
-                    },
-                    timestamp: 0,
-                    time_period: M1.get(),
-                }
-            }
-        }
-    }
-}
+//
+// #[derive(Clone, Debug)]
+// pub struct PublicTradeEvent {
+//     pub exchange: String,
+//     pub symbol: String,
+//     pub trade: PublicTrade, // market realtime trade data
+//     pub timestamp: i64,     // data timestamp
+//     pub time_period: u64,
+// }
+//
+// /// from barter trade data event to PublicTradeEvent
+// impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
+//     fn from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Self {
+//         match event {
+//             Event::Item(market_event) => {
+//                 PublicTradeEvent {
+//                     exchange: market_event.exchange.to_string(),
+//                     symbol: format!("{}", market_event.instrument.base), // 根据你的需求调整
+//                     trade: market_event.kind,                            // PublicTrade
+//                     timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
+//                     time_period: M1.get(),
+//                 }
+//             }
+//             _ => {
+//                 // if not PublicTrade data，return default
+//                 PublicTradeEvent {
+//                     exchange: String::new(),
+//                     symbol: String::new(),
+//                     trade: PublicTrade {
+//                         id: String::new(),
+//                         price: 0.0,
+//                         amount: 0.0,
+//                         side: Side::Buy,
+//                     },
+//                     timestamp: 0,
+//                     time_period: M1.get(),
+//                 }
+//             }
+//         }
+//     }
+// }
 
 ///  多类型统一封装 内存中流转的市场数据事件
 /// memory-based market data event.
@@ -279,3 +274,104 @@ impl FetchContext {
     }
 }
 //==============HistoricalFetcher Base Model===
+impl OHLCVRecord {
+    // Convert PublicTradeEvent and TradeCandle into OHLCVRecord
+    pub fn from_event_and_candle(event: PublicTradeEvent, candle: TradeCandle, period: &str) -> Self {
+        let turnover = Some(event.trade.price * event.trade.amount); // Example turnover calculation
+        let num_trades = Some(candle.num_trades.value());
+
+        // Return the OHLCVRecord
+        Self {
+            ts: event.timestamp,                                // K线结束时间
+            period_start_ts: Some(candle.time_range.open_time), // K线开始时间
+            symbol: Arc::from(event.symbol),                    // 交易对
+            exchange: Arc::from(event.exchange),                // 交易所
+            period: period.to_string(),                         // 交易周期
+            open: candle.open.value(),                          // 开盘价
+            high: candle.high.value(),                          // 最高价
+            low: candle.low.value(),                            // 最低价
+            close: candle.close.value(),                        // 收盘价
+            volume: candle.volume.value(),                      // 成交量
+            turnover,                                           // 成交额
+            num_trades,                                         // 成交笔数
+            vwap: None,                                         // Optional VWAP, can be calculated later
+        }
+    }
+}
+
+pub struct OHLCVRecordBuilder {
+    ts: i64,
+    period_start_ts: Option<i64>,
+    symbol: Arc<str>,
+    exchange: Arc<str>,
+    period: String,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+    volume: f64,
+    turnover: Option<f64>,
+    num_trades: Option<u32>,
+    vwap: Option<f64>,
+}
+
+impl OHLCVRecordBuilder {
+    /// 初始化 Builder，从 PublicTradeEvent 和 TradeCandle 快速构造基础字段
+    pub fn from_event_and_candle(event: PublicTradeEvent, candle: TradeCandle, period: &str) -> Self {
+        let turnover = Some(event.trade.price * event.trade.amount);
+        let num_trades = Some(candle.num_trades.value());
+
+        Self {
+            ts: event.timestamp,
+            period_start_ts: Some(candle.time_range.open_time),
+            symbol: Arc::from(event.symbol),
+            exchange: Arc::from(event.exchange),
+            period: period.to_string(),
+            open: candle.open.value(),
+            high: candle.high.value(),
+            low: candle.low.value(),
+            close: candle.close.value(),
+            volume: candle.volume.value(),
+            turnover,
+            num_trades,
+            vwap: None,
+        }
+    }
+
+    /// 可选设置 turnover
+    pub fn turnover(mut self, turnover: f64) -> Self {
+        self.turnover = Some(turnover);
+        self
+    }
+
+    /// 可选设置 num_trades
+    pub fn num_trades(mut self, num_trades: u32) -> Self {
+        self.num_trades = Some(num_trades);
+        self
+    }
+
+    /// 可选设置 VWAP
+    pub fn vwap(mut self, vwap: f64) -> Self {
+        self.vwap = Some(vwap);
+        self
+    }
+
+    /// 构建 OHLCVRecord
+    pub fn build(self) -> OHLCVRecord {
+        OHLCVRecord {
+            ts: self.ts,
+            period_start_ts: self.period_start_ts,
+            symbol: self.symbol,
+            exchange: self.exchange,
+            period: self.period,
+            open: self.open,
+            high: self.high,
+            low: self.low,
+            close: self.close,
+            volume: self.volume,
+            turnover: self.turnover,
+            num_trades: self.num_trades,
+            vwap: self.vwap,
+        }
+    }
+}

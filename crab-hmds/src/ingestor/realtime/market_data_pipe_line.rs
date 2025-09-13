@@ -1,8 +1,8 @@
 use crate::ingestor::realtime::Subscription;
-use crate::ingestor::realtime::aggregator::trade_aggregator::TradeAggregatorPool;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
 use crab_common_utils::time_utils::parse_period_to_secs;
+use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
 use crab_infras::cache::BaseBar;
 use crab_types::time_frame::TimeFrame;
 use dashmap::DashMap;
@@ -62,110 +62,7 @@ impl MarketDataPipeline {
         }
     }
 
-    /// 批量订阅多个 symbol（同一个 exchange，高性能模板）
-    // pub async fn subscribe_many(
-    //     &self,
-    //     exchange: Arc<str>,
-    //     symbols: Vec<Arc<str>>,
-    //     periods: Vec<Arc<str>>,
-    // ) -> anyhow::Result<()> {
-    //     let exchange_s = exchange.to_string();
-    //
-    //     // 获取 subscriber
-    //     let subscriber = self
-    //         .subscribers
-    //         .get(&exchange_s)
-    //         .ok_or_else(|| anyhow::anyhow!("No subscriber for {}", exchange_s))?
-    //         .clone();
-    //
-    //     // 获取或创建交易所状态集合
-    //     let exch_status = self
-    //         .status
-    //         .entry(exchange_s.clone())
-    //         .or_insert_with(|| Arc::new(DashMap::new()));
-    //
-    //     // 筛选未订阅的 symbol
-    //     let symbols_to_subscribe: Vec<_> = symbols
-    //         .into_iter()
-    //         .filter(|sym| {
-    //             let key = (exchange_s.clone(), sym.to_string());
-    //             !self.subscribed.contains_key(&key)
-    //         })
-    //         .collect();
-    //
-    //     if symbols_to_subscribe.is_empty() {
-    //         return Ok(());
-    //     }
-    //
-    //     // 为每个 symbol 单独订阅，避免 clone Receiver
-    //     for sym in symbols_to_subscribe {
-    //         let key = (exchange_s.clone(), sym.to_string());
-    //
-    //         // 保存订阅信息
-    //         let sub = Subscription {
-    //             exchange: exchange.clone(),
-    //             symbol: sym.clone(),
-    //             periods: periods.clone(),
-    //         };
-    //         self.subscribed.insert(key.clone(), sub.clone());
-    //         exch_status.insert(sym.to_string(), ());
-    //
-    //         // 初始化聚合器
-    //         let key_multi = (exchange_s.clone(), sym.to_string(), "multi".to_string());
-    //         self.aggregators.entry(key_multi.clone()).or_insert_with(|| {
-    //             MultiPeriodAggregator::new(sub.exchange.clone(), sub.symbol.clone(), sub.periods.clone())
-    //         });
-    //
-    //         // 每个 symbol 独立 TradeEvent 流
-    //         let mut trade_rx = subscriber.clone().subscribe_symbols(&[sub.symbol.as_ref()]).await?;
-    //
-    //         // 克隆 Arc 用于任务
-    //         let aggregators = self.aggregators.clone();
-    //         let ohlcv_tx = self.ohlcv_tx.clone();
-    //         let exchange_clone = exchange_s.clone();
-    //         let symbol_clone = sym.clone();
-    //
-    //         // 安全取消通道
-    //         let (cancel_tx, mut cancel_rx) = watch::channel(false);
-    //
-    //         // 启动任务
-    //         let handle = tokio::spawn(async move {
-    //             loop {
-    //                 tokio::select! {
-    //                     maybe_trade = trade_rx.recv() => {
-    //                         if let Some(trade) = maybe_trade {
-    //                             if let Some(mut agg) = aggregators.get_mut(&key_multi) {
-    //                                 let bars = agg.on_event(trade);
-    //                                 for bar in bars {
-    //                                     let _ = ohlcv_tx.send(bar);
-    //                                 }
-    //                             }
-    //                         } else {
-    //                             break; // 底层流自然关闭
-    //                         }
-    //                     }
-    //                     _ = cancel_rx.changed() => {
-    //                         if *cancel_rx.borrow() {
-    //                             break; // 主动取消
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             warn!(
-    //                 "stream closed for {}/{}: {}",
-    //                 exchange_clone,
-    //                 symbol_clone,
-    //                 if *cancel_rx.borrow() { "canceled" } else { "natural" }
-    //             );
-    //         });
-    //
-    //         // 保存任务
-    //         self.tasks.insert(key, SymbolTask { handle, cancel_tx });
-    //     }
-    //
-    //     Ok(())
-    // }
-
+    /// 批量订阅多个 symbol
     pub async fn subscribe_many(
         &self,
         exchange: Arc<str>,

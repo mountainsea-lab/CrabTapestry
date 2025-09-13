@@ -1,8 +1,8 @@
 pub mod binance_subscriber;
 
 use crate::ingestor::realtime::SubscriberStatus;
-use crate::ingestor::types::PublicTradeEvent;
 use async_trait::async_trait;
+use crab_infras::aggregator::types::PublicTradeEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 

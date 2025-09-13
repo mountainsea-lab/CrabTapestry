@@ -112,7 +112,7 @@ impl OutputSubscriber {
     }
 
     /// 将 Subscriber 转换为 Stream
-    pub fn into_stream(mut self) -> impl Stream<Item = HistoricalBatchEnum> {
+    pub fn into_stream(self) -> impl Stream<Item = HistoricalBatchEnum> {
         stream::unfold(self, |mut sub| async move {
             match sub.recv().await {
                 Some(batch) => Some((batch, sub)),

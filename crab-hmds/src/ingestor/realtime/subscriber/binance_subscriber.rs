@@ -1,12 +1,12 @@
 use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
-use crate::ingestor::types::PublicTradeEvent;
 use anyhow::Result;
 use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
 use barter_data::streams::Streams;
 use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
+use crab_infras::aggregator::types::PublicTradeEvent;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::{error, info, warn};
 use std::sync::Arc;
