@@ -2,13 +2,14 @@ use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crate::ingestor::types::OHLCVRecord;
 use crab_common_utils::time_utils::parse_period_to_secs;
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
-use crab_infras::aggregator::types::Subscription;
+use crab_infras::aggregator::types::{Subscription, TradeCandle};
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::broadcast::Sender;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinHandle;
-use trade_aggregation::Aggregator;
+use trade_aggregation::{Aggregator, Trade};
 
 /// 管理每个 symbol 的订阅任务
 /// manage each symbol's subscription task
@@ -110,19 +111,18 @@ impl MarketDataPipeline {
             .subscribe_symbols(&symbols_to_subscribe.iter().map(|s| s.as_ref()).collect::<Vec<_>>())
             .await?;
 
-        let aggregator_pool = self.aggregators.clone(); // TradeAggregatorPool
         let ohlcv_tx = self.ohlcv_tx.clone();
-        let exchange_clone = exchange_s.clone();
 
         let (cancel_tx, mut cancel_rx) = watch::channel(false);
 
-        // aggregator_pool.start_workers_generic::<OHLCVRecord>(
-        //     4,
-        //     None,
-        //     Some(Arc::new(trade_rx)),
-        //     self.ohlcv_tx.clone(),
-        //     Arc::clone(&self.subscribed),
-        // );
+        let aggregator_pool = self.aggregators.clone(); // TradeAggregatorPool
+        aggregator_pool.start_workers_generic::<Sender<OHLCVRecord>>(
+            4,
+            None,
+            Some(trade_rx),
+            ohlcv_tx,
+            Arc::clone(&self.subscribed),
+        );
         // let handle = tokio::spawn(async move {
         //     loop {
         //         tokio::select! {

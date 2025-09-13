@@ -51,18 +51,6 @@ pub fn parse_redis_message(msg: &Msg) -> Result<RedisMessage> {
         Err(e) => return Err(anyhow::anyhow!("Error getting channel: {}", e).into()), // 处理错误
     };
 
-    // 解析消息内容
-    // let payload = match msg.get_payload() {
-    //     Ok(Value::BulkString(bytes)) => {
-    //         // String::from_utf8_lossy(&*bytes).to_string()
-    //         let payload_str = String::from_utf8_lossy(&*bytes).to_string();
-    //           info!("Payload: {}", payload_str.clone());
-    //          payload_str
-    //     },
-    //     Ok(Value::SimpleString(s)) => s.clone(),
-    //     Ok(_) => return Err(anyhow::anyhow!("Invalid payload format").into()), // 处理其它类型
-    //     Err(e) => return Err(anyhow::anyhow!("Error getting payload: {}", e).into()), // 处理错误
-    // };
     // 解析外层消息内容
     let payload = match msg.get_payload() {
         Ok(Value::BulkString(bytes)) => {
@@ -101,17 +89,3 @@ pub fn parse_redis_message(msg: &Msg) -> Result<RedisMessage> {
 
     Ok(RedisMessage { message_type, channel, payload })
 }
-
-// // 使用基础操作
-// let redis_cache = RedisCache::new("redis://localhost:6379").await?;
-// redis_cache.subscribe("news").await?;
-//
-// // 使用业务服务
-// let pubsub_service = RedisPubSubService::new(redis_cache.clone());
-// let mut message_stream = pubsub_service.create_message_stream("news").await?;
-//
-// // 使用基础操作发布
-// redis_cache.publish("news", "Hello").await?;
-//
-// // 使用业务服务发布
-// pubsub_service.publish_app_message("news", &json!({"text": "Hello"})).await?;

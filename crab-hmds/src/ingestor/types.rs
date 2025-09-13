@@ -1,5 +1,6 @@
 use crate::ingestor::dedup::Deduplicatable;
 use chrono::Utc;
+use crab_infras::aggregator::AggregatorOutput;
 use crab_infras::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crab_types::TimeRange;
 use std::sync::Arc;
@@ -317,15 +318,21 @@ pub struct OHLCVRecordBuilder {
 
 impl OHLCVRecordBuilder {
     /// 初始化 Builder，从 PublicTradeEvent 和 TradeCandle 快速构造基础字段
-    pub fn from_event_and_candle(event: PublicTradeEvent, candle: TradeCandle, period: &str) -> Self {
-        let turnover = Some(event.trade.price * event.trade.amount);
+    pub fn from_event_and_candle(
+        exchange: &str,
+        symbol: &str,
+        period: &str,
+        timestamp: i64,
+        candle: TradeCandle,
+    ) -> Self {
+        let turnover = Some(candle.volume.value() * candle.close.value());
         let num_trades = Some(candle.num_trades.value());
 
         Self {
-            ts: event.timestamp,
+            ts: timestamp,
             period_start_ts: Some(candle.time_range.open_time),
-            symbol: Arc::from(event.symbol),
-            exchange: Arc::from(event.exchange),
+            symbol: Arc::from(symbol),
+            exchange: Arc::from(exchange),
             period: period.to_string(),
             open: candle.open.value(),
             high: candle.high.value(),
@@ -373,5 +380,11 @@ impl OHLCVRecordBuilder {
             num_trades: self.num_trades,
             vwap: self.vwap,
         }
+    }
+}
+
+impl AggregatorOutput for OHLCVRecord {
+    fn from_trade_candle(exchange: &str, symbol: &str, period: &str, timestamp: i64, candle: TradeCandle) -> Self {
+        OHLCVRecordBuilder::from_event_and_candle(exchange, symbol, period, timestamp, candle).build()
     }
 }

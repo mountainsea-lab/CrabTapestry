@@ -18,17 +18,17 @@ pub fn milliseconds_to_offsetdatetime(milliseconds: i64) -> OffsetDateTime {
 }
 
 /// 将 K 线周期字符串转换为秒数
-pub fn parse_period_to_secs(period: &str) -> Option<u64> {
+pub fn parse_period_to_secs(period: &str) -> Option<i64> {
     match TimeFrame::from_str(period) {
-        Ok(tf) => Some((tf.to_millis() / 1000) as u64), // 转换成秒
+        Ok(tf) => Some(tf.to_millis() / 1000), // 转换成秒
         Err(_) => None,
     }
 }
 
 /// 将 K 线周期字符串转换为毫秒数
-pub fn parse_period_to_millis(period: &str) -> Option<u64> {
+pub fn parse_period_to_millis(period: &str) -> Option<i64> {
     match TimeFrame::from_str(period) {
-        Ok(tf) => Some(tf.to_millis() as u64), // 转换成秒
+        Ok(tf) => Some(tf.to_millis()), // 转换成秒
         Err(_) => None,
     }
 }

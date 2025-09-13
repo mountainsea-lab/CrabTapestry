@@ -10,6 +10,7 @@ use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::info;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 
 pub async fn start_data_event_flow() {
     // 订阅配置信息
@@ -31,7 +32,7 @@ pub async fn start_data_event_flow() {
     // 启动聚合池
     let aggregator_pool = Arc::new(TradeAggregatorPool::new());
     let (output_tx, mut output_rx) = mpsc::channel::<BaseBar>(100);
-    aggregator_pool.start_workers_generic::<BaseBar>(4, Some(Arc::new(receiver)), None, output_tx, subscribed);
+    aggregator_pool.start_workers_generic::<Sender<BaseBar>>(4, Some(Arc::new(receiver)), None, output_tx, subscribed);
 
     // Redis 发布器
     let redis_cache = get_redis_store().expect("get_redis_store failed");

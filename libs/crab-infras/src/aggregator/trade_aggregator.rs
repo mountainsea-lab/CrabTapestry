@@ -1,5 +1,5 @@
-use crate::aggregator::AggregatorOutput;
 use crate::aggregator::types::{PublicTradeEvent, Subscription, TradeCandle};
+use crate::aggregator::{AggregatorOutput, OutputSink};
 use crate::cache::BaseBar;
 use crab_common_utils::time_utils::parse_period_to_millis;
 use crossbeam::channel::Receiver;
@@ -98,15 +98,16 @@ impl TradeAggregatorPool {
     }
 
     /// 弹性异步 worker，支持 crossbeam 或 tokio 输入，泛型输出 BaseBar 或 TradeCandle
-    pub fn start_workers_generic<O>(
+    pub fn start_workers_generic<S>(
         self: Arc<Self>,
         worker_num: usize,
         crossbeam_rx: Option<Arc<Receiver<PublicTradeEvent>>>, // crossbeam 可选
         tokio_rx: Option<mpsc::Receiver<PublicTradeEvent>>,    // tokio 可选
-        output_tx: mpsc::Sender<O>,                            // 泛型输出
+        output_tx: S,                                          // 泛型输出
         subscribed: Arc<DashMap<(String, String), Subscription>>,
     ) where
-        O: AggregatorOutput,
+        S: OutputSink,
+        S::Item: AggregatorOutput,
     {
         // 1️⃣ 桥接 crossbeam -> tokio channel
         let bridge_rx = if let Some(cb_rx) = crossbeam_rx {
@@ -151,7 +152,8 @@ impl TradeAggregatorPool {
                             let period_sec = parse_period_to_millis(period).unwrap_or(60 * 1000);
 
                             // 获取或创建聚合器
-                            let aggregator = pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec);
+                            let aggregator =
+                                pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec as u64);
 
                             // 异步写锁
                             let mut guard = aggregator.write().await;
@@ -160,9 +162,14 @@ impl TradeAggregatorPool {
                             let trade: Trade = (&event).into();
                             if let Some(trade_candle) = guard.aggregator.update(&trade) {
                                 if guard.candle_count >= 1 {
-                                    info!("agg trade candle {:?}", trade_candle);
-                                    // 输出泛型
-                                    let _ = tx.send(O::from(trade_candle.clone())).await;
+                                    // info!("agg trade candle {:?}", trade_candle);
+                                    let exchange = event.exchange.clone();
+                                    let symbol = event.symbol.clone();
+                                    let timestamp = trade.timestamp;
+
+                                    let item =
+                                        S::Item::from_trade_candle(&exchange, &symbol, period, timestamp, trade_candle);
+                                    let _ = tx.send(item).await;
                                 }
                                 guard.candle_count += 1;
                             }
