@@ -19,7 +19,7 @@ pub async fn start_data_event_flow() {
     // 启动聚合池
     let aggregator_pool = Arc::new(TradeAggregatorPool::new());
     let (output_tx, mut output_rx) = mpsc::channel::<BaseBar>(100);
-    aggregator_pool.start_workers(4, Arc::new(receiver), output_tx);
+    aggregator_pool.start_workers_bridge(4, Arc::new(receiver), output_tx, Arc::new(vec![Arc::from("1m")]));
 
     // Redis 发布器
     let redis_cache = get_redis_store().expect("get_redis_store failed");

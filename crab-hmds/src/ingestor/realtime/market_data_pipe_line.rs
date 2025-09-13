@@ -139,7 +139,7 @@ impl MarketDataPipeline {
                                         period_sec,
                                     );
 
-                                    let mut guard = aggregator.write().unwrap();
+                                    let mut guard = aggregator.write().await;
                                     guard.last_update = Instant::now();
                                      let trade_clone = trade.clone();
                                     let trade_obj: Trade = (&trade).into();
