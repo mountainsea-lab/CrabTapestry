@@ -92,28 +92,55 @@ where
     }
 
     /// 批量任务（按时间切片）
+    // pub async fn add_batch_tasks(
+    //     self: &Arc<Self>,
+    //     base_ctx: Arc<FetchContext>,
+    //     data_type: BackfillDataType,
+    //     step_millis: i64,
+    //     depends_on: Vec<usize>,
+    // ) -> Result<Vec<usize>> {
+    //     let mut ids = Vec::new();
+    //     let mut cur = base_ctx.range.start;
+    //
+    //     while cur < base_ctx.range.end {
+    //         let next = std::cmp::min(cur + step_millis, base_ctx.range.end);
+    //         let mut new_ctx = (*base_ctx).clone();
+    //         new_ctx.range = TimeRange { start: cur, end: next };
+    //
+    //         let id = self.add_task(Arc::new(new_ctx), data_type.clone(), depends_on.clone()).await;
+    //         ids.push(id);
+    //
+    //         cur = next;
+    //     }
+    //
+    //     Ok(ids)
+    // }
     pub async fn add_batch_tasks(
         self: &Arc<Self>,
         base_ctx: Arc<FetchContext>,
         data_type: BackfillDataType,
         step_millis: i64,
         depends_on: Vec<usize>,
-    ) -> Vec<usize> {
+    ) -> Result<Vec<usize>> {
         let mut ids = Vec::new();
+        let depends_on = Arc::new(depends_on); // clone 更轻量
         let mut cur = base_ctx.range.start;
 
         while cur < base_ctx.range.end {
             let next = std::cmp::min(cur + step_millis, base_ctx.range.end);
-            let mut new_ctx = (*base_ctx).clone();
-            new_ctx.range = TimeRange { start: cur, end: next };
 
-            let id = self.add_task(Arc::new(new_ctx), data_type.clone(), depends_on.clone()).await;
+            let new_ctx = Arc::new(FetchContext {
+                range: TimeRange { start: cur, end: next },
+                ..(*base_ctx).clone()
+            });
+
+            let id = self.add_task(new_ctx, data_type.clone(), (*depends_on).clone()).await;
+
             ids.push(id);
-
             cur = next;
         }
 
-        ids
+        Ok(ids)
     }
 
     /// 停止调度器
@@ -401,7 +428,7 @@ mod tests {
         let base_ctx = make_ctx("1h", 6); // 6 小时数据
         let task_ids = scheduler
             .add_batch_tasks(base_ctx, BackfillDataType::OHLCV, 2 * 60 * 60 * 1000, vec![]) // 每 2 小时切片
-            .await;
+            .await?;
 
         assert!(task_ids.len() >= 3, "batch task count >= 3");
 

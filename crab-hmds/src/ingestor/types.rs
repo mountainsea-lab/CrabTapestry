@@ -1,5 +1,5 @@
 use crate::ingestor::dedup::Deduplicatable;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use crab_infras::aggregator::AggregatorOutput;
 use crab_infras::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crab_types::TimeRange;
@@ -229,6 +229,27 @@ pub struct HistoricalBatch<T> {
     pub data: Vec<T>,             // TickRecord, TradeRecord, or OHLCVRecord
 }
 
+impl HistoricalSource {
+    pub fn with_defaults(exchange: &str) -> Self {
+        let batch_size = match exchange.to_lowercase().as_str() {
+            "BinanceFuturesUsd" => 1000,
+            "okx" => 500,
+            "bybit" => 1000,
+            _ => 500, // 默认保守一点
+        };
+
+        Self {
+            name: format!("{}_api", exchange),
+            exchange: exchange.to_string(),
+            last_success_ts: 0,
+            last_fetch_ts: 0,
+            batch_size,
+            supports_tick: true,
+            supports_trade: true,
+            supports_ohlcv: true,
+        }
+    }
+}
 impl FetchContext {
     pub fn new(source: HistoricalSource, exchange: &str, symbol: &str, period: Option<&str>, range: TimeRange) -> Self {
         Self {
@@ -272,6 +293,34 @@ impl FetchContext {
             period: period.map(|p| Arc::from(p)),
             range,
         })
+    }
+
+    /// 为指定交易对创建一个明确时间区间的 FetchContext
+    pub fn new_with_range(
+        exchange: &str,
+        symbol: &str,
+        period: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Self {
+        let source = HistoricalSource::with_defaults(exchange);
+
+        let range = TimeRange::new(start.timestamp_millis(), end.timestamp_millis());
+
+        Self {
+            source,
+            exchange: Arc::from(exchange),
+            symbol: Arc::from(symbol),
+            period: Some(Arc::from(period)),
+            range,
+        }
+    }
+
+    /// 简化版构造：为指定交易对创建 FetchContext，支持过去 N 小时
+    pub fn new_with_past_for_symbol(exchange: &str, symbol: &str, period: &str, past_hours: i64) -> Arc<Self> {
+        let source = HistoricalSource::with_defaults(exchange);
+
+        Self::new_with_past(source, exchange, symbol, Some(period), Some(past_hours), None)
     }
 }
 //==============HistoricalFetcher Base Model===
