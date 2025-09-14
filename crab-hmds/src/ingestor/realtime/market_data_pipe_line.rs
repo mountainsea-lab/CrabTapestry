@@ -87,6 +87,7 @@ impl MarketDataPipeline {
             let sub = Subscription {
                 exchange: exchange.clone(),
                 symbol: sym.clone(),
+                quote: Arc::from("usdt"),
                 periods: periods.clone(),
             };
             self.subscribed.insert(key.clone(), sub.clone());

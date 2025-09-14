@@ -299,6 +299,7 @@ impl FetchContext {
     pub fn new_with_range(
         exchange: &str,
         symbol: &str,
+        quote: &str,
         period: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
@@ -306,11 +307,12 @@ impl FetchContext {
         let source = HistoricalSource::with_defaults(exchange);
 
         let range = TimeRange::new(start.timestamp_millis(), end.timestamp_millis());
+        let full_symbol = format!("{}{}", symbol.to_uppercase(), quote.to_uppercase());
 
         Self {
             source,
             exchange: Arc::from(exchange),
-            symbol: Arc::from(symbol),
+            symbol: Arc::from(full_symbol),
             period: Some(Arc::from(period)),
             range,
         }

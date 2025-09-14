@@ -92,29 +92,6 @@ where
     }
 
     /// 批量任务（按时间切片）
-    // pub async fn add_batch_tasks(
-    //     self: &Arc<Self>,
-    //     base_ctx: Arc<FetchContext>,
-    //     data_type: BackfillDataType,
-    //     step_millis: i64,
-    //     depends_on: Vec<usize>,
-    // ) -> Result<Vec<usize>> {
-    //     let mut ids = Vec::new();
-    //     let mut cur = base_ctx.range.start;
-    //
-    //     while cur < base_ctx.range.end {
-    //         let next = std::cmp::min(cur + step_millis, base_ctx.range.end);
-    //         let mut new_ctx = (*base_ctx).clone();
-    //         new_ctx.range = TimeRange { start: cur, end: next };
-    //
-    //         let id = self.add_task(Arc::new(new_ctx), data_type.clone(), depends_on.clone()).await;
-    //         ids.push(id);
-    //
-    //         cur = next;
-    //     }
-    //
-    //     Ok(ids)
-    // }
     pub async fn add_batch_tasks(
         self: &Arc<Self>,
         base_ctx: Arc<FetchContext>,
@@ -521,21 +498,6 @@ mod tests {
         let mut rx1 = scheduler.subscribe();
         let mut rx2 = scheduler.subscribe();
 
-        //     let b1 = timeout(Duration::from_secs(10), rx1.recv()).await?;
-        //     let b2 = timeout(Duration::from_secs(10), rx2.recv()).await?;
-        //
-        //     // ✅ 解包 Option 并匹配
-        //     if let (Some(HistoricalBatchEnum::OHLCV(batch1)), Some(HistoricalBatchEnum::OHLCV(batch2))) = (b1, b2) {
-        //         println!(
-        //             "Subscriber1 got {} records, Subscriber2 got {} records",
-        //             batch1.data.len(),
-        //             batch2.data.len()
-        //         );
-        //         assert_eq!(batch1.data.len(), batch2.data.len());
-        //     } else {
-        //         panic!("Expected OHLCV batch for both subscribers");
-        //     }
-        //
         // 并行等待两个订阅者
 
         let (b1, b2) = join!(

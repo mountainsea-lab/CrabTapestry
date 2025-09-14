@@ -10,6 +10,7 @@ use ms_tracing::tracing_utils::internal::{error, info};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify, broadcast};
+
 //
 // pub struct HistoricalBackfillService<F>
 // where
@@ -558,6 +559,7 @@ where
     default_max_batch_hours: i64,
     max_retries: usize,
     job_queue: Arc<Mutex<BinaryHeap<BackfillJob<F>>>>,
+    notify: Arc<Notify>, // 新增字段，用于 worker 通知
 }
 
 impl<F> HistoricalBackfillService<F>
@@ -577,6 +579,7 @@ where
             default_max_batch_hours,
             max_retries,
             job_queue: Arc::new(Mutex::new(BinaryHeap::new())),
+            notify: Arc::new(Notify::new()), // 初始化 notify
         }
     }
 
@@ -721,49 +724,57 @@ where
     }
 
     /// Worker 循环（缺口优先 + 回溯补齐）支持优雅退出
+    // pub async fn worker_loop(&self, mut shutdown_rx: broadcast::Receiver<()>, notify: Arc<Notify>) {
+    //     loop {
+    //         // 先尝试拉取任务
+    //         let jobs = self.next_jobs(5).await;
+    //         info!("jobs: {:?}", jobs);
+    //         if !jobs.is_empty() {
+    //             // 批量执行
+    //             for job in jobs {
+    //                 self.execute_job_atomic(job).await;
+    //             }
+    //             continue; // 执行完立即继续取任务
+    //         }
+    //
+    //         // 队列空时，等待通知或关闭信号
+    //         tokio::select! {
+    //         _ = shutdown_rx.recv() => {
+    //             info!("Worker received shutdown signal, exiting");
+    //             break;
+    //         }
+    //         _ = notify.notified() => {
+    //             // 收到新任务通知，继续循环
+    //             continue;
+    //         }
+    //     }
+    //     }
+    // }
     pub async fn worker_loop(&self, mut shutdown_rx: broadcast::Receiver<()>, notify: Arc<Notify>) {
         loop {
-            // 优先尝试批量取任务
-            let jobs = self.next_jobs(5).await;
+            // 先尝试批量消费任务
+            loop {
+                let jobs = self.next_jobs(5).await;
 
-            if jobs.is_empty() {
-                tokio::select! {
-                    _ = shutdown_rx.recv() => {
-                        info!("Worker received shutdown signal, exiting");
-                        break;
-                    }
-                    _ = notify.notified() => {
-                        // 有新任务入队，继续循环取任务
-                        continue;
-                    }
-                    else => {
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                    }
+                if jobs.is_empty() {
+                    break;
                 }
-            } else {
                 for job in jobs {
                     self.execute_job_atomic(job).await;
                 }
             }
+
+            // 队列空了，等待新任务或 shutdown
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    info!("Worker received shutdown signal, exiting");
+                    break;
+                }
+                _ = notify.notified() => {
+                    // 新任务入队，继续下一轮消费
+                }
+            }
         }
-    }
-
-    /// 启动多个 worker 并返回 shutdown 通道
-    pub fn start_workers(self: Arc<Self>, worker_count: usize) -> (broadcast::Sender<()>, Arc<Notify>) {
-        let (shutdown_tx, _) = broadcast::channel::<()>(worker_count);
-        let notify = Arc::new(Notify::new());
-
-        for _ in 0..worker_count {
-            let svc = self.clone();
-            let shutdown_rx = shutdown_tx.subscribe();
-            let notify_clone = notify.clone();
-
-            tokio::spawn(async move {
-                svc.worker_loop(shutdown_rx, notify_clone).await;
-            });
-        }
-
-        (shutdown_tx, notify)
     }
 
     /// 调度任务到队列
@@ -785,7 +796,8 @@ where
             key,
             step_millis,
         };
-        self.enqueue_job(job).await;
+        // 使用 notify 通知 worker
+        self.enqueue_job_notify(job, &self.notify).await;
     }
 
     /// 初始化最近任务（优先缺口）
@@ -834,6 +846,7 @@ where
                     let ctx = Arc::new(FetchContext::new_with_range(
                         &sub.exchange,
                         &sub.symbol,
+                        &sub.quote,
                         period,
                         start_ts,
                         batch_end,
@@ -902,6 +915,7 @@ where
                         let ctx = Arc::new(FetchContext::new_with_range(
                             &sub.exchange,
                             &sub.symbol,
+                            &sub.quote,
                             period,
                             start_ts,
                             batch_end,
@@ -922,6 +936,7 @@ where
                     let ctx = Arc::new(FetchContext::new_with_range(
                         &sub.exchange,
                         &sub.symbol,
+                        &sub.quote,
                         period,
                         start,
                         oldest,
@@ -945,5 +960,52 @@ where
                 }
             }
         }
+    }
+
+    /// 启动多个 worker 并返回 shutdown 通道
+    pub fn start_workers(self: Arc<Self>, worker_count: usize) -> broadcast::Sender<()> {
+        let (shutdown_tx, _) = broadcast::channel::<()>(worker_count);
+
+        for _ in 0..worker_count {
+            let svc = self.clone();
+            let shutdown_rx = shutdown_tx.subscribe();
+
+            let notify_clone = svc.notify.clone(); // ✅ 使用 service 内部 notify
+
+            tokio::spawn(async move {
+                svc.worker_loop(shutdown_rx, notify_clone).await;
+            });
+        }
+
+        shutdown_tx
+    }
+
+    pub async fn loop_maintain_tasks(
+        &self,
+        subscriptions: &SubscriptionMap,
+        data_type: BackfillDataType,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) {
+        let maintain_interval = std::time::Duration::from_secs(60);
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    info!("Maintain loop received shutdown signal, exiting");
+                    break;
+                }
+                _ = tokio::time::sleep(maintain_interval) => {
+                    info!("Running maintain loop iteration...");
+
+                    // 1️⃣ 检查缺口并调度回溯任务
+                    self.backfill_historical(subscriptions, 60_000, data_type.clone(), 1).await;
+
+                    // 2️⃣ 最近数据维护（过去 2 小时）
+                    self.init_recent_tasks(subscriptions, 2, 60_000, data_type.clone()).await;
+                }
+            }
+        }
+
+        info!("Maintain loop stopped");
     }
 }

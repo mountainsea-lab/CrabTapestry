@@ -6,6 +6,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Deserialize)]
 pub struct SymbolConfig {
     pub name: String,
+    pub quote: String,                // 交易对，如 "USDT", "USDC"
     pub periods: Option<Vec<String>>, // 可以为空，使用默认周期
 }
 
@@ -26,6 +27,7 @@ pub struct SubscriptionsFile {
 pub struct Subscription {
     pub exchange: Arc<str>,
     pub symbol: Arc<str>,
+    pub quote: Arc<str>,        // 交易对，如 "USDT", "USDC"
     pub periods: Vec<Arc<str>>, // 多周期 ["1m","5m","1h"]
 }
 
@@ -49,6 +51,7 @@ impl SubscriptionConfig {
                 Subscription {
                     exchange: Arc::from(self.exchange.as_str()),
                     symbol: Arc::from(s.name.as_str()),
+                    quote: Arc::from(s.quote.as_str()),
                     periods,
                 }
             })
@@ -73,17 +76,26 @@ pub fn load_subscriptions_map(path: &str) -> anyhow::Result<Arc<DashMap<(String,
 
 impl Subscription {
     /// 创建单周期订阅
-    pub fn new(exchange: &str, symbol: &str, periods: &[&str]) -> Self {
+    pub fn new(exchange: &str, symbol: &str, quote: &str, periods: &[&str]) -> Self {
         Self {
             exchange: Arc::from(exchange),
             symbol: Arc::from(symbol),
+            quote: Arc::from(quote),
             periods: periods.iter().map(|p| Arc::from(*p)).collect(),
         }
     }
 
+    /// 返回完整交易对，统一大写，例如 "BTCUSDT"
+    pub fn full_symbol(&self) -> String {
+        format!("{}{}", self.symbol.to_uppercase(), self.quote.to_uppercase())
+    }
+
     /// 批量初始化 Vec
     pub fn batch_subscribe(exchange: &str, symbols: &[&str], periods: &[&str]) -> Vec<Subscription> {
-        symbols.iter().map(|sym| Subscription::new(exchange, sym, periods)).collect()
+        symbols
+            .iter()
+            .map(|sym| Subscription::new(exchange, sym, "usdt", periods))
+            .collect()
     }
 
     /// 批量初始化订阅，返回 Arc<DashMap>
