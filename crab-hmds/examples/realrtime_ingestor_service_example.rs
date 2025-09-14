@@ -1,4 +1,4 @@
-//! examples/ingestor_service_example.rs
+//! examples/realrtime_ingestor_service_example
 
 use crab_hmds::ingestor::ctrservice::control_service::IngestorService;
 use crab_hmds::ingestor::ctrservice::{ExchangeConfig, IngestorConfig};
