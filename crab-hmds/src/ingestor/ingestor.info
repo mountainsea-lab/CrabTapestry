@@ -164,7 +164,7 @@ impl IngestorService {
 
 LatestDataCache 保存最近 N 条最新数据，供下游策略快速访问
 
-run_data_writer 批量落盘 + flush_interval + notify downstream
+run_data_writer 批量落盘 + flush_interval + _notify downstream
 
 run_historical_backfill 定期回溯历史数据，保证数据完整性
 

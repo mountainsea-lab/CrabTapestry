@@ -289,17 +289,7 @@ use tokio::sync::{Mutex, Notify, broadcast};
 //     }
 // }
 //
-/// HistoricalBackfillService
-pub struct HistoricalBackfillService<F>
-where
-    F: HistoricalFetcherExt + 'static,
-{
-    scheduler: Arc<BaseBackfillScheduler<F>>,
-    db: Arc<dyn BackfillMetaStore>,
-    default_max_batch_hours: i64,
-    max_retries: usize,
-    job_queue: Arc<Mutex<BinaryHeap<BackfillJob<F>>>>,
-}
+
 //
 // impl<F> HistoricalBackfillService<F>
 // where
@@ -558,10 +548,38 @@ where
 //     }
 // }
 
+/// HistoricalBackfillService
+pub struct HistoricalBackfillService<F>
+where
+    F: HistoricalFetcherExt + 'static,
+{
+    scheduler: Arc<BaseBackfillScheduler<F>>,
+    db: Arc<dyn BackfillMetaStore>,
+    default_max_batch_hours: i64,
+    max_retries: usize,
+    job_queue: Arc<Mutex<BinaryHeap<BackfillJob<F>>>>,
+}
+
 impl<F> HistoricalBackfillService<F>
 where
     F: HistoricalFetcherExt + 'static,
 {
+    /// 构造函数
+    pub fn new(
+        scheduler: Arc<BaseBackfillScheduler<F>>,
+        db: Arc<dyn BackfillMetaStore>,
+        default_max_batch_hours: i64,
+        max_retries: usize,
+    ) -> Self {
+        Self {
+            scheduler,
+            db,
+            default_max_batch_hours,
+            max_retries,
+            job_queue: Arc::new(Mutex::new(BinaryHeap::new())),
+        }
+    }
+
     fn market_key(exchange: &str, symbol: &str, period: &str) -> MarketKey {
         MarketKey {
             exchange: exchange.to_string(),
