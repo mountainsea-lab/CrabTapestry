@@ -72,23 +72,6 @@ where
         *ranges = merged;
     }
 
-    // fn compute_batch_hours(&self, source: &HistoricalSource, period_str: &str) -> i64 {
-    //     let default_hours = self.default_max_batch_hours;
-    //     let period_ms = match period_str {
-    //         "1m" => 60_000,
-    //         "5m" => 5 * 60_000,
-    //         "15m" => 15 * 60_000,
-    //         "30m" => 30 * 60_000,
-    //         "1h" => 60 * 60_000,
-    //         "4h" => 4 * 60 * 60_000,
-    //         "1d" => 24 * 60 * 60_000,
-    //         _ => 60_000,
-    //     };
-    //     let max_batch_millis = source.batch_size as i64 * period_ms;
-    //     let max_batch_hours = max_batch_millis / (60 * 60 * 1000);
-    //     std::cmp::max(1, std::cmp::min(default_hours, max_batch_hours))
-    // }
-
     /// 计算单次批量查询的最大跨度
     fn compute_batch_span(&self, source: &HistoricalSource, period: &Arc<str>) -> Duration {
         // Arc<str> → &str
@@ -264,72 +247,6 @@ where
     }
 
     /// 初始化最近任务（优先缺口）
-    // pub async fn init_recent_tasks(
-    //     &self,
-    //     subscriptions: &SubscriptionMap,
-    //     past_hours: i64,
-    //     step_millis: i64,
-    //     data_type: BackfillDataType,
-    // ) {
-    //     for entry in subscriptions.iter() {
-    //         let (_key, sub) = entry.pair();
-    //         for period in &sub.periods {
-    //             let key = Self::market_key(&sub.exchange, &sub.symbol, period);
-    //
-    //             let last_filled = self
-    //                 .db
-    //                 .get_meta(&key)
-    //                 .await
-    //                 .ok()
-    //                 .flatten()
-    //                 .and_then(|meta| meta.last_filled)
-    //                 .unwrap_or_else(|| Utc::now() - Duration::hours(past_hours));
-    //
-    //             let end_ts = Utc::now();
-    //             let mut start_ts = last_filled;
-    //
-    //             // 批量构建任务
-    //             while start_ts < end_ts {
-    //                 let batch_hours = self.compute_batch_span(
-    //                     &HistoricalSource {
-    //                         name: "".to_string(),
-    //                         exchange: sub.exchange.to_string(),
-    //                         last_success_ts: 0,
-    //                         last_fetch_ts: 0,
-    //                         batch_size: 500,
-    //                         supports_tick: true,
-    //                         supports_trade: true,
-    //                         supports_ohlcv: true,
-    //                     },
-    //                     period,
-    //                 );
-    //
-    //                 let batch_end = std::cmp::min(start_ts + Duration::hours(batch_hours), end_ts);
-    //
-    //                 let ctx = Arc::new(FetchContext::new_with_range(
-    //                     &sub.exchange,
-    //                     &sub.symbol,
-    //                     &sub.quote,
-    //                     period,
-    //                     start_ts,
-    //                     batch_end,
-    //                 ));
-    //
-    //                 self.schedule_backfill(
-    //                     ctx,
-    //                     data_type.clone(),
-    //                     key.clone(),
-    //                     BackfillPriority::Lookback,
-    //                     step_millis,
-    //                 )
-    //                 .await;
-    //
-    //                 start_ts = batch_end;
-    //             }
-    //         }
-    //     }
-    // }
-    /// 初始化最近任务（优先缺口）
     pub async fn init_recent_tasks(
         &self,
         subscriptions: &SubscriptionMap,
@@ -404,101 +321,6 @@ where
             }
         }
     }
-
-    /// 后台回溯历史数据，缺口优先，原子更新
-    // pub async fn backfill_historical(
-    //     &self,
-    //     subscriptions: &SubscriptionMap,
-    //     step_millis: i64,
-    //     data_type: BackfillDataType,
-    //     lookback_days: i64,
-    // ) {
-    //     let now = Utc::now();
-    //     let oldest_allowed = now - Duration::days(lookback_days);
-    //
-    //     for entry in subscriptions.iter() {
-    //         let (_key, sub) = entry.pair();
-    //         for period in &sub.periods {
-    //             let key = Self::market_key(&sub.exchange, &sub.symbol, period);
-    //
-    //             let mut meta = self.db.get_meta(&key).await.unwrap_or(None).unwrap_or(BackfillMeta {
-    //                 last_filled: None,
-    //                 last_checked: None,
-    //                 missing_ranges: vec![],
-    //             });
-    //
-    //             Self::merge_ranges(&mut meta.missing_ranges);
-    //
-    //             // 1️⃣ 缺口任务
-    //             for gap in meta.missing_ranges.iter() {
-    //                 let mut start_ts = gap.0;
-    //                 let end_ts = gap.1;
-    //                 while start_ts < end_ts {
-    //                     let batch_hours = self.compute_batch_hours(
-    //                         &HistoricalSource {
-    //                             name: "".to_string(),
-    //                             exchange: sub.exchange.to_string(),
-    //                             last_success_ts: 0,
-    //                             last_fetch_ts: 0,
-    //                             batch_size: 500,
-    //                             supports_tick: true,
-    //                             supports_trade: true,
-    //                             supports_ohlcv: true,
-    //                         },
-    //                         period,
-    //                     );
-    //
-    //                     let batch_end = std::cmp::min(start_ts + Duration::hours(batch_hours), end_ts);
-    //
-    //                     let ctx = Arc::new(FetchContext::new_with_range(
-    //                         &sub.exchange,
-    //                         &sub.symbol,
-    //                         &sub.quote,
-    //                         period,
-    //                         start_ts,
-    //                         batch_end,
-    //                     ));
-    //
-    //                     self.schedule_backfill(ctx, data_type.clone(), key.clone(), BackfillPriority::Gap, step_millis)
-    //                         .await;
-    //
-    //                     start_ts = batch_end;
-    //                 }
-    //             }
-    //
-    //             // 2️⃣ 回溯任务
-    //             let mut oldest = meta.last_filled.unwrap_or(now);
-    //             while oldest > oldest_allowed {
-    //                 let start = std::cmp::max(oldest - Duration::days(1), oldest_allowed);
-    //
-    //                 let ctx = Arc::new(FetchContext::new_with_range(
-    //                     &sub.exchange,
-    //                     &sub.symbol,
-    //                     &sub.quote,
-    //                     period,
-    //                     start,
-    //                     oldest,
-    //                 ));
-    //
-    //                 self.schedule_backfill(
-    //                     ctx,
-    //                     data_type.clone(),
-    //                     key.clone(),
-    //                     BackfillPriority::Lookback,
-    //                     step_millis,
-    //                 )
-    //                 .await;
-    //
-    //                 oldest = start;
-    //             }
-    //
-    //             // 3️⃣ 更新 last_checked
-    //             if let Err(e) = self.db.update_last_checked(&key, now).await {
-    //                 error!("Failed to update last_checked: {:?}", e);
-    //             }
-    //         }
-    //     }
-    // }
 
     /// 后台回溯历史数据，缺口优先，原子更新
     pub async fn backfill_historical(

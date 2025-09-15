@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use crab_infras::config::sub_config::Subscription;
 
 pub mod control_service;
 
@@ -12,34 +13,14 @@ pub enum ServiceState {
 }
 
 /// 控制消息用于统一管理子服务的启动/停止/错误传播。
-#[derive(Debug)]
 pub enum ControlMsg {
-    SubscribeMany {
-        exchange: Arc<str>,
-        symbols: Vec<Arc<str>>,
-        periods: Vec<Arc<str>>,
-    },
-    UnsubscribeMany {
-        exchange: Arc<str>,
-        symbols: Vec<Arc<str>>,
-    },
-    HealthCheck,
     Start,
     Stop,
-}
-/// 单个交易所的订阅配置
-#[derive(Debug, Clone)]
-pub struct ExchangeConfig {
-    pub exchange: String,     // 交易所
-    pub symbols: Vec<String>, // 币种列表，例如 ["BTC/USDT", "ETH/USDT"]
-    pub periods: Vec<String>, // 公共周期 ["1m", "5m", "1h"]
+    HealthCheck,
+    AddSubscriptions(Vec<Subscription>),
+    RemoveSubscriptions(Vec<(Arc<str>, Arc<str>)>), // exchange, symbol
 }
 
-/// Ingestor 初始化配置
-#[derive(Debug, Clone)]
-pub struct IngestorConfig {
-    pub exchanges: Vec<ExchangeConfig>,
-}
 
 /// 内部消息，用于任务错误或信息上报
 #[derive(Debug)]
