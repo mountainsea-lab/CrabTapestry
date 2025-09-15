@@ -186,32 +186,6 @@ where
     }
 
     /// Worker 循环（缺口优先 + 回溯补齐）支持优雅退出
-    // pub async fn worker_loop(&self, mut shutdown_rx: broadcast::Receiver<()>, notify: Arc<Notify>) {
-    //     loop {
-    //         // 先尝试拉取任务
-    //         let jobs = self.next_jobs(5).await;
-    //         info!("jobs: {:?}", jobs);
-    //         if !jobs.is_empty() {
-    //             // 批量执行
-    //             for job in jobs {
-    //                 self.execute_job_atomic(job).await;
-    //             }
-    //             continue; // 执行完立即继续取任务
-    //         }
-    //
-    //         // 队列空时，等待通知或关闭信号
-    //         tokio::select! {
-    //         _ = shutdown_rx.recv() => {
-    //             info!("Worker received shutdown signal, exiting");
-    //             break;
-    //         }
-    //         _ = notify.notified() => {
-    //             // 收到新任务通知，继续循环
-    //             continue;
-    //         }
-    //     }
-    //     }
-    // }
     pub async fn worker_loop(&self, mut shutdown_rx: broadcast::Receiver<()>, notify: Arc<Notify>) {
         loop {
             // 先尝试批量消费任务
