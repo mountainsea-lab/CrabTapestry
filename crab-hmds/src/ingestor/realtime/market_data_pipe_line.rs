@@ -46,7 +46,6 @@ impl MarketDataPipeline {
     }
 
     /// 批量订阅多个 symbol
-    /// 批量订阅多个 symbol
     pub async fn subscribe_many(
         &self,
         exchange: Arc<str>,

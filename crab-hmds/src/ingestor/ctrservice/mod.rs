@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use crab_infras::config::sub_config::Subscription;
+use std::sync::Arc;
 
 pub mod control_service;
 
@@ -20,7 +20,6 @@ pub enum ControlMsg {
     AddSubscriptions(Vec<Subscription>),
     RemoveSubscriptions(Vec<(Arc<str>, Arc<str>)>), // exchange, symbol
 }
-
 
 /// 内部消息，用于任务错误或信息上报
 #[derive(Debug)]

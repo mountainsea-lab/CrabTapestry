@@ -1,22 +1,22 @@
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{
-    BufferStats, ControlMsg, DedupStats, IngestorHealth, InternalMsg, MarketDataType, ServiceParams,
-    ServiceState,
+    BufferStats, ControlMsg, DedupStats, IngestorHealth, InternalMsg, MarketDataType, ServiceParams, ServiceState,
 };
 use crate::ingestor::dedup::Deduplicatable;
 use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::realtime::market_data_pipe_line::MarketDataPipeline;
-use crate::ingestor::scheduler::HistoricalBatchEnum;
 use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
+use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
+use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
+use crab_infras::config::sub_config::{Subscription, SubscriptionMap, load_subscriptions_map};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Notify, RwLock, broadcast, mpsc};
 use tokio::task::JoinHandle;
-use crab_infras::config::sub_config::{load_subscriptions_map, Subscription, SubscriptionMap};
-use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 
 /// IngestorService 核心结构
 pub struct IngestorService<F>
@@ -70,12 +70,10 @@ where
         pipeline: Arc<MarketDataPipeline>,
         shutdown: Arc<Notify>,
     ) -> Self {
-
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml")
-            .unwrap_or_else(|err| {
-                warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-                Arc::new(Default::default())
-            });
+        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
+            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
+            Arc::new(Default::default())
+        });
         let (control_tx, control_rx) = mpsc::channel(1024);
         let (internal_tx, internal_rx) = mpsc::channel(64);
 
@@ -114,12 +112,10 @@ where
         shutdown: Arc<Notify>,
         params: ServiceParams,
     ) -> Self {
-
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml")
-            .unwrap_or_else(|err| {
-                warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-                Arc::new(Default::default())
-            });
+        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
+            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
+            Arc::new(Default::default())
+        });
 
         let (control_tx, control_rx) = mpsc::channel(params.control_channel_size);
         let (internal_tx, internal_rx) = mpsc::channel(params.internal_channel_size);
@@ -175,6 +171,24 @@ where
         service
     }
 
+    /// 总入口启动所有任务
+    pub async fn start(self: Arc<Self>) {
+        // 启动 error 监控
+        let err_handle = self.spawn_error_monitor_task();
+        self.handles.write().await.push(err_handle);
+
+        // 启动控制任务
+        let ctrl_handle = self.clone().spawn_control_task();
+        self.handles.write().await.push(ctrl_handle);
+
+        // 启动消费者任务
+        for h in self.clone().spawn_consumer_tasks() {
+            self.handles.write().await.push(h);
+        }
+
+        *self.state.write().await = ServiceState::Running;
+    }
+
     /// 停止服务（graceful shutdown）
     pub async fn stop(self: &Arc<Self>) {
         self.shutdown.notify_waiters();
@@ -193,14 +207,112 @@ where
             let mut rx = self.control_rx.write().await;
             while let Some(msg) = rx.recv().await {
                 match msg {
-                    ControlMsg::Start => { /* 启动 worker/backfill */ },
-                    ControlMsg::Stop => { self.shutdown.notify_waiters(); break; },
-                    ControlMsg::HealthCheck => { /* todo */ },
+                    ControlMsg::Start => {
+                        // ✅ 启动 Realtime + Backfill 服务
+                        self.start_market_data_pipeline().await;
+                        self.start_historical_backfill_service().await;
+                    }
+                    ControlMsg::Stop => {
+                        self.shutdown.notify_waiters();
+                        break;
+                    }
+                    ControlMsg::HealthCheck => { /* todo */ }
                     ControlMsg::AddSubscriptions(subs) => self.add_subscriptions(subs).await,
                     ControlMsg::RemoveSubscriptions(keys) => self.remove_subscriptions(keys).await,
                 }
             }
         })
+    }
+
+    /// 启动实时数据 MarketDataPipeline 服务
+    ///
+    /// - 建立与交易所的实时订阅（ws 或 api stream）
+    /// - 将消息推送到内部 realtime channel
+    /// - 异常时发送 InternalMsg::Error
+    async fn start_market_data_pipeline(&self) {
+        let pipeline = self.pipeline.clone();
+        let internal_tx = self.internal_tx.clone();
+        let subscriptions = self.subscriptions.clone();
+
+        // 按交易所分组
+        let mut exch_map: HashMap<String, Vec<Arc<str>>> = HashMap::new();
+        let mut periods_map: HashMap<String, Vec<Arc<str>>> = HashMap::new();
+
+        for entry in subscriptions.iter() {
+            let ((exch, _sym), sub) = entry.pair();
+            exch_map.entry(exch.clone()).or_default().push(sub.symbol.clone());
+            periods_map.entry(exch.clone()).or_insert_with(|| sub.periods.clone());
+        }
+
+        for (exchange, symbols) in exch_map {
+            let periods = periods_map.get(&exchange).cloned().unwrap_or_else(|| vec![Arc::from("1m")]); // 默认周期 1m
+
+            if let Err(e) = pipeline.subscribe_many(Arc::from(exchange.as_str()), symbols, periods).await {
+                let _ = internal_tx
+                    .send(InternalMsg::Error(format!("SubscribeMany error: {}", e)))
+                    .await;
+            }
+        }
+    }
+
+    /// 启动历史数据 HistoricalBackfillService 服务
+    ///
+    /// - 异常时发送 InternalMsg::Error
+    async fn start_historical_backfill_service(&self) {
+        let service = self.backfill.clone();
+        let subscriptions = self.subscriptions.clone();
+        let shutdown = self.shutdown.clone();
+
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = shutdown.notified() => {
+                    info!("BackfillService received shutdown, stopping");
+                }
+                _ = service.loop_maintain_tasks_notify(&subscriptions, BackfillDataType::OHLCV, shutdown) => {}
+            }
+        });
+    }
+
+    /// 数据消费总控：统一启动 Realtime / Backfill / BufferConsumer 三个任务
+    pub fn spawn_consumer_tasks(self: Arc<Self>) -> Vec<JoinHandle<()>> {
+        let mut handles = Vec::new();
+
+        // 启动实时数据消费
+        handles.push(self.clone().spawn_realtime_task());
+
+        // 启动历史数据消费
+        handles.push(self.clone().spawn_backfill_task());
+
+        // 启动 Buffer 消费（落库 / 指标计算）
+        handles.push(self.clone().spawn_buffer_consumer_task());
+
+        handles
+    }
+
+    /// 启动实时数据消费任务
+    pub fn spawn_realtime_task(self: Arc<Self>) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            // TODO: 实现 Realtime 消费逻辑
+        })
+    }
+
+    /// 启动历史数据消费任务
+    pub fn spawn_backfill_task(self: Arc<Self>) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            // TODO: 实现 Backfill 消费逻辑
+        })
+    }
+
+    /// 启动 Buffer 消费任务（落库 / 指标计算）
+    pub fn spawn_buffer_consumer_task(self: Arc<Self>) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            // TODO: 实现 Buffer Consumer 消费逻辑
+        })
+    }
+
+    /// 初始化订阅配置
+    pub async fn initialize_subscriptions(self: &Arc<Self>, subscriptions: &SubscriptionMap) {
+        todo!()
     }
 
     /// 动态新增订阅
@@ -220,38 +332,6 @@ where
         }
         self.backfill.notify.notify_waiters();
     }
-
-    /// 启动实时订阅 task
-    pub fn spawn_realtime_task(self: Arc<Self>) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            loop {
-                // todo: 遍历 subscriptions，拉取实时数据
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-    }
-
-    /// 启动历史回溯 task
-    pub fn spawn_backfill_task(self: Arc<Self>) -> JoinHandle<()> {
-        let svc = self.clone();
-        tokio::spawn(async move {
-            loop {
-                svc.backfill.start_workers(4).await;
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            }
-        })
-    }
-
-    /// 启动数据落库任务（处理缓冲区）
-    pub fn spawn_buffer_task(self: Arc<Self>) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            loop {
-                // todo: flush buffer -> DB
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        })
-    }
-
 
     /// 错误监听任务，随服务启动
     fn spawn_error_monitor_task(self: &Arc<Self>) -> JoinHandle<()> {

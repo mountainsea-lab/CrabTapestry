@@ -1,8 +1,8 @@
 use crate::ingestor::historical::HistoricalFetcherExt;
-use crate::ingestor::scheduler::BackfillDataType;
 use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crate::ingestor::scheduler::service::back_fill_job::{BackfillJob, BackfillPriority};
 use crate::ingestor::scheduler::service::{BackfillMeta, BackfillMetaStore, MarketKey};
+use crate::ingestor::scheduler::{BackfillDataType, OutputSubscriber};
 use crate::ingestor::types::{FetchContext, HistoricalSource};
 use chrono::{DateTime, Duration, MappedLocalTime, TimeZone, Utc};
 use crab_infras::config::sub_config::SubscriptionMap;
@@ -486,5 +486,39 @@ where
         }
 
         info!("Maintain loop stopped");
+    }
+
+    pub async fn loop_maintain_tasks_notify(
+        &self,
+        subscriptions: &SubscriptionMap,
+        data_type: BackfillDataType,
+        shutdown: Arc<Notify>, // ✅ 替换 broadcast
+    ) {
+        let maintain_interval = std::time::Duration::from_secs(60);
+
+        loop {
+            tokio::select! {
+                _ = shutdown.notified() => {
+                    info!("Maintain loop received shutdown signal, exiting");
+                    break;
+                }
+                _ = tokio::time::sleep(maintain_interval) => {
+                    info!("Running maintain loop iteration...");
+
+                    // 1️⃣ 检查缺口并调度回溯任务
+                    self.backfill_historical(subscriptions, data_type.clone(), 1).await;
+
+                    // 2️⃣ 最近数据维护（过去 2 小时）
+                    self.init_recent_tasks(subscriptions, 2, data_type.clone()).await;
+                }
+            }
+        }
+
+        info!("Maintain loop stopped");
+    }
+
+    /// 转发订阅数据
+    pub fn subscribe(&self) -> OutputSubscriber {
+        self.scheduler.subscribe()
     }
 }
