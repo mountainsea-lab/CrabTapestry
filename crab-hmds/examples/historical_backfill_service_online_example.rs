@@ -87,14 +87,10 @@ async fn main() -> Result<()> {
     // 5️⃣ 初始化任务
     // -------------------------------
     // 最近数据（过去 2 小时）
-    service
-        .init_recent_tasks(&subscriptions, 2, 60_000, BackfillDataType::OHLCV)
-        .await;
+    service.init_recent_tasks(&subscriptions, 2, BackfillDataType::OHLCV).await;
 
     // 历史回溯（过去 1 天）
-    service
-        .backfill_historical(&subscriptions, 60_000, BackfillDataType::OHLCV, 1)
-        .await;
+    service.backfill_historical(&subscriptions, BackfillDataType::OHLCV, 1).await;
 
     // -------------------------------
     // 6️⃣ 启动后台维护任务

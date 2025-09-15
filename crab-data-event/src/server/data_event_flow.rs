@@ -15,10 +15,10 @@ use tokio::sync::mpsc::Sender;
 pub async fn start_data_event_flow() {
     // 订阅配置信息
     let subs = vec![
-        Subscription::new("BinanceFuturesUsd", "btc", &["1m"]),
-        Subscription::new("BinanceFuturesUsd", "eth", &["1m"]),
-        Subscription::new("BinanceFuturesUsd", "sol", &["1m"]),
-        Subscription::new("BinanceFuturesUsd", "xrp", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "btc", "usdt", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "eth", "usdt", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "sol", "usdt", &["1m"]),
+        Subscription::new("BinanceFuturesUsd", "xrp", "usdt", &["1m"]),
     ];
     let subscribed: Arc<DashMap<(String, String), Subscription>> = Subscription::init_subscriptions(subs);
 
