@@ -97,13 +97,12 @@ async fn main() -> Result<()> {
     // -------------------------------
     // 6️⃣ 启动后台维护任务
     // -------------------------------
-    // 克隆一个接收器给 maintain loop
-    let shutdown_rx = shutdown_tx.subscribe();
+
     let subscriptions_clone = subscriptions.clone();
 
     let svc = service.clone();
     tokio::spawn(async move {
-        svc.loop_maintain_tasks(&subscriptions_clone, BackfillDataType::OHLCV, shutdown_rx)
+        svc.loop_maintain_tasks_notify(&subscriptions_clone, BackfillDataType::OHLCV, &shutdown)
             .await;
     });
 
@@ -113,7 +112,6 @@ async fn main() -> Result<()> {
     info!("Service running. Press Ctrl+C to stop...");
     tokio::signal::ctrl_c().await?;
     info!("Shutdown signal received, stopping service...");
-    let _ = shutdown_tx.send(());
 
     // -------------------------------
     // 8️⃣ 输出最终 meta
