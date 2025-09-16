@@ -214,6 +214,43 @@ where
         }
     }
 
+    /// 批量去重，支持 Arc<T>
+    pub fn deduplicate_arc(&self, records: Vec<Arc<T>>, mode: DedupMode) -> Vec<Arc<T>> {
+        match mode {
+            DedupMode::Historical => {
+                let keys: Vec<_> = records.iter().map(|r| r.unique_key()).collect();
+                let results = self.historical.bulk_insert(&keys);
+                records
+                    .into_iter()
+                    .zip(results)
+                    .filter_map(|(r, ok)| if ok { Some(r) } else { None })
+                    .collect()
+            }
+            DedupMode::Realtime => {
+                let keys_ts: Vec<_> = records.iter().map(|r| (r.unique_key(), r.timestamp())).collect();
+                let results = self.realtime.bulk_insert(&keys_ts);
+                records
+                    .into_iter()
+                    .zip(results)
+                    .filter_map(|(r, ok)| if ok { Some(r) } else { None })
+                    .collect()
+            }
+            DedupMode::Unified => {
+                let keys: Vec<_> = records.iter().map(|r| r.unique_key()).collect();
+                let keys_ts: Vec<_> = records.iter().map(|r| (r.unique_key(), r.timestamp())).collect();
+
+                let results_hist = self.historical.bulk_insert(&keys);
+                let results_realtime = self.realtime.bulk_insert(&keys_ts);
+
+                records
+                    .into_iter()
+                    .zip(results_hist.into_iter().zip(results_realtime))
+                    .filter_map(|(r, (h, rt))| if h || rt { Some(r) } else { None })
+                    .collect()
+            }
+        }
+    }
+
     /// 流式去重
     /// Deduplicate streaming data
     pub fn deduplicate_stream<S>(self: Arc<Self>, stream: S, mode: DedupMode) -> BoxStream<'static, T>

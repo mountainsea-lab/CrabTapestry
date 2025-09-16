@@ -10,6 +10,7 @@ use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfill
 use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
+use crate::load_subscriptions_config;
 use crab_infras::config::sub_config::{Subscription, SubscriptionMap, load_subscriptions_map};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Notify, RwLock, broadcast, mpsc};
 use tokio::task::JoinHandle;
+use tokio::time::interval;
 
 /// IngestorService 核心结构
 pub struct IngestorService<F>
@@ -281,7 +283,7 @@ where
         handles.push(self.clone().spawn_realtime_task());
 
         // 启动历史数据消费
-        handles.push(self.clone().spawn_backfill_task());
+        handles.push(self.clone().spawn_backfill_task(10, 20));
 
         // 启动 Buffer 消费（落库 / 指标计算）
         handles.push(self.clone().spawn_buffer_consumer_task());
@@ -289,30 +291,200 @@ where
         handles
     }
 
-    /// 启动实时数据消费任务
+    /// 启动实时数据消费任务（逐条直通，无 dedup）
     pub fn spawn_realtime_task(self: Arc<Self>) -> JoinHandle<()> {
         tokio::spawn(async move {
-            // TODO: 实现 Realtime 消费逻辑
+            let mut rx = self.pipeline.subscribe_receiver();
+
+            loop {
+                tokio::select! {
+                    _ = self.shutdown.notified() => {
+                        info!("Realtime OHLCV ingestion shutdown");
+                        break;
+                    }
+
+                    maybe_bar = rx.recv() => {
+                        match maybe_bar {
+                            Ok(bar) => {
+                                // 直接入 buffer，不去重，低延迟
+                                if let Err(e) = self.buffer_ohlcv.push(bar).await {
+                                    let _ = self.internal_tx.send(
+                                        InternalMsg::Error(format!("Realtime buffer push failed: {}", e))
+                                    ).await;
+                                }
+                            }
+                            Err(broadcast::error::RecvError::Closed) => break,
+                            Err(broadcast::error::RecvError::Lagged(n)) => {
+                                warn!("Realtime pipeline lagged, skipped {} messages", n);
+                            }
+                        }
+                    }
+                }
+            }
+
+            info!("Realtime OHLCV ingestion stopped");
         })
     }
 
     /// 启动历史数据消费任务
-    pub fn spawn_backfill_task(self: Arc<Self>) -> JoinHandle<()> {
+    pub fn spawn_backfill_task(self: Arc<Self>, timeout_secs: u64, log_interval: usize) -> JoinHandle<()> {
         tokio::spawn(async move {
-            // TODO: 实现 Backfill 消费逻辑
+            let mut rx = self.backfill.subscribe();
+            info!("Backfill task started");
+            let mut timeout_counter = 0;
+
+            loop {
+                tokio::select! {
+                    _ = self.shutdown.notified() => {
+                        info!("Backfill task shutdown triggered");
+                        break;
+                    }
+
+                    maybe_batch = rx.recv_timeout(Duration::from_secs(timeout_secs)) => {
+                        match maybe_batch {
+                            Some(batch) => {
+                                timeout_counter = 0;
+                                // 直接入 buffer，无去重，批量推送
+                                match batch {
+                                    HistoricalBatchEnum::OHLCV(hb) => {
+                                        if !hb.data.is_empty() {
+                                            if let Err(e) = self.buffer_ohlcv.push_batch(hb.data).await {
+                                                let _ = self.internal_tx.send(
+                                                    InternalMsg::Error(format!("Backfill OHLCV push failed: {}", e))
+                                                ).await;
+                                            }
+                                        }
+                                    }
+                                    HistoricalBatchEnum::Tick(hb) => {
+                                        if !hb.data.is_empty() {
+                                            if let Err(e) = self.buffer_tick.push_batch(hb.data).await {
+                                                let _ = self.internal_tx.send(
+                                                    InternalMsg::Error(format!("Backfill Tick push failed: {}", e))
+                                                ).await;
+                                            }
+                                        }
+                                    }
+                                    HistoricalBatchEnum::Trade(hb) => {
+                                        if !hb.data.is_empty() {
+                                            if let Err(e) = self.buffer_trade.push_batch(hb.data).await {
+                                                let _ = self.internal_tx.send(
+                                                    InternalMsg::Error(format!("Backfill Trade push failed: {}", e))
+                                                ).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            None => {
+                                timeout_counter += 1;
+                                if timeout_counter % log_interval == 0 {
+                                    debug!("Backfill recv_timeout {}s reached {} times", timeout_secs, timeout_counter);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            info!("Backfill task stopped");
         })
     }
 
-    /// 启动 Buffer 消费任务（落库 / 指标计算）
+    /// 启动 Buffer Consumer 任务（落库 + 指标计算）
     pub fn spawn_buffer_consumer_task(self: Arc<Self>) -> JoinHandle<()> {
         tokio::spawn(async move {
-            // TODO: 实现 Buffer Consumer 消费逻辑
+            info!("Buffer Consumer task started");
+
+            const BATCH_SIZE: usize = 100; // 批量大小
+            const FLUSH_INTERVAL: Duration = Duration::from_millis(500); // 时间窗口
+
+            let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
+
+            loop {
+                tokio::select! {
+                    // 关闭信号
+                    _ = self.shutdown.notified() => {
+                        info!("Buffer Consumer shutdown triggered");
+
+                        // flush 剩余数据
+                        let batch = self.buffer_ohlcv.pop_batch().await;
+                        if !batch.is_empty() {
+                            if let Err(e) = self.handle_batch(batch).await {
+                                error!("Final flush failed: {}", e);
+                            }
+                        }
+                        break;
+                    }
+
+                    // 时间窗口 flush
+                    _ = ticker.tick() => {
+                        let batch = self.buffer_ohlcv.pop_batch().await;
+                        if !batch.is_empty() {
+                            if let Err(e) = self.handle_batch(batch).await {
+                                error!("Timed flush failed: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+
+            info!("Buffer Consumer task stopped");
         })
     }
 
-    /// 初始化订阅配置
-    pub async fn initialize_subscriptions(self: &Arc<Self>, subscriptions: &SubscriptionMap) {
-        todo!()
+    /// 批量处理函数：去重 + 落库 + 指标计算
+    async fn handle_batch(&self, batch: Vec<Arc<OHLCVRecord>>) -> anyhow::Result<()> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        // 去重，deduplicate 需要改成支持 Arc<T>
+        let deduped = self.dedup_ohlcv.deduplicate_arc(batch, DedupMode::Unified);
+        if deduped.is_empty() {
+            return Ok(());
+        }
+
+        info!("deduped {} OHLCV records", deduped.len());
+
+        // TODO: MySQL 批量插入 可直接用 Arc 引用，避免 clone
+        let _params: Vec<_> = deduped
+            .iter()
+            .map(|r| {
+                let r = r.as_ref();
+                (
+                    r.symbol.clone(),
+                    r.timestamp(),
+                    r.open,
+                    r.high,
+                    r.low,
+                    r.close,
+                    r.volume,
+                )
+            })
+            .collect();
+
+        Ok(())
+    }
+
+    /// 异步初始化订阅配置（仅加载到服务状态，不启动任务）
+    pub async fn initialize_subscriptions(self: &Arc<Self>) {
+        match load_subscriptions_config() {
+            Ok(subscriptions) => {
+                info!("Loaded {} subscriptions", subscriptions.len());
+
+                // 清空并批量插入
+                self.subscriptions.clear();
+                // 遍历并克隆元素插入 DashMap
+                for r in subscriptions.iter() {
+                    let key = r.key().clone();
+                    let sub = r.value().clone();
+                    self.subscriptions.insert(key, sub);
+                }
+
+                self.notify_subscriptions_changed().await;
+            }
+            Err(e) => error!("Failed to load subscriptions: {}", e),
+        }
     }
 
     /// 动态新增订阅
@@ -321,16 +493,16 @@ where
             let key = (sub.exchange.to_string(), sub.symbol.to_string());
             self.subscriptions.insert(key, sub);
         }
-        self.notify.notify_waiters();
+        self.notify_subscriptions_changed().await;
     }
 
     /// 动态移除订阅
     pub async fn remove_subscriptions(&self, keys: Vec<(Arc<str>, Arc<str>)>) {
-        for (exch, sym) in keys {
-            let key = (exch.to_string(), sym.to_string());
+        for key in keys {
+            let key = (key.0.to_string(), key.1.to_string());
             self.subscriptions.remove(&key);
         }
-        self.backfill.notify.notify_waiters();
+        self.notify_subscriptions_changed().await;
     }
 
     /// 错误监听任务，随服务启动

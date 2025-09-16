@@ -6,6 +6,7 @@ use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBack
 use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
+use crab_hmds::load_subscriptions_config;
 use crab_infras::config::sub_config::{SubscriptionMap, load_subscriptions_map};
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -132,18 +133,18 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// 加载 subscriptions 配置
-pub fn load_subscriptions_config() -> Result<SubscriptionMap> {
-    let config_path = std::env::var("SUBSCRIPTIONS_CONFIG").unwrap_or_else(|_| {
-        let manifest_dir = option_env!("CARGO_MANIFEST_DIR").map(|s| s.to_string()).unwrap_or_else(|| {
-            std::env::current_dir()
-                .expect("Failed to get current dir")
-                .to_string_lossy()
-                .to_string()
-        });
-        format!("{}/subscriptions.toml", manifest_dir)
-    });
-
-    info!("Loading subscriptions from: {}", config_path);
-    load_subscriptions_map(&config_path)
-}
+// /// 加载 subscriptions 配置
+// pub fn load_subscriptions_config() -> Result<SubscriptionMap> {
+//     let config_path = std::env::var("SUBSCRIPTIONS_CONFIG").unwrap_or_else(|_| {
+//         let manifest_dir = option_env!("CARGO_MANIFEST_DIR").map(|s| s.to_string()).unwrap_or_else(|| {
+//             std::env::current_dir()
+//                 .expect("Failed to get current dir")
+//                 .to_string_lossy()
+//                 .to_string()
+//         });
+//         format!("{}/subscriptions.toml", manifest_dir)
+//     });
+//
+//     info!("Loading subscriptions from: {}", config_path);
+//     load_subscriptions_map(&config_path)
+// }
