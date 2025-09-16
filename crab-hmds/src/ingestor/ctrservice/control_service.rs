@@ -278,29 +278,30 @@ where
         // 1️⃣ 启动 worker 消费任务
         let shutdown_tx = service.clone().start_workers(4); // worker 数量可配置
 
+        let shutdown1 = self.shutdown.clone();
         // 2️⃣ 启动 scheduler
         let scheduler = service.scheduler.clone();
         tokio::spawn(async move {
             tokio::select! {
-                _ = shutdown.notified() => {
-                    info!("Scheduler received shutdown, stopping");
+                _ = shutdown1.notified() => {
+                    info!("Scheduler received shutdown1, stopping");
                 }
                 _ = scheduler.run(2) => {  // 线程数可配置
                     info!("Scheduler stopped");
                 }
             }
         });
-
+        let shutdown2 = self.shutdown.clone();
         // 3️⃣ 启动 maintain loop（缺口扫描 + 最近补齐）
         tokio::spawn(async move {
             tokio::select! {
-                _ = shutdown.notified() => {
-                    info!("Backfill maintain loop received shutdown, stopping");
+                _ = shutdown2.notified() => {
+                    info!("Backfill maintain loop received shutdown2, stopping");
                 }
                 _ = service.loop_maintain_tasks_notify(
                     &subscriptions,
                     BackfillDataType::OHLCV,
-                    &shutdown
+                    &shutdown2
                 ) => {
                     info!("Backfill maintain loop exited normally");
                 }

@@ -191,12 +191,11 @@ where
     }
 
     /// Worker 循环（缺口优先 + 回溯补齐）支持优雅退出
-    pub async fn worker_loop(&self, mut shutdown_rx: broadcast::Receiver<()>, notify: Arc<Notify>) {
+    pub async fn worker_loop(&self, shutdown: Arc<Notify>, notify: Arc<Notify>) {
         loop {
             // 先尝试批量消费任务
             loop {
                 let jobs = self.next_jobs(5).await;
-
                 if jobs.is_empty() {
                     break;
                 }
@@ -207,7 +206,7 @@ where
 
             // 队列空了，等待新任务或 shutdown
             tokio::select! {
-                _ = shutdown_rx.recv() => {
+                _ = shutdown.notified() => {
                     info!("Worker received shutdown signal, exiting");
                     break;
                 }
@@ -437,23 +436,34 @@ where
     }
 
     /// 启动多个 worker 并返回 shutdown 通道
-    pub fn start_workers(self: Arc<Self>, worker_count: usize) -> broadcast::Sender<()> {
-        let (shutdown_tx, _) = broadcast::channel::<()>(worker_count);
-
+    // pub fn start_workers(self: Arc<Self>, worker_count: usize) -> broadcast::Sender<()> {
+    //     let (shutdown_tx, _) = broadcast::channel::<()>(worker_count);
+    //
+    //     for _ in 0..worker_count {
+    //         let svc = self.clone();
+    //         let shutdown_rx = shutdown_tx.subscribe();
+    //
+    //         let notify_clone = svc.notify.clone(); // ✅ 使用 service 内部 notify
+    //
+    //         tokio::spawn(async move {
+    //             svc.worker_loop(shutdown_rx, notify_clone).await;
+    //         });
+    //     }
+    //
+    //     shutdown_tx
+    // }
+    /// 启动多个 worker，不返回 shutdown 通道，使用内部 notify 进行新任务通知
+    pub fn start_workers(self: Arc<Self>, worker_count: usize, shutdown: Arc<Notify>) {
         for _ in 0..worker_count {
             let svc = self.clone();
-            let shutdown_rx = shutdown_tx.subscribe();
-
-            let notify_clone = svc.notify.clone(); // ✅ 使用 service 内部 notify
+            let notify_clone = svc.notify.clone(); // 内部任务通知
+            let shutdown_clone = shutdown.clone(); // 统一 shutdown 控制
 
             tokio::spawn(async move {
-                svc.worker_loop(shutdown_rx, notify_clone).await;
+                svc.worker_loop(shutdown_clone, notify_clone).await;
             });
         }
-
-        shutdown_tx
     }
-
     pub async fn loop_maintain_tasks(
         &self,
         subscriptions: &SubscriptionMap,

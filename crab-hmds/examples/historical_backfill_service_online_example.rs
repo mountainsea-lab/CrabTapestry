@@ -41,7 +41,8 @@ async fn main() -> Result<()> {
     // -------------------------------
     // 3️⃣ (1)历史数据拉取调阅器启动,等待拉取任务到来 (2) 启动 worker 维护tasks
     // -------------------------------
-    let shutdown_tx = service.clone().start_workers(2);
+    let shutdown = Arc::new(Notify::new());
+    service.clone().start_workers(2, shutdown.clone());
     tokio::spawn(scheduler.clone().run(2));
     // -------------------------------
     // 4️⃣ 启动订阅输出观察任务

@@ -106,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
         println!("[HealthCheck] buffer sizes: OHLCV={}", ohlcv_len);
     }
 
-    println!("IngestorService 已停止");
-
-    Ok(())
+    // println!("IngestorService 已停止");
+    //
+    // Ok(())
 }
