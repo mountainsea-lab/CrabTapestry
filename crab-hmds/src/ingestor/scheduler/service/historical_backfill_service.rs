@@ -97,11 +97,6 @@ where
         Duration::milliseconds(batch_millis)
     }
 
-    async fn enqueue_job(&self, job: BackfillJob<F>) {
-        let mut q = self.job_queue.lock().await;
-        q.push(job);
-    }
-
     /// 批量从队列安全取任务
     async fn next_jobs(&self, batch_size: usize) -> Vec<BackfillJob<F>> {
         let mut q = self.job_queue.lock().await;
@@ -492,7 +487,7 @@ where
         &self,
         subscriptions: &SubscriptionMap,
         data_type: BackfillDataType,
-        shutdown: Arc<Notify>, // ✅ 替换 broadcast
+        shutdown: &Arc<Notify>, // ✅ 替换 broadcast
     ) {
         let maintain_interval = std::time::Duration::from_secs(60);
 

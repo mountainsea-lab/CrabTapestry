@@ -1,3 +1,4 @@
+use crate::ingestor::buffer::BufferMetrics;
 use crate::ingestor::dedup::Deduplicatable;
 use async_stream::stream;
 use crossbeam::queue::SegQueue;
@@ -34,6 +35,7 @@ where
     batch_counter: AtomicUsize,
     capacity_strategy: CapacityStrategy,
     permits: Option<Arc<Semaphore>>, // Block 策略专用
+    pub metrics: Arc<BufferMetrics>,
 }
 
 impl<T> DataBuffer<T>
@@ -59,6 +61,7 @@ where
             batch_counter: AtomicUsize::new(0),
             capacity_strategy,
             permits,
+            metrics: Arc::new(BufferMetrics::default()), // 新增
         })
     }
 
@@ -90,6 +93,8 @@ where
             self.batch_counter.store(0, Ordering::Relaxed);
             self.notify.notify_waiters();
         }
+        self.metrics.record_push(1);
+
         Ok(())
     }
 
@@ -122,6 +127,7 @@ where
                 self.batch_counter.store(0, Ordering::Relaxed);
                 self.notify.notify_waiters();
             }
+            self.metrics.record_push(added); // ✅ 统计批量入队数
         }
         Ok(())
     }

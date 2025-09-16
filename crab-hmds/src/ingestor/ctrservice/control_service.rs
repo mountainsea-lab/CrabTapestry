@@ -1,12 +1,9 @@
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
-use crate::ingestor::ctrservice::{
-    BufferStats, ControlMsg, DedupStats, IngestorHealth, InternalMsg, MarketDataType, ServiceParams, ServiceState,
-};
+use crate::ingestor::ctrservice::{ControlMsg, InternalMsg, ServiceParams, ServiceState};
 use crate::ingestor::dedup::Deduplicatable;
 use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::realtime::market_data_pipe_line::MarketDataPipeline;
-use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
@@ -18,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Notify, RwLock, broadcast, mpsc};
 use tokio::task::JoinHandle;
-use tokio::time::interval;
+use tokio::time::Instant;
 
 /// IngestorService 核心结构
 pub struct IngestorService<F>
@@ -218,7 +215,7 @@ where
                         self.shutdown.notify_waiters();
                         break;
                     }
-                    ControlMsg::HealthCheck => { /* todo */ }
+                    ControlMsg::HealthCheck => { /* TODO: 可扩展发送状态到监控系统 */ }
                     ControlMsg::AddSubscriptions(subs) => self.add_subscriptions(subs).await,
                     ControlMsg::RemoveSubscriptions(keys) => self.remove_subscriptions(keys).await,
                 }
@@ -270,7 +267,7 @@ where
                 _ = shutdown.notified() => {
                     info!("BackfillService received shutdown, stopping");
                 }
-                _ = service.loop_maintain_tasks_notify(&subscriptions, BackfillDataType::OHLCV, shutdown) => {}
+                _ = service.loop_maintain_tasks_notify(&subscriptions, BackfillDataType::OHLCV, &shutdown) => {}
             }
         });
     }
@@ -394,8 +391,6 @@ where
     pub fn spawn_buffer_consumer_task(self: Arc<Self>) -> JoinHandle<()> {
         tokio::spawn(async move {
             info!("Buffer Consumer task started");
-
-            const BATCH_SIZE: usize = 100; // 批量大小
             const FLUSH_INTERVAL: Duration = Duration::from_millis(500); // 时间窗口
 
             let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
@@ -438,6 +433,8 @@ where
             return Ok(());
         }
 
+        let start = Instant::now();
+
         // 去重，deduplicate 需要改成支持 Arc<T>
         let deduped = self.dedup_ohlcv.deduplicate_arc(batch, DedupMode::Unified);
         if deduped.is_empty() {
@@ -445,6 +442,9 @@ where
         }
 
         info!("deduped {} OHLCV records", deduped.len());
+
+        let duration = start.elapsed();
+        self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());
 
         // TODO: MySQL 批量插入 可直接用 Arc 引用，避免 clone
         let _params: Vec<_> = deduped
@@ -503,6 +503,14 @@ where
             self.subscriptions.remove(&key);
         }
         self.notify_subscriptions_changed().await;
+    }
+
+    /// 统一通知逻辑 通知订阅配置已更新
+    pub async fn notify_subscriptions_changed(&self) {
+        todo!("通知订阅配置已更新");
+        // 这里可以触发 Backfill 或 Pipeline 的 notify
+        // self.backfill.notify.notify_waiters();
+        // self.pipeline.notify.notify_waiters();
     }
 
     /// 错误监听任务，随服务启动
