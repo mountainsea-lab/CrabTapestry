@@ -215,7 +215,18 @@ where
                         self.shutdown.notify_waiters();
                         break;
                     }
-                    ControlMsg::HealthCheck => { /* TODO: 可扩展发送状态到监控系统 */ }
+                    ControlMsg::HealthCheck => {
+                        /* TODO: 可扩展发送状态到监控系统 暂时只做简单输出 */
+                        let state = self.state.read().await;
+                        let ohlcv_len = self.buffer_ohlcv.len();
+                        let tick_len = self.buffer_tick.len();
+                        let trade_len = self.buffer_trade.len();
+
+                        info!(
+                            "HealthCheck: state={:?}, buffer_sizes: OHLCV={}, Tick={}, Trade={}",
+                            *state, ohlcv_len, tick_len, trade_len
+                        );
+                    }
                     ControlMsg::AddSubscriptions(subs) => self.add_subscriptions(subs).await,
                     ControlMsg::RemoveSubscriptions(keys) => self.remove_subscriptions(keys).await,
                 }
@@ -441,7 +452,20 @@ where
             return Ok(());
         }
 
-        info!("deduped {} OHLCV records", deduped.len());
+        // 打印每条记录用于验证
+        for record in &deduped {
+            let r = record.as_ref();
+            info!(
+                "OHLCVRecord - symbol: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
+                r.symbol,
+                r.timestamp(),
+                r.open,
+                r.high,
+                r.low,
+                r.close,
+                r.volume
+            );
+        }
 
         let duration = start.elapsed();
         self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());

@@ -34,15 +34,15 @@ impl MarketDataPipeline {
     pub fn new(
         subscribers: HashMap<String, Arc<dyn RealtimeSubscriber + Send + Sync>>,
         broadcast_capacity: usize,
-    ) -> Self {
+    ) -> Arc<Self> {
         let (tx, _) = broadcast::channel(broadcast_capacity);
-        Self {
+        Arc::new(Self {
             subscribers,
             aggregators: Arc::new(TradeAggregatorPool::new()),
             ohlcv_tx: tx,
             subscribed: Arc::new(DashMap::new()),
             status: Arc::new(DashMap::new()),
-        }
+        })
     }
 
     /// 批量订阅多个 symbol
