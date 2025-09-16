@@ -286,8 +286,11 @@ where
                 _ = shutdown1.notified() => {
                     info!("Scheduler received shutdown1, stopping");
                 }
-                _ = scheduler.run(2) => {  // 线程数可配置
-                    info!("Scheduler stopped");
+                result = scheduler.run(2) => {   // ✅ 注意这里没有 .await
+                    match result {
+                        Ok(_) => info!("Scheduler stopped"),
+                        Err(e) => error!("Scheduler failed: {:?}", e),
+                    }
                 }
             }
         });
