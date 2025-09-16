@@ -18,7 +18,7 @@ pub struct HistoricalBackfillService<F>
 where
     F: HistoricalFetcherExt + 'static,
 {
-    scheduler: Arc<BaseBackfillScheduler<F>>,
+    pub(crate) scheduler: Arc<BaseBackfillScheduler<F>>,
     db: Arc<dyn BackfillMetaStore>,
     default_max_batch_hours: i64,
     max_retries: usize,

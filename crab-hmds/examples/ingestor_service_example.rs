@@ -17,6 +17,7 @@ use tokio::time::sleep;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
+    ms_tracing::setup_tracing();
     // -------------------------------
     // 1️⃣ 初始化历史数据维护服务
     // -------------------------------
@@ -43,6 +44,9 @@ async fn main() -> anyhow::Result<()> {
 
     let real_time_service = MarketDataPipeline::new(subscribers, 1024);
 
+    // -------------------------------
+    // Step 3: 初始化 ingestor_service
+    // -------------------------------
     // Graceful shutdown 通知
     let shutdown = Arc::new(Notify::new());
 
@@ -59,7 +63,6 @@ async fn main() -> anyhow::Result<()> {
         buffer_batch_size_trade: 50,
     };
 
-    // 初始化服务
     let ingestor_service =
         IngestorService::with_params_and_subscriptions(back_fill_service, real_time_service, shutdown.clone(), params)
             .await;
@@ -84,10 +87,24 @@ async fn main() -> anyhow::Result<()> {
     // control_tx.send(ControlMsg::AddSubscriptions(vec![Subscription { ... }])).await?;
 
     // 模拟停止服务
-    control_tx.send(ControlMsg::Stop).await?;
+    // control_tx.send(ControlMsg::Stop).await?;
 
     // 等待服务优雅停止
-    sleep(Duration::from_secs(2)).await;
+    // sleep(Duration::from_secs(2)).await;
+
+    // -----------------------------------------
+    // 4️⃣ 模拟一直运行，周期打印 HealthCheck
+    // -----------------------------------------
+    loop {
+        sleep(Duration::from_secs(10)).await;
+
+        // 发送 HealthCheck
+        control_tx.send(ControlMsg::HealthCheck).await?;
+
+        // 打印 buffer 长度
+        let ohlcv_len = ingestor_service.buffer_ohlcv.len();
+        println!("[HealthCheck] buffer sizes: OHLCV={}", ohlcv_len);
+    }
 
     println!("IngestorService 已停止");
 

@@ -172,6 +172,8 @@ where
 
     /// 总入口启动所有任务
     pub async fn start(self: Arc<Self>) {
+        // ← 初始化订阅信息
+        self.initialize_subscriptions().await;
         // 启动 error 监控
         let err_handle = self.spawn_error_monitor_task();
         self.handles.write().await.push(err_handle);
@@ -273,12 +275,35 @@ where
         let subscriptions = self.subscriptions.clone();
         let shutdown = self.shutdown.clone();
 
+        // 1️⃣ 启动 worker 消费任务
+        let shutdown_tx = service.clone().start_workers(4); // worker 数量可配置
+
+        // 2️⃣ 启动 scheduler
+        let scheduler = service.scheduler.clone();
         tokio::spawn(async move {
             tokio::select! {
                 _ = shutdown.notified() => {
-                    info!("BackfillService received shutdown, stopping");
+                    info!("Scheduler received shutdown, stopping");
                 }
-                _ = service.loop_maintain_tasks_notify(&subscriptions, BackfillDataType::OHLCV, &shutdown) => {}
+                _ = scheduler.run(2) => {  // 线程数可配置
+                    info!("Scheduler stopped");
+                }
+            }
+        });
+
+        // 3️⃣ 启动 maintain loop（缺口扫描 + 最近补齐）
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = shutdown.notified() => {
+                    info!("Backfill maintain loop received shutdown, stopping");
+                }
+                _ = service.loop_maintain_tasks_notify(
+                    &subscriptions,
+                    BackfillDataType::OHLCV,
+                    &shutdown
+                ) => {
+                    info!("Backfill maintain loop exited normally");
+                }
             }
         });
     }
@@ -505,7 +530,7 @@ where
                     self.subscriptions.insert(key, sub);
                 }
 
-                self.notify_subscriptions_changed().await;
+                // self.notify_subscriptions_changed().await;
             }
             Err(e) => error!("Failed to load subscriptions: {}", e),
         }
