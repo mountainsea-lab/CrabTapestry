@@ -80,8 +80,8 @@ impl BarterIngestor {
                             .map_err(|err| warn!(?err, "failed to send public trade event"))
                             .ok();
                     }
-                    Err(err) => {
-                        warn!(?err, "skipped event");
+                    Err(_err) => {
+                        // warn!(?err, "skipped event");
                     }
                 }
             }
