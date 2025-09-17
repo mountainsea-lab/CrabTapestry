@@ -19,8 +19,7 @@ pub async fn create_redis_pool(redis_url: &str) -> Result<bb8::Pool<RedisConnect
 pub async fn init_redis_cache() -> Result<Arc<RedisCache>> {
     match is_local() {
         true => {
-            // let kv_store = RedisCache::new("redis://localhost:6379").await?;
-            let kv_store = RedisCache::new(must_get_env("REDIS_URL").as_str()).await?;
+            let kv_store = RedisCache::new("redis://localhost:6379").await?;
             Ok(Arc::new(kv_store))
         }
         false => {
