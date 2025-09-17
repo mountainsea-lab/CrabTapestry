@@ -42,7 +42,7 @@ async-trait = "0.1.89"
 
 # config
 toml =  { workspace = true }
+dotenvy = {workspace = true}
 
 # db
-dotenvy = {workspace = true}
-diesel = { version = "2.2.10", features = ["mysql", "r2d2", "chrono", "extras"] }
+diesel = {workspace = true}

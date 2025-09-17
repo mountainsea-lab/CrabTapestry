@@ -1,8 +1,8 @@
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
+use dotenvy::dotenv;
 use std::env;
 use std::time::Duration;
-use dotenvy::dotenv;
 
 pub type MySqlPool = Pool<ConnectionManager<MysqlConnection>>;
 pub type MySqlPooledConnection = PooledConnection<ConnectionManager<MysqlConnection>>;

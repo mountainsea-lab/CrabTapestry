@@ -614,6 +614,7 @@ dependencies = [
  "criterion",
  "crossbeam",
  "dashmap",
+ "diesel",
  "futures",
  "futures-util",
  "log",
