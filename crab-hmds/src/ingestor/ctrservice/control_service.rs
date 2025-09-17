@@ -174,18 +174,19 @@ where
     pub async fn start(self: Arc<Self>) {
         // ← 初始化订阅信息
         self.initialize_subscriptions().await;
-        // 启动 error 监控
-        let err_handle = self.spawn_error_monitor_task();
-        self.handles.write().await.push(err_handle);
-
-        // 启动控制任务
-        let ctrl_handle = self.clone().spawn_control_task();
-        self.handles.write().await.push(ctrl_handle);
 
         // 启动消费者任务
         for h in self.clone().spawn_consumer_tasks() {
             self.handles.write().await.push(h);
         }
+
+        // 启动控制任务
+        let ctrl_handle = self.clone().spawn_control_task();
+        self.handles.write().await.push(ctrl_handle);
+
+        // 启动 error 监控
+        let err_handle = self.spawn_error_monitor_task();
+        self.handles.write().await.push(err_handle);
 
         *self.state.write().await = ServiceState::Running;
     }
@@ -211,7 +212,7 @@ where
                     ControlMsg::Start => {
                         // ✅ 启动 Realtime + Backfill 服务
                         self.start_market_data_pipeline().await;
-                        // self.start_historical_backfill_service().await;
+                        self.start_historical_backfill_service().await;
                     }
                     ControlMsg::Stop => {
                         self.shutdown.notify_waiters();
