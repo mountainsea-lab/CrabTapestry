@@ -44,6 +44,9 @@ log = "0.4.27"
 # Db
 diesel = {workspace = true}
 
+# env
+dotenvy = { workspace = true }
+
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async"] }
 

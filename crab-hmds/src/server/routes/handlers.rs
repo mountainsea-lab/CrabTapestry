@@ -1,7 +1,7 @@
 pub mod log_handlers;
 
 pub fn index() -> &'static str {
-    "Welcome to mini bot!"
+    "Welcome to crab-hmds!"
 }
 
 pub fn ping() -> &'static str {

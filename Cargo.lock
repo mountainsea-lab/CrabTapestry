@@ -615,6 +615,7 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "diesel",
+ "dotenvy",
  "futures",
  "futures-util",
  "log",

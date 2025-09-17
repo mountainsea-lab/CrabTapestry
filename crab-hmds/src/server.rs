@@ -8,6 +8,7 @@ use ms_tracing::{LogCache, LogEntry, setup_tracing_with_broadcast};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use warp::Filter;
 
 const APPLICATION_NAME: &str = "crab-hmds";
 
@@ -27,13 +28,13 @@ pub async fn start() {
     // 初始化 tracing 日志系统
     setup_tracing_with_broadcast(tx.clone(), cache.clone());
 
-    info!("Starting crab-data-event server...");
+    info!("Starting crab-hmds server...");
 
     // init global comments domain
     let _ = init_global_services().await;
 
     // ========== 启动数据维护控制服务（启动 -> 实时数据服务+历史数据服务 -> 落盘） ==========
-    tokio::spawn(async move { todo!() });
+    // tokio::spawn(async move { todo!() });
 
     let bind_address: SocketAddr = "127.0.0.1:10088".parse().unwrap();
 
