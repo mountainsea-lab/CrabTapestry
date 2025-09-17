@@ -1,7 +1,9 @@
 use crab_infras::config::sub_config::{SubscriptionMap, load_subscriptions_map};
 use ms_tracing::tracing_utils::internal::info;
 
+pub mod global;
 pub mod ingestor;
+pub mod server;
 
 /// 加载 subscriptions 配置
 pub fn load_subscriptions_config() -> anyhow::Result<SubscriptionMap> {

@@ -625,6 +625,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "trade_aggregation",
+ "warp",
 ]
 
 [[package]]
