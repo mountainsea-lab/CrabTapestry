@@ -1,6 +1,7 @@
 use crab_infras::config::sub_config::{SubscriptionMap, load_subscriptions_map};
 use ms_tracing::tracing_utils::internal::info;
 
+pub mod domain;
 pub mod global;
 pub mod ingestor;
 pub mod schema;
