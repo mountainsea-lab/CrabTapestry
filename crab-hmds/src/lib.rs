@@ -3,6 +3,7 @@ use ms_tracing::tracing_utils::internal::info;
 
 pub mod global;
 pub mod ingestor;
+pub mod schema;
 pub mod server;
 
 /// 加载 subscriptions 配置
