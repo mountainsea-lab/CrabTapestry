@@ -8,6 +8,7 @@ use barter_data::streams::reconnect::Event;
 use barter_data::subscription::trade::PublicTrade;
 use crab_common_utils::time_utils::{milliseconds_to_offsetdatetime, parse_period_to_secs};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use trade_aggregation::candle_components::{Close, High, Low, NumTrades, Open, Volume};
 use trade_aggregation::{CandleComponent, CandleComponentUpdate, M1, ModularCandle, TakerTrade, Trade};
 
@@ -110,7 +111,11 @@ pub trait ValidatableTrade {
 
 impl ValidatableTrade for PublicTrade {
     fn is_valid(&self) -> bool {
-        self.price > 0.0 && self.price.is_finite() && self.amount > 0.0
+        self.price > 0.0
+            && self.price.is_finite()
+            && self.amount > 0.0
+            && self.amount.is_finite()
+            && matches!(self.side, Side::Buy | Side::Sell)
     }
 }
 
@@ -139,34 +144,35 @@ impl From<&PublicTradeEvent> for Trade {
     }
 }
 
-/// from barter trade data event to PublicTradeEvent
-impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
-    fn from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Self {
+#[derive(Debug, Error)]
+pub enum TradeEventError {
+    #[error("invalid trade data (price <= 0 or amount <= 0)")]
+    InvalidTrade,
+    #[error("event is not a PublicTrade item")]
+    NotTradeEvent,
+}
+
+/// try from barter trade data event to PublicTradeEvent
+impl TryFrom<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
+    type Error = TradeEventError;
+
+    fn try_from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Result<Self, Self::Error> {
         match event {
             Event::Item(market_event) => {
-                PublicTradeEvent {
-                    exchange: market_event.exchange.to_string(),
-                    symbol: format!("{}", market_event.instrument.base), // 根据需求调整 format!("{}{}", market_event.instrument.base, market_event.instrument.quote)
-                    trade: market_event.kind,                            // PublicTrade
-                    timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
-                    time_period: M1.get(),
+                let public_trade = market_event.kind;
+                if public_trade.is_valid() {
+                    Ok(PublicTradeEvent {
+                        exchange: market_event.exchange.to_string(),
+                        symbol: format!("{}", market_event.instrument.base), // format!("{}{}", market_event.instrument.base, market_event.instrument.quote),
+                        trade: public_trade,
+                        timestamp: market_event.time_exchange.timestamp_millis(),
+                        time_period: M1.get(),
+                    })
+                } else {
+                    Err(TradeEventError::InvalidTrade)
                 }
             }
-            _ => {
-                // if not PublicTrade data，return default
-                PublicTradeEvent {
-                    exchange: String::new(),
-                    symbol: String::new(),
-                    trade: PublicTrade {
-                        id: String::new(),
-                        price: 0.0,
-                        amount: 0.0,
-                        side: Side::Buy,
-                    },
-                    timestamp: 0,
-                    time_period: M1.get(),
-                }
-            }
+            _ => Err(TradeEventError::NotTradeEvent),
         }
     }
 }

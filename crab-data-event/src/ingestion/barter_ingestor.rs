@@ -73,10 +73,16 @@ impl BarterIngestor {
 
             // listen and handle accepted events
             while let Some(event) = joined_stream.next().await {
-                let public_trade_event: PublicTradeEvent = event.into();
-                // send public_trade_event to the channel
-                if let Err(err) = sender.send(public_trade_event) {
-                    warn!(?err, "Failed to send public trade event");
+                match PublicTradeEvent::try_from(event) {
+                    Ok(ev) => {
+                        sender
+                            .send(ev)
+                            .map_err(|err| warn!(?err, "failed to send public trade event"))
+                            .ok();
+                    }
+                    Err(err) => {
+                        warn!(?err, "skipped event");
+                    }
                 }
             }
 

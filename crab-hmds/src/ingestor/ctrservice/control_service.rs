@@ -211,7 +211,7 @@ where
                     ControlMsg::Start => {
                         // ✅ 启动 Realtime + Backfill 服务
                         self.start_market_data_pipeline().await;
-                        self.start_historical_backfill_service().await;
+                        // self.start_historical_backfill_service().await;
                     }
                     ControlMsg::Stop => {
                         self.shutdown.notify_waiters();
@@ -485,8 +485,9 @@ where
         for record in &deduped {
             let r = record.as_ref();
             info!(
-                "OHLCVRecord - symbol: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
+                "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
                 r.symbol,
+                r.period,
                 r.timestamp(),
                 r.open,
                 r.high,
