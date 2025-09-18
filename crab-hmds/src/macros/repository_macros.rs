@@ -13,7 +13,7 @@ macro_rules! impl_full_repository {
                 $table.select(<$model>::as_select()).load(self.conn).map_err(AppError::from)
             }
 
-            fn get_by_id(&mut self, id: &str) -> AppResult<Option<$model>> {
+            fn get_by_id(&mut self, id: u64) -> AppResult<Option<$model>> {
                 use crate::schema::$table::dsl::*;
                 $table
                     .find(id)
@@ -23,7 +23,7 @@ macro_rules! impl_full_repository {
                     .map_err(AppError::from)
             }
 
-            fn delete(&mut self, id: &str) -> AppResult<usize> {
+            fn delete(&mut self, id: u64) -> AppResult<usize> {
                 use crate::schema::$table::dsl::*;
                 diesel::delete($table.find(id)).execute(self.conn).map_err(AppError::from)
             }

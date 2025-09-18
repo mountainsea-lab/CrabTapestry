@@ -1,5 +1,6 @@
 use crate::domain::model::SortOrder;
 use crate::ingestor::types::OHLCVRecord;
+use crate::schema::crab_ohlcv_record;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -10,33 +11,33 @@ use serde::{Deserialize, Serialize};
 /// - `hash_id` 是 BINARY(16)，这里映射为 `Vec<u8>`
 /// - `created_at` 和 `updated_at` 使用 `chrono::NaiveDateTime`
 #[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, Debug, Clone)]
-#[diesel(table_name = crate::schema::crab_ohlcv_record)]
+#[diesel(table_name = crab_ohlcv_record)]
 pub struct CrabOhlcvRecord {
-    pub id: u64,                      // 自增主键 (BIGINT UNSIGNED)
-    pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
-    pub ts: i64,                      // K线结束时间戳
-    pub period_start_ts: Option<i64>, // K线开始时间戳 (可选)
-    pub symbol: String,               // 交易对 (BTC/USDT 等)
-    pub exchange: String,             // 交易所名称 (binance 等)
-    pub period: String,               // K线周期 (1m, 5m, 1h 等)
-    pub open: f64,                    // 开盘价
-    pub high: f64,                    // 最高价
-    pub low: f64,                     // 最低价
-    pub close: f64,                   // 收盘价
-    pub volume: f64,                  // 成交量
-    pub turnover: Option<f64>,        // 成交额 (可选)
-    pub num_trades: Option<u32>,      // 成交笔数 (可选)
-    pub vwap: Option<f64>,            // 成交量加权平均价 (可选)
-    pub created_at: NaiveDateTime,    // 记录创建时间
-    pub updated_at: NaiveDateTime,    // 记录更新时间
+    pub id: u64,                           // 自增主键 (BIGINT UNSIGNED)
+    pub hash_id: Vec<u8>,                  // 幂等校验用的 MD5 哈希 (16字节)
+    pub ts: i64,                           // K线结束时间戳
+    pub period_start_ts: Option<i64>,      // K线开始时间戳 (可选)
+    pub symbol: String,                    // 交易对 (BTC/USDT 等)
+    pub exchange: String,                  // 交易所名称 (binance 等)
+    pub period: String,                    // K线周期 (1m, 5m, 1h 等)
+    pub open: f64,                         // 开盘价
+    pub high: f64,                         // 最高价
+    pub low: f64,                          // 最低价
+    pub close: f64,                        // 收盘价
+    pub volume: f64,                       // 成交量
+    pub turnover: Option<f64>,             // 成交额 (可选)
+    pub num_trades: Option<u32>,           // 成交笔数 (可选)
+    pub vwap: Option<f64>,                 // 成交量加权平均价 (可选)
+    pub created_at: Option<NaiveDateTime>, // 记录创建时间
+    pub updated_at: Option<NaiveDateTime>, // 记录更新时间
 }
 
 /// 插入模型：用于 `insert_into(crab_ohlcv_record)`
 ///
 /// - 不包含 `id`，由数据库自增生成
 /// - 不包含 `created_at` 和 `updated_at`，交由 MySQL 默认值自动生成
-#[derive(Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
-#[diesel(table_name = crate::schema::crab_ohlcv_record)]
+#[derive(Insertable, Serialize, Deserialize, Debug, Clone)]
+#[diesel(table_name = crab_ohlcv_record)]
 pub struct NewCrabOhlcvRecord {
     pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
     pub ts: i64,                      // K线结束时间戳
@@ -52,6 +53,26 @@ pub struct NewCrabOhlcvRecord {
     pub turnover: Option<f64>,        // 成交额 (可选)
     pub num_trades: Option<u32>,      // 成交笔数 (可选)
     pub vwap: Option<f64>,            // 成交量加权平均价 (可选)
+}
+
+/// 更新模型：用于更新 OHLCV 数据
+///
+/// - 只包含可更新字段，避免修改唯一标识
+/// - 支持部分更新，可选择性设置字段
+#[derive(AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[diesel(table_name = crab_ohlcv_record)]
+pub struct UpdateCrabOhlcvRecord {
+    pub id: u64,         // 必须：定位记录
+    pub ts: Option<i64>, // 可选更新
+    pub period_start_ts: Option<i64>,
+    pub open: Option<f64>,
+    pub high: Option<f64>,
+    pub low: Option<f64>,
+    pub close: Option<f64>,
+    pub volume: Option<f64>,
+    pub turnover: Option<f64>,
+    pub num_trades: Option<u32>,
+    pub vwap: Option<f64>,
 }
 
 impl From<OHLCVRecord> for NewCrabOhlcvRecord {
@@ -72,6 +93,25 @@ impl From<OHLCVRecord> for NewCrabOhlcvRecord {
             low: rec.low,
             close: rec.close,
             volume: rec.volume,
+            turnover: rec.turnover,
+            num_trades: rec.num_trades,
+            vwap: rec.vwap,
+        }
+    }
+}
+
+impl From<(OHLCVRecord, u64)> for UpdateCrabOhlcvRecord {
+    /// 将业务结构体和记录 id 转换为更新模型
+    fn from((rec, id): (OHLCVRecord, u64)) -> Self {
+        UpdateCrabOhlcvRecord {
+            id, // 数据库主键
+            ts: Some(rec.ts),
+            period_start_ts: rec.period_start_ts,
+            open: Some(rec.open),
+            high: Some(rec.high),
+            low: Some(rec.low),
+            close: Some(rec.close),
+            volume: Some(rec.volume),
             turnover: rec.turnover,
             num_trades: rec.num_trades,
             vwap: rec.vwap,

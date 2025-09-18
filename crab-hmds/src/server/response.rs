@@ -1,6 +1,5 @@
 use warp::Reply;
 
-#[warn(dead_code)]
 pub type CusResponse = Result<warp::reply::Json, warp::Rejection>;
 pub type _Response = Result<warp::reply::Json, ErrorResponse>;
 
