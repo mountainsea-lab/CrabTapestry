@@ -29,6 +29,7 @@ trade_aggregation = { workspace = true }
 
 # Error
 anyhow = {workspace = true}
+thiserror = {workspace = true}
 
 # Time
 chrono = {workspace = true}

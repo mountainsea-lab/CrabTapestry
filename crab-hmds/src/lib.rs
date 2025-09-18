@@ -4,6 +4,7 @@ use ms_tracing::tracing_utils::internal::info;
 pub mod domain;
 pub mod global;
 pub mod ingestor;
+pub mod macros;
 pub mod schema;
 pub mod server;
 

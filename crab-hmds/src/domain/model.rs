@@ -1,6 +1,26 @@
+use diesel::result::Error as DieselError;
+use thiserror::Error;
+
 pub mod market_backfill_meta;
 pub mod market_missing_range;
 pub mod ohlcv_record;
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] DieselError),
+
+    #[error("Not found")]
+    NotFound,
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
 
 /// 通用分页响应
 #[derive(Debug, Clone, serde::Serialize)]
