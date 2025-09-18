@@ -42,3 +42,7 @@ async-trait = "0.1.89"
 
 # config
 toml =  { workspace = true }
+dotenvy = {workspace = true}
+
+# db
+diesel = {workspace = true}

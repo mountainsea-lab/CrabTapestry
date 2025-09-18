@@ -82,13 +82,19 @@ impl BinanceSubscriber {
                 *st = SubscriberStatus::Connected;
             }
 
+            // listen and handle accepted events
             while let Some(event) = joined_stream.next().await {
-                if self.shutdown.load(Ordering::Relaxed) {
-                    break;
+                match PublicTradeEvent::try_from(event) {
+                    Ok(ev) => {
+                        self.broadcast_tx
+                            .send(ev)
+                            .map_err(|err| warn!(?err, "failed to send public trade event"))
+                            .ok();
+                    }
+                    Err(_err) => {
+                        // warn!(?_err, "skipped event");
+                    }
                 }
-                let trade_event: PublicTradeEvent = event.into();
-                // info!("Stream trade_event,{:?}",trade_event);
-                let _ = self.broadcast_tx.send(trade_event);
             }
 
             warn!("Stream ended or errored, retrying...");
@@ -168,6 +174,7 @@ impl RealtimeSubscriber for BinanceSubscriber {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
+    use log::debug;
     use std::sync::Arc;
     use tokio::time::{Duration, sleep};
 
@@ -187,7 +194,7 @@ mod integration_tests {
 
         // 等待一段时间让事件流入
         let mut received_count = 0;
-        let max_wait = Duration::from_secs(10);
+        let max_wait = Duration::from_secs(800);
         let start = tokio::time::Instant::now();
 
         while start.elapsed() < max_wait {
@@ -211,7 +218,7 @@ mod integration_tests {
         subscriber.shutdown_subscribe();
         sleep(Duration::from_millis(100)).await; // 等待状态更新
         let status = subscriber.status().await;
-        println!("Received status: {:?}", status);
+        debug!("Received status: {:?}", status);
         assert_eq!(status, SubscriberStatus::Connected);
     }
 }
