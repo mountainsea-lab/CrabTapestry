@@ -1,13 +1,15 @@
 use crate::domain::model::SortOrder;
+use crate::ingestor::types::OHLCVRecord;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// 查询模型：对应表 `crab_ohlcv_record`
 ///
 /// - `id` 为自增主键，只在数据库生成
 /// - `hash_id` 是 BINARY(16)，这里映射为 `Vec<u8>`
 /// - `created_at` 和 `updated_at` 使用 `chrono::NaiveDateTime`
-#[derive(Queryable, Identifiable, Debug, Clone)]
+#[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, Debug, Clone)]
 #[diesel(table_name = crab_ohlcv_record)]
 pub struct CrabOhlcvRecord {
     pub id: u64,                      // 自增主键 (BIGINT UNSIGNED)
@@ -33,7 +35,7 @@ pub struct CrabOhlcvRecord {
 ///
 /// - 不包含 `id`，由数据库自增生成
 /// - 不包含 `created_at` 和 `updated_at`，交由 MySQL 默认值自动生成
-#[derive(Insertable, Debug, Clone)]
+#[derive(Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
 #[diesel(table_name = crab_ohlcv_record)]
 pub struct NewCrabOhlcvRecord {
     pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
@@ -50,6 +52,31 @@ pub struct NewCrabOhlcvRecord {
     pub turnover: Option<f64>,        // 成交额 (可选)
     pub num_trades: Option<u32>,      // 成交笔数 (可选)
     pub vwap: Option<f64>,            // 成交量加权平均价 (可选)
+}
+
+impl From<OHLCVRecord> for NewCrabOhlcvRecord {
+    fn from(rec: OHLCVRecord) -> Self {
+        // 计算 hash_id: md5(symbol+exchange+period+ts)
+        let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
+        let digest = md5::compute(input);
+
+        Self {
+            hash_id: digest.0.to_vec(), // [u8;16] → Vec<u8>
+            ts: rec.ts,
+            period_start_ts: rec.period_start_ts,
+            symbol: rec.symbol.to_string(),
+            exchange: rec.exchange.to_string(),
+            period: rec.period,
+            open: rec.open,
+            high: rec.high,
+            low: rec.low,
+            close: rec.close,
+            volume: rec.volume,
+            turnover: rec.turnover,
+            num_trades: rec.num_trades,
+            vwap: rec.vwap,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

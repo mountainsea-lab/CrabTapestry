@@ -43,6 +43,7 @@ log = "0.4.27"
 
 # Db
 diesel = {workspace = true}
+md5 = "0.8.0"
 
 # env
 dotenvy = { workspace = true }
