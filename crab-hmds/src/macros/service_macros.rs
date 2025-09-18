@@ -20,7 +20,7 @@ macro_rules! impl_full_service {
                 self.repo.get_all()
             }
 
-            pub fn get_by_id(&mut self, id: &str) -> AppResult<Option<$model>> {
+            pub fn get_by_id(&mut self, id: u64) -> AppResult<Option<$model>> {
                 self.repo.get_by_id(id)
             }
 
@@ -32,7 +32,7 @@ macro_rules! impl_full_service {
                 self.repo.update(entity)
             }
 
-            pub fn delete(&mut self, id: &str) -> AppResult<usize> {
+            pub fn delete(&mut self, id: u64) -> AppResult<usize> {
                 self.repo.delete(id)
             }
 

@@ -55,6 +55,22 @@ pub struct NewCrabOhlcvRecord {
     pub vwap: Option<f64>,            // 成交量加权平均价 (可选)
 }
 
+/// Upsert 模型
+#[derive(AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[diesel(table_name = crab_ohlcv_record)]
+pub struct UpsertCrabOhlcvRecord {
+    pub ts: i64,
+    pub period_start_ts: Option<i64>,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+    pub volume: f64,
+    pub turnover: Option<f64>,
+    pub num_trades: Option<u32>,
+    pub vwap: Option<f64>,
+}
+
 /// 更新模型：用于更新 OHLCV 数据
 ///
 /// - 只包含可更新字段，避免修改唯一标识
