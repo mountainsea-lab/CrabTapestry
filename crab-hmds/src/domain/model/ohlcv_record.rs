@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// - `hash_id` 是 BINARY(16)，这里映射为 `Vec<u8>`
 /// - `created_at` 和 `updated_at` 使用 `chrono::NaiveDateTime`
 #[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
+#[diesel(table_name = crate::schema::crab_ohlcv_record)]
 pub struct CrabOhlcvRecord {
     pub id: u64,                      // 自增主键 (BIGINT UNSIGNED)
     pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
@@ -36,7 +36,7 @@ pub struct CrabOhlcvRecord {
 /// - 不包含 `id`，由数据库自增生成
 /// - 不包含 `created_at` 和 `updated_at`，交由 MySQL 默认值自动生成
 #[derive(Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
+#[diesel(table_name = crate::schema::crab_ohlcv_record)]
 pub struct NewCrabOhlcvRecord {
     pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
     pub ts: i64,                      // K线结束时间戳
