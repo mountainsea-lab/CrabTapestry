@@ -1,3 +1,4 @@
+use crate::domain::model::SortOrder;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
@@ -55,7 +56,7 @@ pub struct NewCrabOhlcvRecord {
 pub struct OhlcvFilter {
     pub exchange: Option<String>,
     pub symbol: Option<String>,
-    pub time_frame: Option<String>,
+    pub period: Option<String>,
     pub close_time: Option<i64>,
     pub sort_by_close_time: Option<SortOrder>,
     pub page: Option<usize>,
