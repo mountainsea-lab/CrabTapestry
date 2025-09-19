@@ -1,3 +1,5 @@
+use crate::domain::model::ohlcv_record::{NewCrabOhlcvRecord, to_new_records_with_hash};
+use crate::domain::service::save_ohlcv_records_batch;
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{ControlMsg, InternalMsg, ServiceParams, ServiceState};
 use crate::ingestor::dedup::Deduplicatable;
@@ -501,24 +503,43 @@ where
         let duration = start.elapsed();
         self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());
 
-        // TODO: MySQL 批量插入 可直接用 Arc 引用，避免 clone
-        let _params: Vec<_> = deduped
-            .iter()
-            .map(|r| {
-                let r = r.as_ref();
-                (
-                    r.symbol.clone(),
-                    r.timestamp(),
-                    r.open,
-                    r.high,
-                    r.low,
-                    r.close,
-                    r.volume,
-                )
-            })
-            .collect();
+        // ✅ 落库
+        Self::save_with_log(&deduped).await?;
 
         Ok(())
+    }
+
+    /// 落库 + 日志逻辑封装
+    async fn save_with_log(batch: &[Arc<OHLCVRecord>]) -> anyhow::Result<()> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        // 转换为插入模型
+        let new_records = to_new_records_with_hash(batch).await;
+
+        // 落库并记录日志
+        match save_ohlcv_records_batch(&new_records).await {
+            Ok(_) => {
+                info!(
+                    "✅ Saved {} OHLCV records. first_ts={:?}, last_ts={:?}, symbol={}",
+                    new_records.len(),
+                    new_records.first().map(|r| r.ts),
+                    new_records.last().map(|r| r.ts),
+                    new_records.first().map(|r| r.symbol.clone()).unwrap_or_default(),
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    "❌ Failed to save {} OHLCV records. first_record={:?}, error={}",
+                    new_records.len(),
+                    new_records.first(),
+                    e
+                );
+                Err(e.into())
+            }
+        }
     }
 
     /// 异步初始化订阅配置（仅加载到服务状态，不启动任务）

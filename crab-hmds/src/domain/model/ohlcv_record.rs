@@ -4,6 +4,8 @@ use crate::schema::crab_ohlcv_record;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::task;
 
 /// 查询模型：对应表 `crab_ohlcv_record`
 ///
@@ -114,6 +116,67 @@ impl From<OHLCVRecord> for NewCrabOhlcvRecord {
             vwap: rec.vwap,
         }
     }
+}
+
+impl From<&OHLCVRecord> for NewCrabOhlcvRecord {
+    fn from(rec: &OHLCVRecord) -> Self {
+        let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
+        let digest = md5::compute(input);
+
+        Self {
+            hash_id: digest.0.to_vec(),
+            ts: rec.ts,
+            period_start_ts: rec.period_start_ts,
+            symbol: rec.symbol.to_string(),
+            exchange: rec.exchange.to_string(),
+            period: rec.period.clone(),
+            open: rec.open,
+            high: rec.high,
+            low: rec.low,
+            close: rec.close,
+            volume: rec.volume,
+            turnover: rec.turnover,
+            num_trades: rec.num_trades,
+            vwap: rec.vwap,
+        }
+    }
+}
+
+pub async fn to_new_records_with_hash(batch: &[Arc<OHLCVRecord>]) -> Vec<NewCrabOhlcvRecord> {
+    let mut handles = Vec::with_capacity(batch.len());
+
+    for arc_rec in batch.iter().cloned() {
+        handles.push(task::spawn_blocking(move || {
+            let rec = arc_rec.as_ref();
+            let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
+            let digest = md5::compute(input);
+
+            NewCrabOhlcvRecord {
+                hash_id: digest.0.to_vec(),
+                ts: rec.ts,
+                period_start_ts: rec.period_start_ts,
+                symbol: rec.symbol.to_string(),
+                exchange: rec.exchange.to_string(),
+                period: rec.period.clone(),
+                open: rec.open,
+                high: rec.high,
+                low: rec.low,
+                close: rec.close,
+                volume: rec.volume,
+                turnover: rec.turnover,
+                num_trades: rec.num_trades,
+                vwap: rec.vwap,
+            }
+        }));
+    }
+
+    // 等待所有任务完成
+    let mut out = Vec::with_capacity(handles.len());
+    for h in handles {
+        out.push(h.await.expect("task panicked"));
+    }
+
+    out
 }
 
 impl From<(OHLCVRecord, u64)> for UpdateCrabOhlcvRecord {
