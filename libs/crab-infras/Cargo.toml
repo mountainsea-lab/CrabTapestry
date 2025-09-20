@@ -46,3 +46,10 @@ dotenvy = {workspace = true}
 
 # db
 diesel = {workspace = true}
+# http wss
+
+# Cryptographic Signatures
+uuid = { version = "1.18.1", features = ["v4"] }
+hmac = { version = "0.12.1"}
+hex = { version = "0.4.3" }
+base64 = { version = "0.22.1" }

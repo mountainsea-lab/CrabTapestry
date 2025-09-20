@@ -1,7 +1,6 @@
 use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter, UpdateCrabOhlcvRecord};
 use crate::domain::model::{AppError, AppResult, SortOrder};
 use crate::domain::repository::Repository;
-use crate::schema::crab_ohlcv_record::dsl::crab_ohlcv_record;
 use crate::{impl_full_repository, impl_repository_with_filter};
 use diesel::{MysqlConnection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 
