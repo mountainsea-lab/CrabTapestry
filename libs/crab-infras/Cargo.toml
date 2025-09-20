@@ -8,6 +8,7 @@ edition = "2024"
 crab-common-utils = { workspace = true }
 # net
 reqwest ={workspace = true}
+tokio-tungstenite = { workspace = true }
 
 # barter-data
 barter-data = { workspace = true }
@@ -21,7 +22,7 @@ bb8-redis = "0.20.0"
 tokio = { workspace = true }
 futures = { workspace = true }
 crossbeam = { workspace = true }
-
+futures-util = { workspace = true }
 
 # Error
 anyhow = { workspace = true}
