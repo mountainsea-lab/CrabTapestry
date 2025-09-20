@@ -12,6 +12,7 @@ jobs:
       matrix:
         service:
           - crab-data-event
+          - crab-hmds
           # - future-service  # 未来可扩展
 
     steps:
@@ -34,6 +35,8 @@ jobs:
           ls -lah
           echo "=== crab-data-event 目录 ==="
           ls -lah crab-data-event || true
+          echo "=== crab-hmds 目录 ==="
+          ls -lah crab-hmds || true
           echo "=== libs 目录 ==="
           ls -lah libs || true
 
