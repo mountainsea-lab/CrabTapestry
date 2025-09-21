@@ -3,7 +3,7 @@ version: "3.9"
 services:
   mysql:
     image: mysql:8.0
-    container_name: mysql-server
+    container_name: crab-mysql-server
     ports:
       - "3306:3306"
     environment:
@@ -21,7 +21,7 @@ services:
 
   redis:
     image: redis:7
-    container_name: redis-server
+    container_name: crab-redis-server
     ports:
       - "6379:6379"
     volumes:

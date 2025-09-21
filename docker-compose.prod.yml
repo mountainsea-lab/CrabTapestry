@@ -1,0 +1,16 @@
+services:
+  crab-data-event:
+    image: mountainsealab/crab-data-event:latest
+    env_file:
+      - ${CRAB_DATA_EVENT_ENV}
+    command: ["crab-data-event"]
+    ports:
+      - 10086:10086
+
+  crab-hmds:
+    image: mountainsealab/crab-hmds:latest
+    env_file:
+      - ${CRAB_HMDS_ENV}
+    command: ["crab-hmds"]
+    ports:
+      - 10088:10088

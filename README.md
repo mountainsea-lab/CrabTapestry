@@ -50,11 +50,14 @@ cargo build --release
 
 4. Run:
 ```bash
-cp .env.dev .env   # 开发环境
+# 开发环境
+cp .env.dev .env
 ./deploy/start-all.sh
 
-cp .env.prod .env  # 生产环境
-START_INFRA=no ./deploy/start-all.sh
+# 生产环境
+cp .env.prod .env
+./deploy/start-all.sh
+
 ```
 
 ---------------------------------------------------------------------------

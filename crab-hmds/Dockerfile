@@ -58,9 +58,10 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
+    libmariadb3 \
     libssl3 \
     ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
 
 # 拷贝编译好的二进制（注意：COPY 不会展开变量，所以用构建时 ARG）
 ARG SERVICE_NAME

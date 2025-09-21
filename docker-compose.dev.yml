@@ -9,7 +9,6 @@ services:
       - ${CRAB_DATA_EVENT_ENV}
     volumes:
       - ${CRAB_DATA_EVENT_ENV}:/app/.env
-      - ./deploy/start-app.sh:/deploy/start-app.sh
     command: ["crab-data-event"]
     environment:
       - REDIS_URL=${REDIS_URL}
@@ -27,7 +26,6 @@ services:
       - ${CRAB_HMDS_ENV}
     volumes:
       - ${CRAB_HMDS_ENV}:/app/.env
-      - ./deploy/start-app.sh:/deploy/start-app.sh
     command: ["crab-hmds"]
     environment:
       - DATABASE_URL=${DATABASE_URL}

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ==========================================
 # start-all.sh
-# 一键启动 infra + 应用服务（支持 dev/prod）
+# 自动处理 dev/prod 环境
 # ==========================================
 
 # 1. 加载根目录 .env
@@ -14,9 +14,8 @@ else
     exit 1
 fi
 
-# 默认配置
-START_INFRA=${START_INFRA:-yes}    # 是否启动基础设施
-SERVICES=("crab-data-event" "crab-hmds")   # 应用服务列表
+# 默认应用服务列表
+SERVICES=("crab-data-event" "crab-hmds")
 
 # ------------------------------------------
 # 等待服务函数
@@ -38,10 +37,10 @@ wait_for_redis() {
 }
 
 # ------------------------------------------
-# 启动 infra
+# 启动基础设施
 # ------------------------------------------
-if [[ "$START_INFRA" == "yes" ]]; then
-    if [[ -f "$INFRA_COMPOSE_FILE" ]]; then
+if [[ "${START_INFRA:-yes}" == "yes" ]]; then
+    if [[ -f "${INFRA_COMPOSE_FILE:-}" ]]; then
         echo "🚀 启动基础设施: $INFRA_COMPOSE_FILE ..."
         docker-compose -f "$INFRA_COMPOSE_FILE" up -d
 
@@ -51,19 +50,22 @@ if [[ "$START_INFRA" == "yes" ]]; then
     else
         echo "⚠️ INFRA_COMPOSE_FILE 未定义或文件不存在，跳过基础设施启动"
     fi
+else
+    echo "ℹ️ 跳过基础设施启动 (START_INFRA=no)"
 fi
 
 # ------------------------------------------
-# 启动应用服务（并行）
+# 启动应用服务
 # ------------------------------------------
-echo "🚀 启动应用服务..."
+APP_COMPOSE="${APP_COMPOSE_FILE:-docker-compose.yml}"
+echo "🚀 启动应用服务 (${APP_COMPOSE}) ..."
 for service in "${SERVICES[@]}"; do
-    docker-compose up -d "$service" &
+    docker-compose -f "$APP_COMPOSE" up -d "$service" &
 done
 wait  # 等待所有服务启动完成
 
 # ------------------------------------------
 # 输出日志
 # ------------------------------------------
-echo "📜 正在输出应用服务日志 (Ctrl+C 退出)..."
-docker-compose logs -f "${SERVICES[@]}"
+echo "📜 输出应用服务日志 (Ctrl+C 退出)..."
+docker-compose -f "$APP_COMPOSE" logs -f "${SERVICES[@]}"
