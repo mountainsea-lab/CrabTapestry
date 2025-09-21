@@ -58,6 +58,7 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
+    libmariadb3 \
     libssl3 \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
