@@ -41,13 +41,31 @@ jobs:
           ls -lah libs || true
 
       - name: Build and push ${{ matrix.service }}
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./${{ matrix.service }}/Dockerfile
-          push: true
-          build-args: |
-            SERVICE_NAME=${{ matrix.service }}
-          tags: |
-            mountainsealab/${{ matrix.service }}:${{ github.ref_name }}
-            mountainsealab/${{ matrix.service }}:latest
+        shell: bash
+        run: |
+          echo "=== 构建服务: ${{ matrix.service }} ==="
+          SERVICE_DIR="${{ matrix.service }}"
+
+          # 判断服务目录下是否有独立 Dockerfile
+          if [ -f "$SERVICE_DIR/Dockerfile" ]; then
+            DOCKERFILE="$SERVICE_DIR/Dockerfile"
+          else
+            DOCKERFILE="Dockerfile"  # 根目录通用 Dockerfile
+          fi
+          echo "使用 Dockerfile: $DOCKERFILE"
+
+          # 构建镜像
+          docker build \
+            --file "$DOCKERFILE" \
+            --build-arg SERVICE_NAME="${{ matrix.service }}" \
+            --tag "mountainsealab/${{ matrix.service }}:latest" \
+            --tag "mountainsealab/${{ matrix.service }}:${GITHUB_REF_NAME#refs/tags/}" \
+            .
+
+          # 推送镜像
+          docker push "mountainsealab/${{ matrix.service }}:latest"
+
+          # 安全推送 tag 镜像
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            docker push "mountainsealab/${{ matrix.service }}:${GITHUB_REF_NAME#refs/tags/}"
+          fi

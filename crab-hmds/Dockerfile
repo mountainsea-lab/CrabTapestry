@@ -17,6 +17,7 @@ WORKDIR /app
 # 将整个 workspace 复制到镜像中Cargo.lock
 COPY Cargo.toml  ./
 COPY libs ./libs
+COPY crab-data-event ./crab-data-event
 COPY crab-hmds ./crab-hmds
 # 如果未来有其他服务，只要放在 workspace 根即可
 
