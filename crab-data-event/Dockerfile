@@ -65,4 +65,10 @@ RUN apt-get update && apt-get install -y \
 ARG SERVICE_NAME
 COPY --from=builder /app/target/release/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 # 默认入口
-ENTRYPOINT ["/usr/local/bin/crab-data-event"]
+#ENTRYPOINT ["/usr/local/bin/crab-data-event"]
+# 拷贝共享启动脚本
+COPY deploy/start-app.sh /deploy/start-app.sh
+RUN chmod +x /deploy/start-app.sh
+
+# ENTRYPOINT 使用共享启动脚本
+ENTRYPOINT ["/deploy/start-app.sh"]
