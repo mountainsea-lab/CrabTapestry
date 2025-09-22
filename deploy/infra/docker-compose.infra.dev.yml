@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.0
@@ -20,15 +18,28 @@ services:
       retries: 5
 
   redis:
-    image: redis:7
     container_name: crab-redis-server
+    build:
+      context: ./vendor/redis
+      dockerfile: Dockerfile
     ports:
-      - "6379:6379"
+      - 6379:6379
     volumes:
-      - ./redis-data:/data
+      - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "1.5G"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     command: redis-server /usr/local/etc/redis/redis.conf --save "" --appendonly no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
+volumes:
+  redis-data:

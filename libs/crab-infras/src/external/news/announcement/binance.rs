@@ -4,7 +4,6 @@ use barter_integration::Transformer;
 use barter_integration::error::SocketError;
 use barter_integration::protocol::StreamParser;
 use barter_integration::protocol::websocket::{WebSocketParser, WsMessage, connect};
-use diesel::internal::derives::multiconnection::chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -12,6 +11,7 @@ use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
+use chrono::Utc;
 use tokio::sync::{Mutex, broadcast, mpsc};
 use uuid::Uuid;
 

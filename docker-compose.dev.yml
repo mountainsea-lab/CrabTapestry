@@ -1,4 +1,7 @@
 services:
+  # ---------------------------
+  # crab-data-event 应用服务
+  # ---------------------------
   crab-data-event:
     build:
       context: .
@@ -10,25 +13,24 @@ services:
     volumes:
       - ${CRAB_DATA_EVENT_ENV}:/app/.env
     command: ["crab-data-event"]
-    environment:
-      - REDIS_URL=${REDIS_URL}
-      - WAIT_FOR_REDIS=yes
     ports:
-      - 10086:10086
+      - "10086:10086"
 
-  crab-hmds:
-    build:
-      context: .
-      dockerfile: ./crab-hmds/Dockerfile
-      args:
-        SERVICE_NAME: crab-hmds
-    env_file:
-      - ${CRAB_HMDS_ENV}
-    volumes:
-      - ${CRAB_HMDS_ENV}:/app/.env
-    command: ["crab-hmds"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - WAIT_FOR_MYSQL=yes
-    ports:
-      - 10088:10088
+  # ---------------------------
+  # crab-hmds 应用服务
+  # ---------------------------
+#  crab-hmds:
+#    build:
+#      context: .
+#      dockerfile: ./crab-hmds/Dockerfile
+#      args:
+#        SERVICE_NAME: crab-hmds
+#    env_file:
+#      - ${CRAB_HMDS_ENV}
+#    volumes:
+#      - ${CRAB_HMDS_ENV}:/app/.env
+#    command: ["crab-hmds"]
+#    environment:
+#      - DATABASE_URL=${DATABASE_URL}
+#    ports:
+#      - "10088:10088"
