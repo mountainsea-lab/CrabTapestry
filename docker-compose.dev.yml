@@ -19,18 +19,16 @@ services:
   # ---------------------------
   # crab-hmds 应用服务
   # ---------------------------
-#  crab-hmds:
-#    build:
-#      context: .
-#      dockerfile: ./crab-hmds/Dockerfile
-#      args:
-#        SERVICE_NAME: crab-hmds
-#    env_file:
-#      - ${CRAB_HMDS_ENV}
-#    volumes:
-#      - ${CRAB_HMDS_ENV}:/app/.env
-#    command: ["crab-hmds"]
-#    environment:
-#      - DATABASE_URL=${DATABASE_URL}
-#    ports:
-#      - "10088:10088"
+  crab-hmds:
+    build:
+      context: .
+      dockerfile: ./crab-hmds/Dockerfile
+      args:
+        SERVICE_NAME: crab-hmds
+    env_file:
+      - ${CRAB_HMDS_ENV}
+    volumes:
+      - ${CRAB_HMDS_ENV}:/app/.env
+    command: ["crab-hmds"]
+    ports:
+      - "10088:10088"

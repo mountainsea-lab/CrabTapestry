@@ -1,6 +1,6 @@
 [workspace]
 
-exclude = ["crab-data-event"]
+exclude = ["crab-data-event", "crab-hmds"]
 resolver = "2"
 
 [workspace.dependencies]
