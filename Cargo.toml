@@ -1,5 +1,5 @@
 [workspace]
-
+members = ["libs/crab-types", "libs/crab-common-utils" ,"libs/crab-infras"]
 exclude = ["crab-data-event", "crab-hmds"]
 resolver = "2"
 
