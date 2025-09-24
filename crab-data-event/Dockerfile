@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y \
 
 # 拷贝 recipe.json 和 Cargo.toml 文件
 COPY Cargo.toml Cargo.lock ./
-COPY crab-*/Cargo.toml crab-*/Cargo.toml
+COPY crab-*/Cargo.toml crab-*/
 COPY libs/*/Cargo.toml libs/*/Cargo.toml
 COPY --from=planner /app/recipe.json recipe.json
 
