@@ -24,6 +24,9 @@ COPY libs ./libs
 # COPY workspace 下所有二进制服务的 Cargo.toml（不包含源码）
 COPY crab-*/Cargo.toml crab-*/
 
+# COPY 服务 Cargo.toml
+COPY ${SERVICE_NAME}/Cargo.toml ${SERVICE_NAME}/
+
 # 生成 cargo-chef recipe.json
 RUN cargo chef prepare --recipe-path /app/recipe.json --bin ${SERVICE_NAME}
 
