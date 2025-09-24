@@ -1,6 +1,7 @@
 services:
   crab-data-event:
     image: mountainsealab/crab-data-event:latest
+    platform: linux/amd64
     env_file:
       - ${CRAB_DATA_EVENT_ENV}
     command: ["crab-data-event"]
@@ -9,6 +10,7 @@ services:
 
   crab-hmds:
     image: mountainsealab/crab-hmds:latest
+    platform: linux/amd64
     env_file:
       - ${CRAB_HMDS_ENV}
     command: ["crab-hmds"]

@@ -18,7 +18,7 @@ WORKDIR /app
 COPY . .
 
 # 运行 cargo-chef prepare（必须在 workspace 根目录）
-RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
+RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME} --no-default-features
 
 ########################################
 # Builder 阶段
@@ -45,7 +45,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 
 # 编译服务二进制
-RUN CARGO_TARGET_DIR=/tmp/cargo-target cargo build --release --bin ${SERVICE_NAME}
+RUN CARGO_TARGET_DIR=/tmp/cargo-target cargo build --release --bin ${SERVICE_NAME} --no-default-features
 
 # 拷贝编译好的二进制到统一目录
 RUN mkdir -p /bin/server && \
