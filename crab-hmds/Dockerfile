@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y \
 # COPY recipe.json 和各 crate Cargo.toml
 COPY Cargo.toml Cargo.lock ./
 COPY crab-*/Cargo.toml crab-*/
-COPY libs/*/Cargo.toml libs/*/
+COPY libs libs
 COPY --from=planner /app/recipe.json recipe.json
 
 # 构建依赖缓存
