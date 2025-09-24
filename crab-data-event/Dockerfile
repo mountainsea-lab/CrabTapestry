@@ -18,7 +18,7 @@ WORKDIR /app
 COPY . .
 
 # 运行 cargo-chef prepare（必须在 workspace 根目录）
-RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME} --no-default-features
+RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
 
 ########################################
 # Builder 阶段
