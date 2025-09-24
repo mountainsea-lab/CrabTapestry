@@ -16,7 +16,7 @@ ARG SERVICE_NAME
 WORKDIR /app
 
 # COPY 根 Cargo.toml + Cargo.lock
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 
 # COPY workspace 下所有子 crate 的 Cargo.toml（不包含源码）
 COPY */Cargo.toml */

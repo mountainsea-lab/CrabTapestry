@@ -16,7 +16,7 @@ ARG SERVICE_NAME
 WORKDIR /app
 
 # 拷贝 workspace 配置（必须包含根 Cargo.toml / Cargo.lock / libs / 服务 Cargo.toml）
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml  ./
 COPY libs ./libs
 COPY ${SERVICE_NAME}/Cargo.toml ${SERVICE_NAME}/
 
