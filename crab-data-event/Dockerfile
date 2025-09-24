@@ -17,7 +17,7 @@ WORKDIR /app
 
 # COPY workspace 的最小结构（根 Cargo.toml + 各 crate 的 Cargo.toml）
 COPY Cargo.toml Cargo.lock ./
-COPY crab-*/Cargo.toml crab-*/
+COPY crab-* crab-*/
 COPY libs libs
 
 

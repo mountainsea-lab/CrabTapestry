@@ -17,7 +17,7 @@ WORKDIR /app
 
 # COPY workspace 的最小结构
 COPY Cargo.toml Cargo.lock ./
-COPY crab-*/Cargo.toml crab-*/
+COPY crab-* crab-*/
 COPY libs libs
 
 # 生成 cargo-chef recipe.json
