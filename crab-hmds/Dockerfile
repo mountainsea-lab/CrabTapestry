@@ -16,7 +16,7 @@ ARG SERVICE_NAME
 WORKDIR /app
 
 # COPY workspace 的最小结构
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY crab-*/Cargo.toml crab-*/Cargo.toml
 COPY libs/*/Cargo.toml libs/*/Cargo.toml
 
@@ -36,9 +36,9 @@ RUN apt-get update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 # COPY recipe.json 和各 crate Cargo.toml
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY crab-*/Cargo.toml crab-*/Cargo.toml
-COPY libs/*/Cargo.toml libs/*/Cargo.toml
+COPY libs libs
 COPY --from=planner /app/recipe.json recipe.json
 
 # 构建依赖缓存
