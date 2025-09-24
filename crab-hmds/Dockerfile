@@ -16,10 +16,13 @@ ARG SERVICE_NAME
 WORKDIR /app
 
 # COPY 根 Cargo.toml + Cargo.lock
-COPY Cargo.toml  ./
+COPY Cargo.toml ./
 
-# COPY workspace 下所有子 crate 的 Cargo.toml（不包含源码）
-COPY */Cargo.toml */
+# COPY libs 下所有 crate 的 Cargo.toml（不包含源码）
+COPY libs/*/Cargo.toml libs/*/
+
+# COPY workspace 下所有二进制服务的 Cargo.toml（不包含源码）
+COPY crab-*/Cargo.toml crab-*/
 
 # 生成 cargo-chef recipe.json
 RUN cargo chef prepare --recipe-path /app/recipe.json --bin ${SERVICE_NAME}
