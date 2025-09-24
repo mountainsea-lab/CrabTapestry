@@ -15,10 +15,7 @@ FROM chef AS planner
 ARG SERVICE_NAME
 WORKDIR /app
 
-# COPY workspace 的最小结构
-COPY Cargo.toml Cargo.lock ./
-COPY crab-* crab-*/
-COPY libs libs
+COPY . .
 
 # 生成 cargo-chef recipe.json
 RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
