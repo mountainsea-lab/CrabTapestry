@@ -18,7 +18,7 @@ WORKDIR /app
 COPY . .
 
 # 生成 cargo-chef recipe.json
-RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
+RUN cargo chef prepare --recipe-path recipe-${SERVICE_NAME}.json --bin ${SERVICE_NAME}
 
 ########################################
 # Builder 阶段
@@ -36,10 +36,10 @@ RUN apt-get update && apt-get install -y \
 COPY Cargo.toml Cargo.lock ./
 COPY crab-*/Cargo.toml crab-*/
 COPY libs libs
-COPY --from=planner /app/recipe.json recipe.json
+COPY --from=planner /app/recipe-${SERVICE_NAME}.json recipe-${SERVICE_NAME}.json
 
 # 构建依赖缓存
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe-${SERVICE_NAME}.json
 
 # COPY 全部源码（必须在 cook 之后）
 COPY . .
