@@ -277,7 +277,7 @@ where
         let shutdown = self.shutdown.clone();
 
         // 1️⃣ 启动 worker 消费任务
-        let shutdown_tx = service.clone().start_workers(4, shutdown); // worker 数量可配置
+        let _shutdown_tx = service.clone().start_workers(4, shutdown); // worker 数量可配置
 
         let shutdown1 = self.shutdown.clone();
         // 2️⃣ 启动 scheduler
