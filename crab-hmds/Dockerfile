@@ -18,8 +18,8 @@ WORKDIR /app
 # COPY 根 Cargo.toml + Cargo.lock
 COPY Cargo.toml ./
 
-# COPY libs 下所有 crate 的 Cargo.toml（不包含源码）
-COPY libs/*/Cargo.toml libs/*/
+# COPY libs 下所有 crate
+COPY libs ./libs
 
 # COPY workspace 下所有二进制服务的 Cargo.toml（不包含源码）
 COPY crab-*/Cargo.toml crab-*/
