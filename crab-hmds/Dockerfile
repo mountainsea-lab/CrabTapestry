@@ -13,10 +13,13 @@ WORKDIR /app
 ########################################
 FROM chef AS planner
 ARG SERVICE_NAME
-WORKDIR /app/${SERVICE_NAME}
+WORKDIR /app
 
-# 只 COPY 服务的 Cargo.toml
-COPY ${SERVICE_NAME}/Cargo.toml ./
+# COPY 根 Cargo.toml + Cargo.lock
+COPY Cargo.toml Cargo.lock ./
+
+# COPY workspace 下所有子 crate 的 Cargo.toml（不包含源码）
+COPY */Cargo.toml */
 
 # 生成 cargo-chef recipe.json
 RUN cargo chef prepare --recipe-path /app/recipe.json --bin ${SERVICE_NAME}
@@ -26,25 +29,22 @@ RUN cargo chef prepare --recipe-path /app/recipe.json --bin ${SERVICE_NAME}
 ########################################
 FROM chef AS builder
 ARG SERVICE_NAME
-WORKDIR /app/${SERVICE_NAME}
+WORKDIR /app
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev build-essential \
   && rm -rf /var/lib/apt/lists/*
 
-# COPY 服务 Cargo.toml 和 recipe.json
-COPY ${SERVICE_NAME}/Cargo.toml ./
+# COPY recipe.json 并构建依赖缓存
 COPY --from=planner /app/recipe.json /app/recipe.json
-
-# 构建依赖缓存
 RUN cargo chef cook --release --recipe-path /app/recipe.json
 
-# COPY 源码
-COPY ${SERVICE_NAME} ./
+# COPY workspace 全部源码
+COPY . .
 
-# 编译服务二进制
-RUN CARGO_TARGET_DIR=/tmp/cargo-target cargo build --release
+# 编译指定服务
+RUN CARGO_TARGET_DIR=/tmp/cargo-target cargo build --release -p ${SERVICE_NAME}
 
 # 拷贝编译好的二进制到统一目录
 RUN mkdir -p /bin/server && \
@@ -56,19 +56,19 @@ RUN mkdir -p /bin/server && \
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# 安装运行时依赖（libmariadb3 + openssl）
+# 安装运行时依赖
 RUN apt-get update && apt-get install -y \
     libmariadb3 \
     libssl3 ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# 拷贝编译好的二进制
+# 只 COPY 目标服务二进制
 COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 
-# 拷贝 subscriptions.toml
+# COPY subscriptions.toml
 COPY crab-hmds/subscriptions.toml /app/crab-hmds/subscriptions.toml
 
-# 拷贝启动脚本
+# COPY 启动脚本
 COPY deploy/start-app.sh /deploy/start-app.sh
 RUN chmod +x /deploy/start-app.sh
 

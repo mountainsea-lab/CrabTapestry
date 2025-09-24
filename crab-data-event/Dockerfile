@@ -15,13 +15,14 @@ FROM chef AS planner
 ARG SERVICE_NAME
 WORKDIR /app
 
-# 复制整个 workspace 的清单文件（保证本地路径依赖能解析）Cargo.lock
-COPY Cargo.toml  ./
-COPY libs ./libs
-COPY ${SERVICE_NAME}/Cargo.toml ${SERVICE_NAME}/
+# COPY 根 Cargo.toml + Cargo.lock
+COPY Cargo.toml Cargo.lock ./
+
+# COPY workspace 下所有子 crate 的 Cargo.toml（不包含源码）
+COPY */Cargo.toml */
 
 # 生成 cargo-chef recipe.json
-RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
+RUN cargo chef prepare --recipe-path /app/recipe.json --bin ${SERVICE_NAME}
 
 ########################################
 # Builder 阶段
@@ -35,11 +36,11 @@ RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev build-essential \
   && rm -rf /var/lib/apt/lists/*
 
-# 复制 recipe.json 并构建依赖缓存
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+# COPY recipe.json 并构建依赖缓存
+COPY --from=planner /app/recipe.json /app/recipe.json
+RUN cargo chef cook --release --recipe-path /app/recipe.json
 
-# 再复制源码（workspace 所有子 crate）
+# COPY workspace 全部源码
 COPY . .
 
 # 编译指定服务
@@ -60,10 +61,10 @@ RUN apt-get update && apt-get install -y \
     libssl3 ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# 只复制目标服务的二进制
+# 只 COPY 目标服务二进制
 COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 
-# 复制启动脚本
+# COPY 启动脚本
 COPY deploy/start-app.sh /deploy/start-app.sh
 RUN chmod +x /deploy/start-app.sh
 
