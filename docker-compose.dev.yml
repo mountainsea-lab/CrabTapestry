@@ -1,0 +1,34 @@
+services:
+  # ---------------------------
+  # crab-data-event 应用服务
+  # ---------------------------
+  crab-data-event:
+    build:
+      context: .
+      dockerfile: ./crab-data-event/Dockerfile
+      args:
+        SERVICE_NAME: crab-data-event
+    env_file:
+      - ${CRAB_DATA_EVENT_ENV}
+    volumes:
+      - ${CRAB_DATA_EVENT_ENV}:/app/.env
+    command: ["crab-data-event"]
+    ports:
+      - "10086:10086"
+
+  # ---------------------------
+  # crab-hmds 应用服务
+  # ---------------------------
+  crab-hmds:
+    build:
+      context: .
+      dockerfile: ./crab-hmds/Dockerfile
+      args:
+        SERVICE_NAME: crab-hmds
+    env_file:
+      - ${CRAB_HMDS_ENV}
+    volumes:
+      - ${CRAB_HMDS_ENV}:/app/.env
+    command: ["crab-hmds"]
+    ports:
+      - "10088:10088"

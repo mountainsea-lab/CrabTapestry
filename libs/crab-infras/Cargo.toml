@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 # CrabTapestry Ecosystem
-crab-common-utils = { workspace = true }
+crab-common-utils = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-common-utils" }
+
 # net
 reqwest ={workspace = true}
 
@@ -21,7 +22,8 @@ bb8-redis = "0.20.0"
 tokio = { workspace = true }
 futures = { workspace = true }
 crossbeam = { workspace = true }
-
+futures-util = { workspace = true }
+async-trait = "0.1.89"
 
 # Error
 anyhow = { workspace = true}
@@ -36,13 +38,20 @@ dashmap =  { workspace = true }
 
 # Time
 time = {workspace = true}
+chrono = {workspace = true}
 
 trade_aggregation = "13.0.1"
-async-trait = "0.1.89"
 
 # config
 toml =  { workspace = true }
 dotenvy = {workspace = true}
 
 # db
-diesel = {workspace = true}
+diesel = { version = "2.2.10", features = ["r2d2", "chrono", "extras"], optional = true }
+
+# Cryptographic Signatures
+uuid = { version = "1.18.1", features = ["v4"] }
+
+[features]
+default = []
+mysql = ["diesel/mysql"]  # 可选 feature，只在需要 MySQL 的服务启用

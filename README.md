@@ -50,11 +50,14 @@ cargo build --release
 
 4. Run:
 ```bash
-# Run the core engine
-cargo run --release --bin crabtapestry-core
+# 开发环境
+cp .env.dev .env
+./deploy/start-all.sh
 
-# Or run the Web dashboard (usually in a separate terminal)
-cargo run --release --bin crabtapestry-dashboard
+# 生产环境
+cp .env.prod .env
+./deploy/start-all.sh
+
 ```
 
 ---------------------------------------------------------------------------

@@ -1,28 +1,13 @@
 [workspace]
-members = [
-     # -- Libraries
-    "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
-    # -- Binaries
-    "crab-data-event", "crab-hmds",
-]
-default-members = [
-    # -- Libraries
-    "libs/crab-common-utils", "libs/crab-types", "libs/crab-infras",
-    # -- Binaries
-    "crab-data-event", "crab-hmds",
-]
-
+members = ["libs/crab-types", "libs/crab-common-utils" ,"libs/crab-infras"]
+exclude = ["crab-data-event", "crab-hmds"]
 resolver = "2"
 
 [workspace.dependencies]
 # Web
 warp = { version = "0.4", features = ["server"] }
 reqwest = { version = "0.12.9",default-features = false, features = ["rustls-tls", "json"] }
-
-# CrabTapestry Ecosystem
-crab-common-utils = { path = "libs/crab-common-utils", version = "0.1.0" }
-crab-types = { path = "libs/crab-types", version = "0.1.0" }
-crab-infras = { path = "libs/crab-infras", version = "0.1.0" }
+tokio-tungstenite = { version = "0.26.0", default-features = false, features = ["url","rustls-tls-webpki-roots", "connect"] }
 
 # Cryto
 trade_aggregation = "13.0.1"

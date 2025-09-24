@@ -1,61 +1,89 @@
-version: "3.9"
-
-x-defaults: &defaults
-  env_file:
-    - .env
-  environment:
-    # 默认连接本地 Redis
-    REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-
 services:
-  # ===============================
-  # crab-data-event / crab-data-event 服务
-  # ===============================
-  crab-data-event:
-    <<: *defaults
-    build:
-      context: ./crab-data-event
-      dockerfile: Dockerfile
-      args:
-        # 是否使用本地 Redis，默认为 true
-        USE_LOCAL_REDIS: ${USE_LOCAL_REDIS:-true}
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - .env:/app/.env
+  # ---------------------------
+  # MySQL 服务
+  # ---------------------------
+  crab-mysql-server:
+    image: mysql:8.0
+    container_name: crab-mysql-server
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: crabtapestry
+      MYSQL_USER: crab
+      MYSQL_PASSWORD: 123456
     ports:
-      - "8080:8080"  # 如果 crab-data-event 提供 HTTP 服务
-
-  # ===============================
-  # 可选本地 Redis 服务
-  # ===============================
-  redis:
-    build:
-      context: ./vendor/redis
-      dockerfile: Dockerfile
-    container_name: local-redis
+      - "3306:3306"
     volumes:
-      - redis-data:/data
+      - ./deploy/infra/mysql/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------
+  # Redis 服务
+  # ---------------------------
+  redis:
+    image: redis:8
+    container_name: crab-redis-server
     ports:
       - "6379:6379"
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: "1.5G"
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
-    command: redis-server /usr/local/etc/redis/redis.conf --save "" --appendonly no
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-    profiles:
-      - local-redis  # 本地 Redis 可通过 profile 控制是否启动
 
+  # ---------------------------
+  # crab-data-event 应用服务
+  # ---------------------------
+  crab-data-event:
+    build:
+      context: .
+      dockerfile: ./crab-data-event/Dockerfile
+      args:
+        SERVICE_NAME: crab-data-event
+    env_file:
+      - ${CRAB_DATA_EVENT_ENV}
+    volumes:
+      - ${CRAB_DATA_EVENT_ENV}:/app/.env
+    command: ["crab-data-event"]
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "10086:10086"
+
+  # ---------------------------
+  # crab-hmds 应用服务
+  # ---------------------------
+  crab-hmds:
+    build:
+      context: .
+      dockerfile: ./crab-hmds/Dockerfile
+      args:
+        SERVICE_NAME: crab-hmds
+    env_file:
+      - ${CRAB_HMDS_ENV}
+    volumes:
+      - ${CRAB_HMDS_ENV}:/app/.env
+    command: ["crab-hmds"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      crab-mysql-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "10088:10088"
+
+# ---------------------------
+# 数据卷
+# ---------------------------
 volumes:
   redis-data:

@@ -5,51 +5,62 @@ edition = "2024"
 
 [dependencies]
 # Web
-warp =  { workspace = true }
+warp = { version = "0.4", features = ["server"] }
 
 # Async
-tokio = {workspace = true, features = ["full"]}
-async-trait = {workspace = true}
-futures-util = { workspace = true }
-crossbeam = { workspace = true }
+tokio = { version = "1.44.2", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
 async-stream = "0.3.6"
-once_cell = { workspace = true }
+async-trait = "0.1.86"
+futures-util = "0.3.31"
+crossbeam = "0.8.4"
+futures = "0.3.31"
+once_cell = "1.21.3"
 
 # barter-data
-barter-data = { workspace = true }
+barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-data" }
 
 # tracing
-ms-tracing = { workspace = true }
+ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
 
 # CrabTapestry Ecosystem
-crab-common-utils = { workspace = true }
-crab-infras = { workspace = true }
-crab-types  = {workspace = true}
-trade_aggregation = { workspace = true }
+crab-common-utils = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-common-utils" }
+crab-types = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-types" }
+crab-infras = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-infras" , features = ["mysql"]}
+
+# Cryto
+trade_aggregation = "13.0.1"
 
 # Error
-anyhow = {workspace = true}
+anyhow = "1.0.95"
+thiserror = "2.0.11"
 
 # Time
-chrono = {workspace = true}
+chrono = { version = "0.4.39", features = ["serde"] }
 
 # SerDe Data
-dashmap =  { workspace = true }
-serde_json = { workspace = true }
-futures = "0.3.31"
-rand = "0.9.2"
+serde_json = "1.0.140"
 serde = { version = "1.0.219", features = ["derive"] }
+dashmap = "6.1.0"
+
+
+rand = "0.9.2"
 log = "0.4.27"
 
 # Db
-diesel = {workspace = true}
+diesel = { version = "2.2.10", features = ["mysql", "r2d2", "chrono", "extras"] }
+md5 = "0.8.0"
 
 # env
-dotenvy = { workspace = true }
+dotenvy = "0.15"
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["async"] }
 
-[[bench]]
-name = "data_buffer_bench"
-harness = false
+#[[bench]]
+#name = "data_buffer_bench"
+#harness = false
+
+
+[[bin]]
+name = "crab-hmds"
+path = "src/main.rs"
