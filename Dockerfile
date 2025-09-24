@@ -17,8 +17,17 @@ WORKDIR /app
 
 # 拷贝 workspace 配置（必须包含根 Cargo.toml / Cargo.lock / libs / 服务 Cargo.toml）
 COPY Cargo.toml  ./
-COPY libs ./libs
-COPY ${SERVICE_NAME}/Cargo.toml ${SERVICE_NAME}/
+# 自动找到 workspace 下所有 crate 的 Cargo.toml（libs/* + 服务目录）
+# 注意：需要在 COPY 之前创建目标目录
+RUN find . -maxdepth 1 -type d ! -name . -exec mkdir -p {} \;
+
+# 使用 shell 循环拷贝所有一级目录的 Cargo.toml
+# 这样不管后续新增 libs 或服务，都无需修改 Dockerfile
+RUN for dir in */ ; do \
+        if [ -f "$dir/Cargo.toml" ]; then \
+            cp "$dir/Cargo.toml" "$dir"; \
+        fi; \
+    done
 
 # 生成依赖清单
 RUN cargo chef prepare --recipe-path recipe.json --bin ${SERVICE_NAME}
