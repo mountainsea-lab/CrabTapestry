@@ -17,7 +17,7 @@ WORKDIR /app
 
 # COPY workspace 的最小结构
 COPY Cargo.toml Cargo.lock ./
-COPY crab-*/Cargo.toml crab-*/Cargo.toml
+COPY crab-*/Cargo.toml crab-*/
 COPY libs/*/Cargo.toml libs/*/Cargo.toml
 
 # 生成 cargo-chef recipe.json
@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y \
 # COPY recipe.json 和各 crate Cargo.toml
 COPY Cargo.toml Cargo.lock ./
 COPY crab-*/Cargo.toml crab-*/
-COPY libs libs
+COPY libs/*/Cargo.toml libs/*/
 COPY --from=planner /app/recipe.json recipe.json
 
 # 构建依赖缓存
