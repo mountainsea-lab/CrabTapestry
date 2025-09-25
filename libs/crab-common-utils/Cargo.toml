@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # CrabTapestry Ecosystem
-crab-types = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-types" }
+crab-types = { path  = "../crab-types" }
 
 # Time
 time = {workspace = true}

@@ -571,17 +571,7 @@ dependencies = [
 name = "crab-common-utils"
 version = "0.1.0"
 dependencies = [
- "crab-types 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=dev)",
- "ms-tracing",
- "time",
-]
-
-[[package]]
-name = "crab-common-utils"
-version = "0.1.0"
-source = "git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=dev#71fa847a7cbc915502b18a7018c3f1bfa7dcf372"
-dependencies = [
- "crab-types 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=dev)",
+ "crab-types",
  "ms-tracing",
  "time",
 ]
@@ -616,9 +606,9 @@ dependencies = [
  "async-trait",
  "barter-data",
  "chrono",
- "crab-common-utils 0.1.0",
+ "crab-common-utils",
  "crab-infras",
- "crab-types 0.1.0",
+ "crab-types",
  "criterion",
  "crossbeam",
  "dashmap",
@@ -649,7 +639,7 @@ dependencies = [
  "bb8",
  "bb8-redis",
  "chrono",
- "crab-common-utils 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=dev)",
+ "crab-common-utils",
  "crossbeam",
  "dashmap",
  "diesel",
@@ -674,16 +664,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
-]
-
-[[package]]
-name = "crab-types"
-version = "0.1.0"
-source = "git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=dev#71fa847a7cbc915502b18a7018c3f1bfa7dcf372"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
 ]
 
 [[package]]

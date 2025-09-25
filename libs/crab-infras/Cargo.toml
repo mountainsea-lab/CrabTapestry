@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # CrabTapestry Ecosystem
-crab-common-utils = { git = "https://github.com/mountainsea-lab/CrabTapestry.git", branch = "dev", package = "crab-common-utils" }
+crab-common-utils = { path  = "../crab-common-utils" }
 
 # net
 reqwest ={workspace = true}
