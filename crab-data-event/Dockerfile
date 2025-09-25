@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 ARG RUST_VERSION=1.87.0
-ARG SERVICE_NAME=crab-data-event
+ARG SERVICE_NAME
 
 ########################################
 # Builder 阶段
