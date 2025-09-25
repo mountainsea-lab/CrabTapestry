@@ -10,7 +10,7 @@ WORKDIR /app
 
 # 安装构建依赖
 RUN apk add --no-cache \
-    clang lld musl-dev pkgconfig openssl-dev git bash make
+    clang lld musl-dev pkgconfig openssl-dev git bash make mariadb-connector-c-dev
 
 # 构建缓存目录
 RUN mkdir -p /tmp/cargo-target
@@ -35,7 +35,7 @@ WORKDIR /app
 # 安装运行时依赖
 RUN apk add --no-cache \
     mariadb-connector-c \
-    openssl
+    openssl \
 
 # 拷贝编译好的二进制
 COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
