@@ -3,17 +3,21 @@ services:
     image: mountainsealab/crab-data-event:latest
     platform: linux/amd64
     env_file:
-      - ${CRAB_DATA_EVENT_ENV}
+      - ${CRAB_DATA_EVENT_ENV}   # 只读 env_file 用于环境变量
+    volumes:
+      - "${CRAB_DATA_EVENT_ENV}:/app/.env:ro"   # 挂载到容器 /app/.env
     command: ["crab-data-event"]
     ports:
-      - 10086:10086
+      - "10086:10086"
 
   crab-hmds:
     image: mountainsealab/crab-hmds:latest
     platform: linux/amd64
     env_file:
-      - ${CRAB_HMDS_ENV}
-      - ./crab-hmds/subscriptions.toml:/app/crab-hmds/subscriptions.toml:ro
+      - ${CRAB_HMDS_ENV}   # 只读 env_file 用于环境变量
+    volumes:
+      - "${CRAB_HMDS_ENV}:/app/.env:ro"
+      - "${PWD}/crab-hmds/subscriptions.toml:/app/crab-hmds/subscriptions.toml:ro"
     command: ["crab-hmds"]
     ports:
-      - 10088:10088
+      - "10088:10088"

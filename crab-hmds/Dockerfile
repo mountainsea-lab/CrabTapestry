@@ -74,4 +74,4 @@ RUN chmod +x /deploy/start-app.sh
 EXPOSE 10088
 
 # 启动服务
-ENTRYPOINT ["/deploy/start-app.sh"]
+ENTRYPOINT ["/bin/bash", "/deploy/start-app.sh"]

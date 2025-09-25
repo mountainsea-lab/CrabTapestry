@@ -47,4 +47,5 @@ WORKDIR /app
 EXPOSE 10086
 
 # 启动服务（通过你的脚本）
-ENTRYPOINT ["/deploy/start-app.sh"]
+ENTRYPOINT ["/bin/bash", "/deploy/start-app.sh"]
+
