@@ -51,11 +51,22 @@ if [[ ! -f "$APP_COMPOSE" ]]; then
     exit 1
 fi
 
-# 启动指定服务
-for service in "${SERVICES[@]}"; do
-    echo "🔹 启动服务: $service ..."
-    docker compose -f "$APP_COMPOSE" up -d --build "$service"
-done
+
+# ------------------------------------------
+# 启动应用服务
+# ------------------------------------------
+APP_COMPOSE="${APP_COMPOSE_FILE:-docker-compose.yml}"
+echo "🚀 启动应用服务 (${APP_COMPOSE}) ..."
+
+if [ "${#SERVICES[@]}" -eq 0 ]; then
+    echo "⚠️ 没有指定要启动的服务，跳过应用服务启动"
+else
+    for service in "${SERVICES[@]}"; do
+        echo "🔹 启动服务: $service ..."
+        docker-compose -f "$APP_COMPOSE" up -d "$service" &
+    done
+    wait  # 等待所有服务启动完成
+fi
 
 # ------------------------------------------
 # 4️⃣ 输出日志并跟随
