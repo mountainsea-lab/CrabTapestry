@@ -20,7 +20,7 @@ COPY . .
 
 # 编译指定服务，屏蔽默认 feature（按需调整，如 mysql feature）
 RUN CARGO_TARGET_DIR=/tmp/cargo-target \
-    cargo build --release --package ${SERVICE_NAME} --no-default-features
+    cargo build --release --package ${SERVICE_NAME}
 
 # 拷贝编译好的二进制
 RUN mkdir -p /bin/server && \
