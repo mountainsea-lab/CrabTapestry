@@ -11,7 +11,7 @@ WORKDIR /app
 # 安装构建依赖
 RUN apk add --no-cache \
     clang lld musl-dev pkgconfig openssl-dev git bash make \
-    mariadb-connector-c-dev mariadb-connector-c
+    mariadb-connector-c-dev mariadb-connector-c-static
 
 
 # 构建缓存目录
