@@ -14,7 +14,9 @@ RUN apk add --no-cache \
     clang lld musl-dev pkgconfig openssl-dev git bash make \
     mariadb-connector-c mariadb-connector-c-dev
 
-ENV MYSQLCLIENT_STATIC=N
+ENV MYSQLCLIENT_STATIC=0
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_ALL_STATIC=0
 
 # 构建缓存目录
 RUN mkdir -p /tmp/cargo-target
