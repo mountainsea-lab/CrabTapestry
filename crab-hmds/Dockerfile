@@ -5,23 +5,40 @@ ARG SERVICE_NAME
 ########################################
 # Builder 阶段
 ########################################
-FROM rust:${RUST_VERSION}-alpine AS builder
+FROM rust:${RUST_VERSION}-bullseye AS builder
 ARG SERVICE_NAME
 WORKDIR /app
 
-# 安装构建依赖
-RUN apk add --no-cache \
-    clang lld musl-dev pkgconfig openssl-dev git bash make \
-    mariadb-connector-c mariadb-connector-c-dev
-
-ENV MYSQLCLIENT_STATIC=0
-ENV PKG_CONFIG_ALLOW_CROSS=1
-ENV PKG_CONFIG_ALL_STATIC=0
+# 安装构建依赖（glibc + dev libs）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libmariadb-dev \
+    git \
+    bash \
+    make \
+ && rm -rf /var/lib/apt/lists/*
 
 # 构建缓存目录
 RUN mkdir -p /tmp/cargo-target
 
-# 拷贝整个 workspace
+# ------------------------------
+# 依赖缓存优化
+# ------------------------------
+# 先拷贝 Cargo.toml/Cargo.lock 及 workspace 相关 Cargo.toml
+# 这里假设 workspace 中 libs/crab-infras 也在源码目录下
+COPY Cargo.toml Cargo.lock ./
+COPY libs/crab-infras/Cargo.toml libs/crab-infras/Cargo.toml
+
+# 生成依赖层缓存
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN CARGO_TARGET_DIR=/tmp/cargo-target cargo build --release --package ${SERVICE_NAME} || true
+RUN rm -rf src
+
+# ------------------------------
+# 拷贝实际源代码
+# ------------------------------
 COPY . .
 
 # 编译指定服务
@@ -35,14 +52,16 @@ RUN mkdir -p /bin/server && \
 ########################################
 # Runtime 阶段
 ########################################
-FROM alpine:3.20 AS runtime
+FROM debian:bookworm-slim AS runtime
 ARG SERVICE_NAME
 WORKDIR /app
 
 # 安装运行时依赖
-RUN apk add --no-cache \
-    mariadb-connector-c \
-    openssl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libmariadb3 \
+    libssl3 \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # 拷贝编译好的二进制
 COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
@@ -51,7 +70,7 @@ COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 COPY deploy/start-app.sh /deploy/start-app.sh
 RUN chmod +x /deploy/start-app.sh
 
-# 暴露端口（按服务实际需求）
+# 暴露端口
 EXPOSE 10088
 
 # 启动服务
