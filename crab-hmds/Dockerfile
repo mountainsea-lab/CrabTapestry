@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.4
 ARG RUST_VERSION=1.87.0
 ARG SERVICE_NAME
+
 ########################################
 # Builder 阶段
 ########################################
@@ -11,8 +12,9 @@ WORKDIR /app
 # 安装构建依赖
 RUN apk add --no-cache \
     clang lld musl-dev pkgconfig openssl-dev git bash make \
-    mariadb-connector-c-dev mariadb-connector-c-static
+    mariadb-connector-c mariadb-connector-c-dev
 
+ENV MYSQLCLIENT_STATIC=N
 
 # 构建缓存目录
 RUN mkdir -p /tmp/cargo-target
@@ -20,7 +22,7 @@ RUN mkdir -p /tmp/cargo-target
 # 拷贝整个 workspace
 COPY . .
 
-# 编译指定服务，屏蔽默认 feature（按需调整，如 mysql feature）
+# 编译指定服务
 RUN CARGO_TARGET_DIR=/tmp/cargo-target \
     cargo build --release --package ${SERVICE_NAME}
 
@@ -31,7 +33,8 @@ RUN mkdir -p /bin/server && \
 ########################################
 # Runtime 阶段
 ########################################
-FROM alpine:3.18 AS runtime
+FROM alpine:3.20 AS runtime
+ARG SERVICE_NAME
 WORKDIR /app
 
 # 安装运行时依赖
@@ -45,9 +48,6 @@ COPY --from=builder /bin/server/${SERVICE_NAME} /usr/local/bin/${SERVICE_NAME}
 # 拷贝启动脚本
 COPY deploy/start-app.sh /deploy/start-app.sh
 RUN chmod +x /deploy/start-app.sh
-
-# 设置工作目录
-WORKDIR /app
 
 # 暴露端口（按服务实际需求）
 EXPOSE 10088
