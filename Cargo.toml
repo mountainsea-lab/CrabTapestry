@@ -6,7 +6,8 @@ members = [
     "libs/crab-infras",
     # -- Binaries
     "crab-data-event" ,
-    "crab-hmds"
+    "crab-hmds",
+    "crab-insight-hub"
 ]
 
 default-members = [
@@ -16,7 +17,8 @@ default-members = [
     "libs/crab-infras",
     # -- Binaries
     "crab-data-event" ,
-    "crab-hmds"
+    "crab-hmds",
+    "crab-insight-hub"
 ]
 
 resolver = "2"

@@ -659,6 +659,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "crab-insight-hub"
+version = "0.1.0"
+
+[[package]]
 name = "crab-types"
 version = "0.1.0"
 dependencies = [
