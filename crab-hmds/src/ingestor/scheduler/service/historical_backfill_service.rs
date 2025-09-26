@@ -11,7 +11,7 @@ use ms_tracing::tracing_utils::internal::{error, info, warn};
 use std::collections::BinaryHeap;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify, broadcast};
+use tokio::sync::{Mutex, Notify};
 
 /// HistoricalBackfillService
 pub struct HistoricalBackfillService<F>
@@ -22,6 +22,7 @@ where
     db: Arc<dyn BackfillMetaStore>,
     default_max_batch_hours: i64,
     max_retries: usize,
+    lookback_days: i64,
     job_queue: Arc<Mutex<BinaryHeap<BackfillJob<F>>>>,
     notify: Arc<Notify>, // 新增字段，用于 worker 通知
 }
@@ -36,12 +37,14 @@ where
         db: Arc<dyn BackfillMetaStore>,
         default_max_batch_hours: i64,
         max_retries: usize,
+        lookback_days: i64,
     ) -> Self {
         Self {
             scheduler,
             db,
             default_max_batch_hours,
             max_retries,
+            lookback_days,
             job_queue: Arc::new(Mutex::new(BinaryHeap::new())),
             notify: Arc::new(Notify::new()), // 初始化 notify
         }
@@ -274,8 +277,8 @@ where
                     last_success_ts: 0,
                     last_fetch_ts: 0,
                     batch_size: 500, // 最大支持条数
-                    supports_tick: true,
-                    supports_trade: true,
+                    supports_tick: false,
+                    supports_trade: false,
                     supports_ohlcv: true,
                 };
 
@@ -385,7 +388,7 @@ where
                         ));
 
                         // step_millis 记录为 batch_span 毫秒
-                        let step_millis = batch_span.num_milliseconds() as i64;
+                        let step_millis = batch_span.num_milliseconds();
 
                         self.schedule_backfill(ctx, data_type.clone(), key.clone(), BackfillPriority::Gap, step_millis)
                             .await;
@@ -435,23 +438,6 @@ where
         }
     }
 
-    /// 启动多个 worker 并返回 shutdown 通道
-    // pub fn start_workers(self: Arc<Self>, worker_count: usize) -> broadcast::Sender<()> {
-    //     let (shutdown_tx, _) = broadcast::channel::<()>(worker_count);
-    //
-    //     for _ in 0..worker_count {
-    //         let svc = self.clone();
-    //         let shutdown_rx = shutdown_tx.subscribe();
-    //
-    //         let notify_clone = svc.notify.clone(); // ✅ 使用 service 内部 notify
-    //
-    //         tokio::spawn(async move {
-    //             svc.worker_loop(shutdown_rx, notify_clone).await;
-    //         });
-    //     }
-    //
-    //     shutdown_tx
-    // }
     /// 启动多个 worker，不返回 shutdown 通道，使用内部 notify 进行新任务通知
     pub fn start_workers(self: Arc<Self>, worker_count: usize, shutdown: Arc<Notify>) {
         for _ in 0..worker_count {
@@ -463,34 +449,6 @@ where
                 svc.worker_loop(shutdown_clone, notify_clone).await;
             });
         }
-    }
-    pub async fn loop_maintain_tasks(
-        &self,
-        subscriptions: &SubscriptionMap,
-        data_type: BackfillDataType,
-        mut shutdown_rx: broadcast::Receiver<()>,
-    ) {
-        let maintain_interval = std::time::Duration::from_secs(60);
-
-        loop {
-            tokio::select! {
-                _ = shutdown_rx.recv() => {
-                    info!("Maintain loop received shutdown signal, exiting");
-                    break;
-                }
-                _ = tokio::time::sleep(maintain_interval) => {
-                    info!("Running maintain loop iteration...");
-
-                    // 1️⃣ 检查缺口并调度回溯任务
-                    self.backfill_historical(subscriptions, data_type.clone(), 1).await;
-
-                    // 2️⃣ 最近数据维护（过去 2 小时）
-                    self.init_recent_tasks(subscriptions, 2, data_type.clone()).await;
-                }
-            }
-        }
-
-        info!("Maintain loop stopped");
     }
 
     pub async fn loop_maintain_tasks_notify(
@@ -511,7 +469,7 @@ where
                     info!("Running maintain loop iteration...");
 
                     // 1️⃣ 检查缺口并调度回溯任务
-                    self.backfill_historical(subscriptions, data_type.clone(), 1).await;
+                    self.backfill_historical(subscriptions, data_type.clone(), self.lookback_days).await;
 
                     // 2️⃣ 最近数据维护（过去 2 小时）
                     self.init_recent_tasks(subscriptions, 2, data_type.clone()).await;

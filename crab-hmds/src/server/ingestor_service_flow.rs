@@ -1,3 +1,4 @@
+use crate::global::get_app_config;
 use crate::ingestor::ctrservice::control_service::IngestorService;
 use crate::ingestor::ctrservice::{ControlMsg, ServiceParams};
 use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
@@ -19,11 +20,15 @@ pub async fn start_ingestor_service_flow() {
     let fetcher = Arc::new(BinanceFetcher::new());
     let scheduler = BaseBackfillScheduler::new(fetcher.clone(), 3); // retry_limit=3
 
+    // 通过全局配置获取回溯天数
+    let lookback_days = get_app_config().app.lookback_days;
+
     let back_fill_service = Arc::new(HistoricalBackfillService::new(
         scheduler.clone(),
         meta_store.clone(),
         4, // default_max_batch_hours
         3, // max_retries
+        lookback_days,
     ));
 
     // -------------------------------

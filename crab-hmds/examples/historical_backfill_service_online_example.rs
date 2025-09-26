@@ -6,11 +6,13 @@ use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBack
 use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
-use crab_hmds::load_subscriptions_config;
+use crab_hmds::{load_app_config, load_subscriptions_config};
 use crab_infras::config::sub_config::{SubscriptionMap, load_subscriptions_map};
 use dashmap::DashMap;
+use dotenvy::dotenv;
 use futures::future::join_all;
 use ms_tracing::tracing_utils::internal::{info, warn};
+use std::env;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::sync::broadcast;
@@ -19,6 +21,9 @@ use tokio::sync::broadcast;
 async fn main() -> Result<()> {
     ms_tracing::setup_tracing();
 
+    // 假设 hmds.toml 在当前目录
+    let app_config = load_app_config().expect("系统应用配置信息读取失败");
+    let lookback_days = app_config.app.lookback_days;
     // -------------------------------
     // 1️⃣ 初始化存储和调度器
     // -------------------------------
@@ -31,6 +36,7 @@ async fn main() -> Result<()> {
         meta_store.clone(),
         4, // default_max_batch_hours
         3, // max_retries
+        lookback_days,
     ));
 
     // -------------------------------
@@ -88,11 +94,11 @@ async fn main() -> Result<()> {
     // -------------------------------
     // 5️⃣ 初始化任务
     // -------------------------------
-    // 最近数据（过去 2 小时）
-    service.init_recent_tasks(&subscriptions, 2, BackfillDataType::OHLCV).await;
-
-    // 历史回溯（过去 1 天）
-    service.backfill_historical(&subscriptions, BackfillDataType::OHLCV, 1).await;
+    // // 最近数据（过去 2 小时）
+    // service.init_recent_tasks(&subscriptions, 2, BackfillDataType::OHLCV).await;
+    //
+    // // 历史回溯（过去 1 天）
+    // service.backfill_historical(&subscriptions, BackfillDataType::OHLCV, 1).await;
 
     // -------------------------------
     // 6️⃣ 启动后台维护任务

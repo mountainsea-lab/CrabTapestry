@@ -1,0 +1,21 @@
+# config/hmds.toml
+[app]
+# 设置回溯数据天数
+lookback_days = 7
+
+[[subscriptions]]
+exchange = "BinanceFuturesUsd"
+default_periods = ["1m", "5m", "1h"]
+symbols = [
+    { name = "btc", quote="usdt", periods = ["1m", "5m", "1h"] },
+    { name = "eth", quote="usdt", periods = ["1m"] },
+    { name = "sol", quote="usdt", periods = ["1m"] },
+]
+
+#[[subscriptions]]
+#exchange = "okx"
+#default_periods = ["1m", "5m", "1h"]
+#symbols = [
+#    { name = "BTC/USDT", periods = ["15m"] }
+#]
+

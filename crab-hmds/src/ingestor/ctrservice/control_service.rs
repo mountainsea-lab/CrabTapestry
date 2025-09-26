@@ -9,7 +9,7 @@ use crate::ingestor::realtime::market_data_pipe_line::MarketDataPipeline;
 use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
-use crate::load_subscriptions_config;
+use crate::load_subscriptions;
 use crab_infras::config::sub_config::{Subscription, SubscriptionMap, load_subscriptions_map};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -71,10 +71,7 @@ where
         pipeline: Arc<MarketDataPipeline>,
         shutdown: Arc<Notify>,
     ) -> Self {
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
-            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-            Arc::new(Default::default())
-        });
+        let subscriptions: SubscriptionMap = Arc::new(Default::default());
         let (control_tx, control_rx) = mpsc::channel(1024);
         let (internal_tx, internal_rx) = mpsc::channel(64);
 
@@ -168,7 +165,6 @@ where
         params: ServiceParams,
     ) -> Arc<Self> {
         let service = Arc::new(Self::with_params(backfill, pipeline, shutdown, params));
-        // service.initialize_subscriptions(config).await;
         service
     }
 
@@ -544,7 +540,7 @@ where
 
     /// 异步初始化订阅配置（仅加载到服务状态，不启动任务）
     pub async fn initialize_subscriptions(self: &Arc<Self>) {
-        match load_subscriptions_config() {
+        match load_subscriptions() {
             Ok(subscriptions) => {
                 info!("Loaded {} subscriptions", subscriptions.len());
 
