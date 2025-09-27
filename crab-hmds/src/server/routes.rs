@@ -35,21 +35,11 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
 
     //=====================ohlcv================================
     let ohlcv_records = api
-        .and(
-            warp::path("ohlcv").and(
-                warp::get() // 历史查询接口
-                    .and(warp::query::<OhlcvFilter>()),
-            ),
-        )
+        .and(warp::path("ohlcv").and(warp::path("list").and(warp::get()).and(warp::query::<OhlcvFilter>())))
         .and_then(query_list);
 
     let ohlcv_page = api
-        .and(
-            warp::path("ohlcv").and(
-                warp::get() // 历史查询接口
-                    .and(warp::query::<OhlcvFilter>()),
-            ),
-        )
+        .and(warp::path("ohlcv").and(warp::path("page").and(warp::get()).and(warp::query::<OhlcvFilter>())))
         .and_then(query_page);
     //=====================ohlcv================================
 
