@@ -1,11 +1,12 @@
 use diesel::result::Error as DieselError;
+use serde::Deserialize;
 use thiserror::Error;
 
 pub mod market_backfill_meta;
 pub mod market_missing_range;
 pub mod ohlcv_record;
 
-pub type AppResult<T> = Result<T, AppError>;
+pub type AppResult<T> = anyhow::Result<T, AppError>;
 
 #[derive(Debug, Error)]
 pub enum AppError {
@@ -22,6 +23,13 @@ pub enum AppError {
     Internal(String),
 }
 
+impl From<anyhow::Error> for AppError {
+    fn from(error: anyhow::Error) -> Self {
+        // 根据实际需要转换
+        AppError::Internal(error.to_string())
+    }
+}
+
 /// 通用分页响应
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PageResult<T> {
@@ -31,7 +39,7 @@ pub struct PageResult<T> {
     pub per_page: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum SortOrder {
     Asc,
     Desc,

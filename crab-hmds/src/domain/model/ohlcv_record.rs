@@ -198,7 +198,7 @@ impl From<(OHLCVRecord, u64)> for UpdateCrabOhlcvRecord {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OhlcvFilter {
     pub exchange: Option<String>,
     pub symbol: Option<String>,

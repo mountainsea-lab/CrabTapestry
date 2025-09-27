@@ -1,5 +1,5 @@
 mod ingestor_service_flow;
-mod response;
+pub mod response;
 mod routes;
 
 use crate::global::init_global_services;

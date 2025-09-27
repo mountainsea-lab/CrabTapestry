@@ -1,4 +1,5 @@
-use crate::domain::model::ohlcv_record::NewCrabOhlcvRecord;
+use crate::domain::model::PageResult;
+use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter};
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::service::ohlcv_record_service::OhlcvRecordService;
 use crate::global::get_mysql_pool;
@@ -11,4 +12,30 @@ pub async fn save_ohlcv_records_batch(datas: &[NewCrabOhlcvRecord]) -> Result<()
     let repo = OhlcvRecordRepository::new(&mut conn);
     let mut ohlcv_record_service = OhlcvRecordService { repo };
     ohlcv_record_service.insert_new_ohlcv_records_batch(datas).await
+}
+/// 分页查询ohlcv records数据
+pub async fn query_ohlcv_page(ohlcv_filter: OhlcvFilter) -> Result<PageResult<CrabOhlcvRecord>, anyhow::Error> {
+    let mut conn = get_mysql_pool().get()?;
+    let repo = OhlcvRecordRepository::new(&mut conn);
+    let mut ohlcv_record_service = OhlcvRecordService { repo };
+    let page = ohlcv_filter.page.map_or_else(|| 1, |p| p);
+    let page_size = ohlcv_filter.page_size.map_or_else(|| 20, |p| p);
+    let result = ohlcv_record_service
+        .query_page_with_total(ohlcv_filter, page as i64, page_size as i64)
+        .map_err(|e| anyhow::Error::new(e))?;
+
+    Ok(result)
+}
+
+/// 条件查询ohlcv records线集合
+pub async fn query_ohlcv_list(ohlcv_filter: OhlcvFilter) -> Result<Vec<CrabOhlcvRecord>, anyhow::Error> {
+    let mut conn = get_mysql_pool().get()?;
+    let repo = OhlcvRecordRepository::new(&mut conn);
+    let mut ohlcv_record_service = OhlcvRecordService { repo };
+    let result = ohlcv_record_service
+        .query_list(ohlcv_filter)
+        .await
+        .map_err(|e| anyhow::Error::new(e))?;
+
+    Ok(result)
 }

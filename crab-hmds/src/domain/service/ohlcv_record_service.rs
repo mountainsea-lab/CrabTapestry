@@ -32,19 +32,19 @@ impl<'a> OhlcvRecordService<'a> {
     }
 
     pub async fn insert_new_ohlcv_records_batch(&mut self, datas: &[NewCrabOhlcvRecord]) -> Result<()> {
-        insert_new_ohlcv_records_batch(&mut self.repo.conn, datas, 500)?;
+        insert_new_ohlcv_records_batch(&mut self.repo.conn, datas, 500).await?;
         Ok(())
     }
 
-    pub fn query_list(&mut self, filter: OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
-        let data = query_list_by_filter(&mut self.repo.conn, &filter)?;
+    pub async fn query_list(&mut self, filter: OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
+        let data = query_list_by_filter(&mut self.repo.conn, &filter).await?;
         Ok(data)
     }
 }
 
 /// 批量安全插入新 K 线，遇到 hash_id 已存在自动忽略
 /// 自动按 batch_size 拆分
-pub fn insert_new_ohlcv_records_batch(
+pub async fn insert_new_ohlcv_records_batch(
     conn: &mut MysqlConnection,
     ohlcv_records: &[NewCrabOhlcvRecord],
     batch_size: usize, // 每批大小，例如 500
@@ -86,7 +86,10 @@ pub fn insert_new_ohlcv_records_batch(
     Ok(total_inserted)
 }
 
-pub fn query_list_by_filter(conn: &mut MysqlConnection, ohlcv_filter: &OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
+pub async fn query_list_by_filter(
+    conn: &mut MysqlConnection,
+    ohlcv_filter: &OhlcvFilter,
+) -> AppResult<Vec<CrabOhlcvRecord>> {
     let mut query = crab_ohlcv_record.into_boxed(); // 初始化为可扩展查询
 
     // 根据 `OhlcvFilter` 动态添加筛选条件
