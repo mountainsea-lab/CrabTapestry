@@ -1,13 +1,15 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
+use crab_hmds::config::AppConfig;
+use crab_hmds::global::get_app_config;
 use crab_hmds::ingestor::dedup::Deduplicatable;
 use crab_hmds::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
-use crab_hmds::{load_app_config, load_subscriptions_config};
-use crab_infras::config::sub_config::{SubscriptionMap, load_subscriptions_map};
+use crab_hmds::{load_app_config, load_subscriptions};
+use crab_infras::config::sub_config::{Subscription, SubscriptionMap};
 use dashmap::DashMap;
 use dotenvy::dotenv;
 use futures::future::join_all;
@@ -42,7 +44,7 @@ async fn main() -> Result<()> {
     // -------------------------------
     // 2️⃣ 加载订阅配置
     // -------------------------------
-    let subscriptions = load_subscriptions_config()?;
+    let subscriptions = load_subscriptionMaps(app_config.clone())?;
 
     // -------------------------------
     // 3️⃣ (1)历史数据拉取调阅器启动,等待拉取任务到来 (2) 启动 worker 维护tasks
@@ -153,3 +155,14 @@ async fn main() -> Result<()> {
 //     info!("Loading subscriptions from: {}", config_path);
 //     load_subscriptions_map(&config_path)
 // }
+/// 从 TOML 文件加载并初始化 SubscriptionMap
+pub fn load_subscriptionMaps(app_config: AppConfig) -> Result<Arc<DashMap<(String, String), Subscription>>> {
+    let map = Arc::new(DashMap::new());
+    for exch_cfg in &app_config.subscriptions {
+        for sub in exch_cfg.to_subscriptions() {
+            let key = (sub.exchange.to_string(), sub.symbol.to_string());
+            map.insert(key, sub);
+        }
+    }
+    Ok(map)
+}

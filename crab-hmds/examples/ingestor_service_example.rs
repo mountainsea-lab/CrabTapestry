@@ -9,6 +9,7 @@ use crab_hmds::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscr
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crab_hmds::ingestor::scheduler::service::InMemoryBackfillMetaStore;
 use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
+use crab_hmds::load_app_config;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,6 +19,10 @@ use tokio::time::sleep;
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     ms_tracing::setup_tracing();
+
+    let app_config = load_app_config().expect("系统应用配置信息读取失败");
+    let lookback_days = app_config.app.lookback_days;
+
     // -------------------------------
     // 1️⃣ 初始化历史数据维护服务
     // -------------------------------
@@ -30,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
         meta_store.clone(),
         4, // default_max_batch_hours
         3, // max_retries
+        lookback_days,
     ));
 
     // -------------------------------

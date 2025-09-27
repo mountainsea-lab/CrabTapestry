@@ -10,7 +10,7 @@ use crate::ingestor::scheduler::service::historical_backfill_service::Historical
 use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
 use crate::load_subscriptions;
-use crab_infras::config::sub_config::{Subscription, SubscriptionMap, load_subscriptions_map};
+use crab_infras::config::sub_config::{Subscription, SubscriptionMap};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -110,10 +110,7 @@ where
         shutdown: Arc<Notify>,
         params: ServiceParams,
     ) -> Self {
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
-            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-            Arc::new(Default::default())
-        });
+        let subscriptions: SubscriptionMap = Arc::new(Default::default());
 
         let (control_tx, control_rx) = mpsc::channel(params.control_channel_size);
         let (internal_tx, internal_rx) = mpsc::channel(params.internal_channel_size);
