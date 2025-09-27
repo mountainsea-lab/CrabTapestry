@@ -4,6 +4,7 @@ use ms_tracing::tracing_utils::internal::info;
 /// ==============================
 ///  应用配置信息获取
 /// ==============================
+#[tokio::main]
 fn main() -> anyhow::Result<()> {
     // 初始化日志
     ms_tracing::setup_tracing();

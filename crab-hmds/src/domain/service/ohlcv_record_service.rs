@@ -6,7 +6,7 @@ use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::impl_full_service;
 use crate::schema::crab_ohlcv_record::dsl::crab_ohlcv_record;
-use crate::schema::crab_ohlcv_record::{exchange, period, symbol, ts};
+use crate::schema::crab_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
 use anyhow::Result;
 use diesel::sql_types::*;
 use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
@@ -108,6 +108,9 @@ pub async fn query_list_by_filter(
     if let Some(close_time) = ohlcv_filter.close_time {
         query = query.filter(ts.eq(close_time)); // 根据时间戳过滤
     }
+
+    // 默认排序：按 `period_start_ts` 升序排序
+    query = query.order_by(period_start_ts.asc());
 
     // 添加排序功能：如果 `sort_by_close_time` 被指定，则按时间排序
     if let Some(sort_order) = &ohlcv_filter.sort_by_close_time {
