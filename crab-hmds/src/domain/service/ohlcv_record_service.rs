@@ -1,13 +1,15 @@
 use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter, UpdateCrabOhlcvRecord};
-use crate::domain::model::{AppResult, PageResult};
+use crate::domain::model::{AppError, AppResult, PageResult, SortOrder};
 use crate::domain::repository::Repository;
 use crate::domain::repository::UpdatableRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::impl_full_service;
+use crate::schema::crab_ohlcv_record::dsl::crab_ohlcv_record;
+use crate::schema::crab_ohlcv_record::{exchange, period, symbol, ts};
 use anyhow::Result;
 use diesel::sql_types::*;
-use diesel::{MysqlConnection, RunQueryDsl};
+use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
 
 impl_full_service!(
     OhlcvRecordService,
@@ -34,7 +36,10 @@ impl<'a> OhlcvRecordService<'a> {
         Ok(())
     }
 
-    // TODO 条件查询
+    pub fn query_list(&mut self, filter: OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
+        let data = query_list_by_filter(&mut self.repo.conn, &filter)?;
+        Ok(data)
+    }
 }
 
 /// 批量安全插入新 K 线，遇到 hash_id 已存在自动忽略
@@ -79,4 +84,44 @@ pub fn insert_new_ohlcv_records_batch(
     }
 
     Ok(total_inserted)
+}
+
+pub fn query_list_by_filter(conn: &mut MysqlConnection, ohlcv_filter: &OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
+    let mut query = crab_ohlcv_record.into_boxed(); // 初始化为可扩展查询
+
+    // 根据 `OhlcvFilter` 动态添加筛选条件
+    if let Some(ref symbol_val) = ohlcv_filter.symbol {
+        query = query.filter(symbol.eq(symbol_val)); // 确保符号匹配
+    }
+
+    if let Some(ref exchange_val) = ohlcv_filter.exchange {
+        query = query.filter(exchange.eq(exchange_val)); // 确保交易所匹配
+    }
+
+    if let Some(ref period_arg) = ohlcv_filter.period {
+        query = query.filter(period.eq(period_arg)); // 确保周期匹配
+    }
+
+    if let Some(close_time) = ohlcv_filter.close_time {
+        query = query.filter(ts.eq(close_time)); // 根据时间戳过滤
+    }
+
+    // 添加排序功能：如果 `sort_by_close_time` 被指定，则按时间排序
+    if let Some(sort_order) = &ohlcv_filter.sort_by_close_time {
+        match sort_order {
+            SortOrder::Asc => {
+                query = query.order_by(ts.asc());
+            }
+            SortOrder::Desc => {
+                query = query.order_by(ts.desc());
+            }
+        }
+    }
+
+    // 执行查询并返回结果
+    let result = query
+        .load::<CrabOhlcvRecord>(conn)
+        .map_err(|e| AppError::DatabaseError(e.into()))?;
+
+    Ok(result)
 }
