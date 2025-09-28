@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
     unsafe {
         env::set_var(
             "DATABASE_URL",
-            "mysql://root:root@113.44.153.48:3306/crabtapestry",
+            "mysql://root:root@mysql.infra.orb.local:3306/crabtapestry",
         );
     }
 

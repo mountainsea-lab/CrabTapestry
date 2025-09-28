@@ -1,6 +1,6 @@
-use std::env;
 use crab_hmds::server;
 use dotenvy::from_path;
+use std::env;
 use std::path::Path;
 
 #[tokio::main]
@@ -14,7 +14,7 @@ pub async fn main() {
     unsafe {
         env::set_var(
             "DATABASE_URL",
-            "mysql://root:root@113.44.153.48:3306/crabtapestry",
+            "mysql://root:root@mysql.infra.orb.local:3306/crabtapestry",
         );
     }
     server::start().await;

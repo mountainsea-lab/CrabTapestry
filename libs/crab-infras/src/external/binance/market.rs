@@ -62,7 +62,7 @@ impl TryFrom<&Vec<Value>> for KlineSummary {
         })
     }
 }
-
+#[derive(Debug)]
 pub struct FetchKlineSummaryRequest {
     pub(crate) query_params: BTreeMap<String, String>,
 }

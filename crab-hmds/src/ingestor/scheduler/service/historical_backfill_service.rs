@@ -7,6 +7,7 @@ use crate::ingestor::types::{FetchContext, HistoricalSource};
 use chrono::{DateTime, Duration, MappedLocalTime, TimeZone, Utc};
 use crab_infras::config::sub_config::SubscriptionMap;
 use crab_types::time_frame::TimeFrame;
+use futures_util::TryFutureExt;
 use ms_tracing::tracing_utils::internal::{error, info, warn};
 use std::collections::BinaryHeap;
 use std::str::FromStr;
@@ -281,39 +282,54 @@ where
                     supports_trade: false,
                     supports_ohlcv: true,
                 };
+                let last_filled_str = last_filled.format("%Y-%m-%d %H:%M:%S").to_string();
+                info!(
+                    "Market={} Symbol={} Period={} last_filled={} now={}",
+                    sub.exchange,
+                    sub.symbol,
+                    period_arc,
+                    last_filled_str,
+                    now.format("%Y-%m-%d %H:%M:%S")
+                );
 
                 while start_ts < end_ts {
                     // 计算批量跨度（毫秒） = batch_size * interval，自动控制
                     let batch_span = self.compute_batch_span(&source, period_arc);
 
-                    // 计算本批结束时间，不能超过 end_ts
-                    let batch_end = std::cmp::min(start_ts + batch_span, end_ts);
+                    // ⚡ 保持 batch_span 大小，不管剩余时间是否足够，循环处理直到 end_ts
+                    let mut batch_start = start_ts;
+                    while batch_start < end_ts {
+                        let batch_end = batch_start + batch_span;
+                        let batch_end = std::cmp::min(batch_end, end_ts); // 防止超过 now
 
-                    // 构建 FetchContext
-                    let ctx = Arc::new(FetchContext::new_with_range(
-                        &sub.exchange,
-                        &sub.symbol,
-                        &sub.quote,
-                        period_arc,
-                        start_ts,
-                        batch_end,
-                    ));
+                        // 构建 FetchContext
+                        let ctx = Arc::new(FetchContext::new_with_range(
+                            &sub.exchange,
+                            &sub.symbol,
+                            &sub.quote,
+                            period_arc,
+                            batch_start,
+                            batch_end,
+                        ));
 
-                    // step_millis 记录为 batch_span 毫秒
-                    let step_millis = batch_span.num_milliseconds();
+                        // step_millis 记录为 batch_span 毫秒
+                        let step_millis = batch_span.num_milliseconds();
 
-                    // 调度 BackfillJob
-                    self.schedule_backfill(
-                        ctx,
-                        data_type.clone(),
-                        key.clone(),
-                        BackfillPriority::Lookback,
-                        step_millis,
-                    )
-                    .await;
+                        // 调度 BackfillJob
+                        self.schedule_backfill(
+                            ctx,
+                            data_type.clone(),
+                            key.clone(),
+                            BackfillPriority::Lookback,
+                            step_millis,
+                        )
+                        .await;
 
-                    // 更新 start_ts，准备下一批
-                    start_ts = batch_end;
+                        batch_start = batch_end; // 下一批
+                    }
+
+                    // 更新 start_ts 为 end_ts，结束 while 循环
+                    start_ts = end_ts;
                 }
             }
         }
@@ -469,7 +485,7 @@ where
                     info!("Running maintain loop iteration...");
 
                     // 1️⃣ 检查缺口并调度回溯任务
-                    self.backfill_historical(subscriptions, data_type.clone(), self.lookback_days).await;
+                    // self.backfill_historical(subscriptions, data_type.clone(), self.lookback_days).await;
 
                     // 2️⃣ 最近数据维护（过去 2 小时）
                     self.init_recent_tasks(subscriptions, 2, data_type.clone()).await;

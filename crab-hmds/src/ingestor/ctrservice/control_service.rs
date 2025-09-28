@@ -478,20 +478,20 @@ where
         }
 
         // 打印每条记录用于验证
-        for record in &deduped {
-            let r = record.as_ref();
-            info!(
-                "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
-                r.symbol,
-                r.period,
-                r.timestamp(),
-                r.open,
-                r.high,
-                r.low,
-                r.close,
-                r.volume
-            );
-        }
+        // for record in &deduped {
+        //     let r = record.as_ref();
+        //     info!(
+        //         "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
+        //         r.symbol,
+        //         r.period,
+        //         r.timestamp(),
+        //         r.open,
+        //         r.high,
+        //         r.low,
+        //         r.close,
+        //         r.volume
+        //     );
+        // }
 
         let duration = start.elapsed();
         self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());
@@ -514,13 +514,13 @@ where
         // 落库并记录日志
         match save_ohlcv_records_batch(&new_records).await {
             Ok(_) => {
-                info!(
-                    "✅ Saved {} OHLCV records. first_ts={:?}, last_ts={:?}, symbol={}",
-                    new_records.len(),
-                    new_records.first().map(|r| r.ts),
-                    new_records.last().map(|r| r.ts),
-                    new_records.first().map(|r| r.symbol.clone()).unwrap_or_default(),
-                );
+                // info!(
+                //     "✅ Saved {} OHLCV records. first_ts={:?}, last_ts={:?}, symbol={}",
+                //     new_records.len(),
+                //     new_records.first().map(|r| r.ts),
+                //     new_records.last().map(|r| r.ts),
+                //     new_records.first().map(|r| r.symbol.clone()).unwrap_or_default(),
+                // );
                 Ok(())
             }
             Err(e) => {

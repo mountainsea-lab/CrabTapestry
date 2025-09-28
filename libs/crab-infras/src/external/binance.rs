@@ -5,7 +5,7 @@ use barter_integration::error::SocketError;
 use barter_integration::protocol::http::rest::RestRequest;
 use barter_integration::protocol::http::rest::client::RestClient;
 use barter_integration::protocol::http::{BuildStrategy, HttpParser};
-use ms_tracing::tracing_utils::internal::error;
+use ms_tracing::tracing_utils::internal::{error, info};
 use reqwest::RequestBuilder;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -125,6 +125,7 @@ where
         }
 
         let fetch_klines_request = FetchKlineSummaryRequest { query_params: parameters };
+        info!("Fetching kline summary client execute {:?}", fetch_klines_request);
         match self.rest_client.execute(fetch_klines_request).await {
             Ok((response, _)) => response.0,
             Err(err) => {

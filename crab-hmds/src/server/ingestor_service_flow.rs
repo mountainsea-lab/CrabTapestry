@@ -26,7 +26,7 @@ pub async fn start_ingestor_service_flow() {
     let back_fill_service = Arc::new(HistoricalBackfillService::new(
         scheduler.clone(),
         meta_store.clone(),
-        4, // default_max_batch_hours
+        9, // default_max_batch_hours
         3, // max_retries
         lookback_days,
     ));
