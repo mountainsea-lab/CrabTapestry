@@ -206,7 +206,7 @@ where
                 match msg {
                     ControlMsg::Start => {
                         // ✅ 启动 Realtime + Backfill 服务
-                        self.start_market_data_pipeline().await;
+                        // self.start_market_data_pipeline().await;
                         self.start_historical_backfill_service().await;
                     }
                     ControlMsg::Stop => {
