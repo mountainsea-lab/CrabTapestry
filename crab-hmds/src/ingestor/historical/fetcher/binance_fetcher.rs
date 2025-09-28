@@ -32,7 +32,7 @@ impl BinanceFetcher {
             .get_klines(
                 symbol.as_ref(),
                 interval.as_ref(),
-                Some(500),
+                Some(ctx.limit),
                 Some(start_ts as u64),
                 Some(end_ts as u64),
             )
@@ -75,30 +75,6 @@ impl BinanceFetcher {
 
 #[async_trait]
 impl HistoricalFetcher for BinanceFetcher {
-    /// 流式拉取 OHLCV
-    /// stream pull ohlcv from exchange
-    // async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-    //     let chunk_ms = 60 * 60 * 1000; // 每小时为例
-    //     let ranges = ctx.range.split(chunk_ms);
-    //     let ctx_clone = ctx.clone();
-    //     let client = Arc::clone(&self.client);
-    //
-    //     let s = stream::iter(ranges.into_iter())
-    //         .then(move |range| {
-    //             let ctx = ctx_clone.clone();
-    //             let client = Arc::clone(&client);
-    //             async move {
-    //                 let fetcher = BinanceFetcher { client };
-    //                 fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
-    //             }
-    //         })
-    //         .flat_map(|res| match res {
-    //             Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
-    //             Err(e) => stream::iter(vec![Err(e)]).boxed(),
-    //         });
-    //
-    //     Ok(s.boxed())
-    // }
     /// 流式拉取 OHLCV
     /// stream pull ohlcv from exchange
     async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {

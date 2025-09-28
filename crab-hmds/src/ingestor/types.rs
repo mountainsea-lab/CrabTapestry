@@ -201,7 +201,7 @@ pub struct HistoricalSource {
     pub exchange: String,     // Exchange name, e.g., "binance"
     pub last_success_ts: i64, // Last successfully saved data timestamp
     pub last_fetch_ts: i64,   // Last fetch attempt timestamp
-    pub batch_size: usize,    // Batch size for each fetch
+    pub batch_size: u16,      // Batch size for each fetch
     pub supports_tick: bool,  // Supports tick data
     pub supports_trade: bool, // Supports trade data
     pub supports_ohlcv: bool, // Supports OHLCV data
@@ -216,6 +216,7 @@ pub struct FetchContext {
     pub symbol: Arc<str>,
     pub period: Option<Arc<str>>, // ✅ 和 HistoricalBatch 对齐，也用 Arc<str>
     pub range: TimeRange,
+    pub limit: u16,
 }
 
 /// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
@@ -252,12 +253,14 @@ impl HistoricalSource {
 }
 impl FetchContext {
     pub fn new(source: HistoricalSource, exchange: &str, symbol: &str, period: Option<&str>, range: TimeRange) -> Self {
+        let limit = 500;
         Self {
             source,
             exchange: Arc::<str>::from(exchange),
             symbol: Arc::<str>::from(symbol),
             period: period.map(|p| Arc::<str>::from(p)),
             range,
+            limit,
         }
     }
 
@@ -285,6 +288,7 @@ impl FetchContext {
         };
 
         let range = TimeRange::new(start_ts, end_ts);
+        let limit = source.batch_size;
 
         Arc::new(Self {
             source,
@@ -292,6 +296,7 @@ impl FetchContext {
             symbol: Arc::from(symbol),
             period: period.map(|p| Arc::from(p)),
             range,
+            limit,
         })
     }
 
@@ -308,6 +313,7 @@ impl FetchContext {
 
         let range = TimeRange::new(start.timestamp_millis(), end.timestamp_millis());
         let full_symbol = format!("{}{}", symbol.to_uppercase(), quote.to_uppercase());
+        let limit = source.batch_size;
 
         Self {
             source,
@@ -315,6 +321,7 @@ impl FetchContext {
             symbol: Arc::from(full_symbol),
             period: Some(Arc::from(period)),
             range,
+            limit,
         }
     }
 
