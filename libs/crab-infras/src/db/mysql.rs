@@ -19,12 +19,6 @@ pub fn make_mysql_pool() -> Result<MySqlPool, PoolError> {
     let manager = ConnectionManager::<MysqlConnection>::new(database_url);
 
     // Customize pool settings if needed
-    // Pool::builder()
-    //     .max_size(20)
-    //     .min_idle(Some(5))
-    //     .connection_timeout(Duration::from_secs(5))
-    //     .idle_timeout(Some(Duration::from_secs(300)))
-    //     .build(manager)
     match Pool::builder()
         .max_size(20)
         .min_idle(Some(5))
