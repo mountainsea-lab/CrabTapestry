@@ -38,7 +38,7 @@ impl<'a> MarketFillRangeService<'a> {
         Ok(PageResult { data, total, page, per_page })
     }
 
-    pub async fn generate_and_insert_fill_ranges(&mut self) -> Result<()> {
+    pub async fn generate_and_insert_fill_ranges(&mut self) -> AppResult<()> {
         generate_and_insert_fill_ranges(&mut self.repo.conn).await
     }
 
@@ -118,7 +118,7 @@ fn query_period_time_ranges_optimized(
 }
 
 /// 统一生成历史回溯 + 实时增量区间，并插入数据库
-pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> Result<()> {
+pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> AppResult<()> {
     let max_count = 500; // 默认 500 后续通过配置或者枚举获取
     // 假设 hmds.toml 在当前目录
     let app_config = get_app_config();

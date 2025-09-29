@@ -1,6 +1,8 @@
 use crate::domain::model::PageResult;
 use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter};
+use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
+use crate::domain::service::market_fill_range_service::MarketFillRangeService;
 use crate::domain::service::ohlcv_record_service::OhlcvRecordService;
 use crate::global::get_mysql_pool;
 
@@ -39,4 +41,12 @@ pub async fn query_ohlcv_list(ohlcv_filter: OhlcvFilter) -> Result<Vec<CrabOhlcv
         .map_err(|e| anyhow::Error::new(e))?;
 
     Ok(result)
+}
+/// 生成维护任务
+pub async fn generate_and_insert_fill_ranges() -> Result<(), anyhow::Error> {
+    let mut conn = get_mysql_pool().get()?;
+    let repo = MarketFillRangeRepository::new(&mut conn);
+    let mut market_fill_range_service = MarketFillRangeService { repo };
+    market_fill_range_service.generate_and_insert_fill_ranges().await?;
+    Ok(())
 }
