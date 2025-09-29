@@ -10,7 +10,7 @@ use crate::impl_full_service;
 use crate::schema::hmds_market_fill_range::dsl::hmds_market_fill_range;
 use crate::schema::hmds_market_fill_range::{exchange, period, start_time, status, symbol};
 use anyhow::Result;
-use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
 
 impl_full_service!(
     MarketFillRangeService,
@@ -45,46 +45,47 @@ impl<'a> MarketFillRangeService<'a> {
 
 pub async fn query_list_by_filter(
     conn: &mut MysqlConnection,
-    ohlcv_filter: &FillRangeFilter,
+    filter: &FillRangeFilter,
 ) -> AppResult<Vec<HmdsMarketFillRange>> {
-    let mut query = hmds_market_fill_range.into_boxed(); // 初始化为可扩展查询
+    use crate::schema::hmds_market_fill_range::dsl::*;
 
-    // 根据 `OhlcvFilter` 动态添加筛选条件
-    if let Some(ref symbol_val) = ohlcv_filter.symbol {
-        query = query.filter(symbol.eq(symbol_val)); // 确保符号匹配
+    let mut query = hmds_market_fill_range.into_boxed();
+
+    // 默认条件：未同步或失败的区间，重试次数 < 5
+    query = query.filter(
+        status.eq(0).or(status.eq(3))
+    ).filter(retry_count.lt(5));
+
+    // 可选筛选条件
+    if let Some(ref ex) = filter.exchange {
+        query = query.filter(exchange.eq(ex));
+    }
+    if let Some(ref sym) = filter.symbol {
+        query = query.filter(symbol.eq(sym));
+    }
+    if let Some(ref p) = filter.period {
+        query = query.filter(period.eq(p));
+    }
+    if let Some(ref last_try) = filter.last_try_time {
+        query = query.filter(last_try_time.le(last_try));
     }
 
-    if let Some(ref exchange_val) = ohlcv_filter.exchange {
-        query = query.filter(exchange.eq(exchange_val)); // 确保交易所匹配
-    }
+    // 排序：按 start_time 最近的记录
+    let sort_order = filter.sort_by_start_time.as_ref().unwrap_or(&SortOrder::Desc);
+    query = match sort_order {
+        SortOrder::Asc => query.order(start_time.asc()),
+        SortOrder::Desc => query.order(start_time.desc()),
+    };
 
-    if let Some(ref period_arg) = ohlcv_filter.period {
-        query = query.filter(period.eq(period_arg)); // 确保周期匹配
-    }
+    // 限制查询条数
+    let limit_count = filter.limit.unwrap_or(100);
+    query = query.limit(limit_count as i64);
 
-    if let Some(status_val) = ohlcv_filter.status {
-        query = query.filter(status.eq(status_val)); // 根据时间戳过滤
-    }
-
-    // 默认排序：按 `period_start_ts` 升序排序
-    query = query.order_by(start_time.desc());
-
-    // 添加排序功能：如果 `sort_by_close_time` 被指定，则按时间排序
-    if let Some(sort_order) = &ohlcv_filter.sort_by_start_time {
-        match sort_order {
-            SortOrder::Asc => {
-                query = query.order_by(start_time.asc());
-            }
-            SortOrder::Desc => {
-                query = query.order_by(start_time.desc());
-            }
-        }
-    }
-
-    // 执行查询并返回结果
+    // 执行查询
     let result = query
         .load::<HmdsMarketFillRange>(conn)
         .map_err(|e| AppError::DatabaseError(e.into()))?;
 
     Ok(result)
 }
+
