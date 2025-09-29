@@ -62,7 +62,7 @@ pub struct FillRangeFilter {
     pub status: Option<i8>,
     pub retry_count: Option<i32>,
     pub last_try_time: Option<NaiveDateTime>, // 可选更新最后一次尝试同步时间
-    pub start_time: Option<SortOrder>,
+    pub sort_by_start_time: Option<SortOrder>,
     pub page: Option<usize>,
     pub page_size: Option<usize>,
 }
