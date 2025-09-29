@@ -3,7 +3,6 @@ use crate::domain::model::market_fill_range::{
 };
 use crate::domain::model::{AppError, AppResult, SortOrder};
 use crate::domain::repository::Repository;
-use crate::schema::hmds_market_fill_range::{last_try_time, retry_count, status};
 use crate::{impl_full_repository, impl_repository_with_filter};
 use diesel::{MysqlConnection, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 

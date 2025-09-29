@@ -1,6 +1,7 @@
 pub mod buffer;
 pub mod ctrservice;
 pub mod dedup;
+pub mod generate_fill_range;
 pub mod historical;
 pub mod realtime;
 pub mod scheduler;
