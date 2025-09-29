@@ -2,8 +2,7 @@ use diesel::result::Error as DieselError;
 use serde::Deserialize;
 use thiserror::Error;
 
-pub mod market_backfill_meta;
-pub mod market_missing_range;
+pub mod market_fill_range;
 pub mod ohlcv_record;
 
 pub type AppResult<T> = anyhow::Result<T, AppError>;

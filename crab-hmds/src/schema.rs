@@ -27,32 +27,22 @@ diesel::table! {
 }
 
 diesel::table! {
-    market_backfill_meta (id) {
+    hmds_market_fill_range (id) {
         id -> Unsigned<Bigint>,
-        #[max_length = 64]
+        #[max_length = 50]
         exchange -> Varchar,
-        #[max_length = 64]
+        #[max_length = 50]
         symbol -> Varchar,
-        #[max_length = 16]
-        interval -> Varchar,
-        last_filled -> Nullable<Datetime>,
-        last_checked -> Nullable<Datetime>,
+        #[max_length = 10]
+        period -> Varchar,
+        start_time -> Bigint,
+        end_time -> Bigint,
+        status -> Tinyint,
+        retry_count -> Integer,
+        last_try_time -> Nullable<Timestamp>,
         created_at -> Nullable<Timestamp>,
         updated_at -> Nullable<Timestamp>,
     }
 }
 
-diesel::table! {
-    market_missing_range (id) {
-        id -> Unsigned<Bigint>,
-        market_id -> Unsigned<Bigint>,
-        start_ts -> Datetime,
-        end_ts -> Datetime,
-        created_at -> Nullable<Timestamp>,
-        updated_at -> Nullable<Timestamp>,
-    }
-}
-
-diesel::joinable!(market_missing_range -> market_backfill_meta (market_id));
-
-diesel::allow_tables_to_appear_in_same_query!(crab_ohlcv_record, market_backfill_meta, market_missing_range,);
+diesel::allow_tables_to_appear_in_same_query!(crab_ohlcv_record, hmds_market_fill_range,);

@@ -15,7 +15,7 @@ CREATE TABLE `hmds_market_fill_range` (
 
                                           `status` TINYINT NOT NULL DEFAULT 0 COMMENT '同步状态，0: 未同步, 1: 同步中, 2: 已同步, 3: 同步失败',
                                           `retry_count` INT NOT NULL DEFAULT 0 COMMENT '重试次数',
-                                          `last_try_time` TIMESTAMP NULL COMMENT '最后一次尝试同步时间',
+                                          `last_try_time` TIMESTAMP DEFAULT NULL  COMMENT '最后一次尝试同步时间',
 
                                           `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
                                           `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
