@@ -12,6 +12,11 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    // 初始化日志
+    ms_tracing::setup_tracing();
+    // 初始化全局变量
+    setup().await;
+
     generate_and_insert_fill_ranges().await?;
 
     Ok(())
