@@ -19,3 +19,18 @@ CREATE TABLE `market_backfill_meta` (
                                         PRIMARY KEY (`id`),
                                         UNIQUE KEY `uniq_market` (`exchange`, `symbol`, `interval`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='每个市场历史数据回补元信息';
+// 市场数据区间维护任务信息表
+CREATE TABLE hmds_market_fill_range (
+                                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                 exchange VARCHAR(50) NOT NULL,       -- 新增交易所字段
+                                 symbol VARCHAR(50) NOT NULL,
+                                 `period` VARCHAR(10) NOT NULL,
+                                 start_time BIGINT NOT NULL,
+                                 end_time BIGINT NOT NULL,
+                                 status TINYINT NOT NULL DEFAULT 0,   -- 0: 未同步, 1: 同步中, 2: 已同步, 3: 同步失败
+                                 retry_count INT NOT NULL DEFAULT 0,
+                                 last_try_time TIMESTAMP NULL,
+                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                 UNIQUE(exchange, symbol, `period`, start_time, end_time)  -- 唯一索引加上交易所
+);
