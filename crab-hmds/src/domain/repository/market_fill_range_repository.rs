@@ -1,7 +1,6 @@
 use crate::domain::model::market_fill_range::{
     FillRangeFilter, HmdsMarketFillRange, NewHmdsMarketFillRange, UpdateHmdsMarketFillRange,
 };
-use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter, UpdateCrabOhlcvRecord};
 use crate::domain::model::{AppError, AppResult, SortOrder};
 use crate::domain::repository::Repository;
 use crate::schema::hmds_market_fill_range::{last_try_time, retry_count, status};
@@ -34,8 +33,8 @@ impl_repository_with_filter!(
     FillRangeFilter,
     @filter_var = filter,
     {
-        use crate::schema::crab_ohlcv_record::dsl::*;
-        let mut q = crab_ohlcv_record.into_boxed();
+        use crate::schema::hmds_market_fill_range::dsl::*;
+        let mut q = hmds_market_fill_range.into_boxed();
 
 
         if let Some(ref exchange_arg) = filter.exchange {
@@ -65,8 +64,8 @@ impl_repository_with_filter!(
         if let Some(order) = &filter.sort_by_start_time {
             q = {
                 match order {
-                    SortOrder::Asc => q.order(ts.asc()),
-                    SortOrder::Desc => q.order(ts.desc()),
+                    SortOrder::Asc => q.order(start_time.asc()),
+                    SortOrder::Desc => q.order(start_time.desc()),
                 }
             };
         }
