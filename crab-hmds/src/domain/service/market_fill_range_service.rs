@@ -129,7 +129,7 @@ pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> Resu
     let subscriptions = load_subscriptions()?;
 
     let now_ts = Utc::now().timestamp_millis();
-    let lookback_ts = now_ts - (lookback_days as i64 * 24 * 3600 * 1000);
+    let lookback_ts = now_ts - (lookback_days * 24 * 3600 * 1000);
 
     let subs_vec: Vec<Subscription> = subscriptions.iter().map(|e| e.value().clone()).collect();
 
