@@ -1,4 +1,5 @@
 use crate::domain::model::PageResult;
+use crate::domain::model::market_fill_range::{FillRangeFilter, HmdsMarketFillRange};
 use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter};
 use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
@@ -49,4 +50,24 @@ pub async fn generate_and_insert_fill_ranges() -> Result<(), anyhow::Error> {
     let mut market_fill_range_service = MarketFillRangeService { repo };
     market_fill_range_service.generate_and_insert_fill_ranges().await?;
     Ok(())
+}
+/// 查询区间任务集合
+pub async fn query_fill_range_list() -> Result<Vec<HmdsMarketFillRange>, anyhow::Error> {
+    let mut conn = get_mysql_pool().get()?;
+    let repo = MarketFillRangeRepository::new(&mut conn);
+    let mut market_fill_range_service = MarketFillRangeService { repo };
+    let range_filter = FillRangeFilter {
+        exchange: None,
+        symbol: None,
+        period: None,
+        status: None,
+        retry_count: None,
+        last_try_time: None,
+        sort_by_start_time: None,
+        limit: Some(1000),
+        page: None,
+        page_size: None,
+    };
+    let result = market_fill_range_service.query_list(range_filter).await?;
+    Ok(result)
 }
