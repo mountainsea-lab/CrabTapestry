@@ -7,7 +7,7 @@ use crate::domain::repository::UpdatableRepository;
 use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepository;
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::global::get_app_config;
-use crate::ingestor::generate_fill_range::generate_fill_ranges;
+use crate::ingestor::generate_fill_range::{generate_fill_ranges_full, should_generate_ranges};
 use crate::schema::hmds_market_fill_range::dsl::hmds_market_fill_range;
 use crate::{impl_full_service, load_subscriptions};
 use anyhow::Result;
@@ -16,6 +16,7 @@ use crab_infras::config::sub_config::Subscription;
 use diesel::associations::HasTable;
 use diesel::dsl::{max, min};
 use diesel::{BoolExpressionMethods, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
+use ms_tracing::tracing_utils::internal::{debug, info};
 use std::collections::HashMap;
 
 impl_full_service!(
@@ -119,46 +120,122 @@ fn query_period_time_ranges_optimized(
 
 /// 统一生成历史回溯 + 实时增量区间，并插入数据库
 pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> AppResult<()> {
-    let max_count = 500; // 默认 500 后续通过配置或者枚举获取
-    // 假设 hmds.toml 在当前目录
+    let max_count = 500;
     let app_config = get_app_config();
     let lookback_days = app_config.app.lookback_days;
-    // -------------------------------
-    // 2️⃣ 加载订阅配置
-    // -------------------------------
     let subscriptions = load_subscriptions()?;
 
     let now_ts = Utc::now().timestamp_millis();
     let lookback_ts = now_ts - (lookback_days * 24 * 3600 * 1000);
 
-    let subs_vec: Vec<Subscription> = subscriptions.iter().map(|e| e.value().clone()).collect();
+    info!(
+        "Starting fill range generation: lookback_ts={}, now_ts={}",
+        lookback_ts, now_ts
+    );
 
-    for sub in subs_vec {
-        // 1️⃣ 查询每个周期的最早和最新时间
+    let subs_vec: Vec<Subscription> = subscriptions.iter().map(|e| e.value().clone()).collect();
+    let mut all_ranges = Vec::new();
+    let mut total_generated = 0;
+
+    for sub in &subs_vec {
+        // 查询每个周期的最早开始时间和最晚结束时间
         let period_times = query_period_time_ranges_optimized(conn, &sub.exchange, &sub.symbol)?;
 
-        let mut all_ranges = Vec::new();
-
         for period_str in &sub.periods {
-            let (start_ts, _last_end_ts) = period_times
+            let (existing_start_ts, existing_end_ts) = period_times
                 .get(period_str.as_ref())
                 .cloned()
                 .unwrap_or((lookback_ts, lookback_ts));
 
-            // 2️⃣ 生成区间（历史 + 增量）
-            let ranges = generate_fill_ranges(&sub, start_ts, now_ts, max_count, period_str);
+            let (needs_lookback, needs_incremental) =
+                should_generate_ranges(existing_start_ts, existing_end_ts, lookback_ts, now_ts);
 
+            if !needs_lookback && !needs_incremental {
+                debug!(
+                    "No new ranges needed for {}/{}/{}",
+                    sub.exchange, sub.symbol, period_str
+                );
+                continue;
+            }
+
+            // 使用新的生成函数
+            let ranges = generate_fill_ranges_full(
+                sub,
+                existing_start_ts,
+                existing_end_ts,
+                lookback_ts,
+                now_ts,
+                max_count,
+                period_str,
+            );
+
+            total_generated += ranges.len();
             all_ranges.extend(ranges);
-        }
 
-        // 3️⃣ 批量插入数据库
-        if !all_ranges.is_empty() {
-            diesel::insert_into(hmds_market_fill_range::table())
-                .values(&all_ranges)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
+            // 分批插入避免单次事务过大
+            if all_ranges.len() >= 1000 {
+                batch_insert_ranges(conn, &all_ranges)?;
+                all_ranges.clear();
+            }
         }
     }
 
+    // 插入剩余的数据
+    if !all_ranges.is_empty() {
+        batch_insert_ranges(conn, &all_ranges)?;
+    }
+
+    info!(
+        "Fill range generation completed: {} total ranges generated",
+        total_generated
+    );
     Ok(())
+}
+
+/// 改进的查询函数，支持批量查询多个交易对
+// fn batch_query_period_time_ranges(
+//     conn: &mut MysqlConnection,
+//     subscriptions: &[Subscription],
+// ) -> Result<HashMap<(String, String), HashMap<String, (i64, i64)>>> {
+//     use crate::schema::hmds_market_fill_range::dsl::*;
+//
+//     // 构建查询条件
+//     let mut query = hmds_market_fill_range.into_boxed();
+//
+//     let mut conditions = Vec::new();
+//     for sub in subscriptions {
+//         conditions.push(exchange.eq(&sub.exchange).and(symbol.eq(&sub.symbol)));
+//     }
+//
+//     if !conditions.is_empty() {
+//         query = query.or_filter(conditions);
+//     }
+//
+//     let results = query
+//         .group_by((exchange, symbol, period))
+//         .select((exchange, symbol, period, min(start_time), max(end_time)))
+//         .load::<(String, String, String, Option<i64>, Option<i64>)>(conn)?;
+//
+//     let mut map = HashMap::new();
+//     for (ex, sym, per, min_st, max_et) in results {
+//         if let (Some(st), Some(et)) = (min_st, max_et) {
+//             map.entry((ex, sym))
+//                 .or_insert_with(HashMap::new)
+//                 .insert(per, (st, et));
+//         }
+//     }
+//
+//     Ok(map)
+// }
+
+/// 批量插入填充范围
+fn batch_insert_ranges(conn: &mut MysqlConnection, ranges: &[NewHmdsMarketFillRange]) -> AppResult<usize> {
+    use crate::schema::hmds_market_fill_range::dsl::*;
+
+    let inserted = diesel::insert_into(hmds_market_fill_range::table())
+        .values(ranges)
+        .on_conflict_do_nothing()
+        .execute(conn)?;
+
+    Ok(inserted)
 }
