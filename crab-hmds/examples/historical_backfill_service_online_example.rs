@@ -5,7 +5,7 @@ use crab_hmds::global::get_app_config;
 use crab_hmds::ingestor::dedup::Deduplicatable;
 use crab_hmds::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
-use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
+use crab_hmds::ingestor::scheduler::service::historical_backfill_service_update::HistoricalBackfillService;
 use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crab_hmds::{load_app_config, load_subscriptions};

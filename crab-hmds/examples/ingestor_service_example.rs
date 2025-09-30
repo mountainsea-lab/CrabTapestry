@@ -8,7 +8,7 @@ use crab_hmds::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crab_hmds::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crab_hmds::ingestor::scheduler::service::InMemoryBackfillMetaStore;
-use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
+use crab_hmds::ingestor::scheduler::service::historical_backfill_service_update::HistoricalBackfillService;
 use crab_hmds::load_app_config;
 use std::collections::HashMap;
 use std::sync::Arc;

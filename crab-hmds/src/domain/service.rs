@@ -71,3 +71,12 @@ pub async fn query_fill_range_list() -> Result<Vec<HmdsMarketFillRange>, anyhow:
     let result = market_fill_range_service.query_list(range_filter).await?;
     Ok(result)
 }
+
+/// 查询交易所、币种、周期最新区间任务
+pub async fn query_latest_ranges() -> Result<Vec<HmdsMarketFillRange>, anyhow::Error> {
+    let mut conn = get_mysql_pool().get()?;
+    let repo = MarketFillRangeRepository::new(&mut conn);
+    let mut market_fill_range_service = MarketFillRangeService { repo };
+    let result = market_fill_range_service.query_latest_ranges().await?;
+    Ok(result)
+}

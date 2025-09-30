@@ -1,14 +1,14 @@
 use crate::domain::model::SortOrder;
 use crate::schema::hmds_market_fill_range;
 use chrono::NaiveDateTime;
-use diesel::{AsChangeset, Identifiable, Insertable, Queryable, Selectable};
+use diesel::{AsChangeset, Identifiable, Insertable, Queryable, QueryableByName, Selectable};
 use serde::{Deserialize, Serialize};
 
 /// 查询模型：对应表 `hmds_market_fill_range`
 ///
 /// - `id` 为自增主键，只在数据库生成
 /// - `created_at` 和 `updated_at` 使用 `chrono::NaiveDateTime`
-#[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, Debug, Clone)]
+#[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, QueryableByName, Debug, Clone)]
 #[diesel(table_name = hmds_market_fill_range)]
 pub struct HmdsMarketFillRange {
     pub id: u64,                              // 自增主键 (BIGINT UNSIGNED)

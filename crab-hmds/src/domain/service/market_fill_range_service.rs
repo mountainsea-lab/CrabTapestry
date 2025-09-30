@@ -47,6 +47,10 @@ impl<'a> MarketFillRangeService<'a> {
         let data = query_list_by_filter(&mut self.repo.conn, &filter).await?;
         Ok(data)
     }
+
+    pub async fn query_latest_ranges(&mut self) -> AppResult<Vec<HmdsMarketFillRange>> {
+        query_latest_ranges(&mut self.repo.conn).await
+    }
 }
 
 pub async fn query_list_by_filter(
@@ -87,6 +91,31 @@ pub async fn query_list_by_filter(
 
     // 执行查询
     let result = query
+        .load::<HmdsMarketFillRange>(conn)
+        .map_err(|e| AppError::DatabaseError(e.into()))?;
+
+    Ok(result)
+}
+/// 查询交易所、币种、周期最新区间任务
+pub async fn query_latest_ranges(conn: &mut MysqlConnection) -> AppResult<Vec<HmdsMarketFillRange>> {
+    use diesel::RunQueryDsl;
+    use diesel::sql_query;
+
+    let sql = r#"
+        SELECT t.*
+        FROM hmds_market_fill_range t
+        INNER JOIN (
+            SELECT exchange, symbol, period, MAX(end_time) AS max_end_time
+            FROM hmds_market_fill_range
+            GROUP BY exchange, symbol, period
+        ) latest
+        ON t.exchange = latest.exchange
+        AND t.symbol = latest.symbol
+        AND t.period = latest.period
+        AND t.end_time = latest.max_end_time
+    "#;
+
+    let result = sql_query(sql)
         .load::<HmdsMarketFillRange>(conn)
         .map_err(|e| AppError::DatabaseError(e.into()))?;
 
@@ -192,7 +221,7 @@ pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> AppR
     Ok(())
 }
 
-/// 改进的查询函数，支持批量查询多个交易对
+// /// 改进的查询函数，支持批量查询多个交易对
 // fn batch_query_period_time_ranges(
 //     conn: &mut MysqlConnection,
 //     subscriptions: &[Subscription],
