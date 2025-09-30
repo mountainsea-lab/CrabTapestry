@@ -130,17 +130,27 @@ fn generate_ranges_for_span(
             current_end = aligned_end;
         }
 
-        ranges.push(NewHmdsMarketFillRange {
-            exchange: sub.exchange.to_string(),
-            symbol: sub.symbol.to_string(),
-            period: period_str.to_string(),
-            start_time: current_start,
-            end_time: current_end,
-            status: 0,
-            retry_count: 0,
-            last_try_time: None,
-        });
-
+        // ✅ 校验：区间必须至少包含一个完整周期
+        if current_end - current_start >= period_ms {
+            ranges.push(NewHmdsMarketFillRange {
+                exchange: sub.exchange.to_string(),
+                symbol: sub.symbol.to_string(),
+                period: period_str.to_string(),
+                start_time: current_start,
+                end_time: current_end,
+                status: 0,
+                retry_count: 0,
+                last_try_time: None,
+            });
+        } else {
+            debug!(
+                "Skipped invalid short range: start={} end={} (diff {} < period {})",
+                current_start,
+                current_end,
+                current_end - current_start,
+                period_ms
+            );
+        }
         // 下一个区间的开始时间就是当前区间的结束时间
         current_start = current_end;
     }
