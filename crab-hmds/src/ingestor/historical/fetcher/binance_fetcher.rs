@@ -127,29 +127,21 @@ impl HistoricalFetcher for BinanceFetcher {
 mod tests {
     use super::*;
     use crate::ingestor::historical::HistoricalFetcherExt;
-    use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
+    use crab_types::TimeRange;
 
     #[tokio::test]
     async fn test_fetch_ohlcv_pipeline() -> Result<()> {
         // 构造 FetchContext
-        let ctx = FetchContext::new_with_past(
-            HistoricalSource {
-                name: "Binance API".to_string(),
-                exchange: "binance".to_string(),
-                last_success_ts: 0,
-                last_fetch_ts: 0,
-                batch_size: 0,
-                supports_tick: false,
-                supports_trade: false,
-                supports_ohlcv: false,
-            },
+        let ctx = Arc::new(FetchContext::new(
+            Some(1),
             "binance",
             "BTCUSDT",
+            "USDT",
             Some("1h"),
-            Some(3), // 最近 3 小时
-            None,    // 最近 3 小时, // 3 小时
-        );
+            TimeRange::new(100000, 120000), // 最近 3 小时
+            500,                            // 最近 3 小时, // 3 小时
+        ));
 
         let fetcher = BinanceFetcher::new();
 

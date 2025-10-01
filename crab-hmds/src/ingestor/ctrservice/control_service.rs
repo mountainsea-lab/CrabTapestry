@@ -268,7 +268,6 @@ where
     /// - 异常时发送 InternalMsg::Error
     async fn start_historical_backfill_service(&self) {
         let service = self.backfill.clone();
-        let subscriptions = self.subscriptions.clone();
         let shutdown = self.shutdown.clone();
 
         // 1️⃣ 启动 worker 消费任务
@@ -298,7 +297,6 @@ where
                     info!("Backfill maintain loop received shutdown2, stopping");
                 }
                 _ = service.loop_maintain_tasks_notify(
-                    &subscriptions,
                     BackfillDataType::OHLCV,
                     &shutdown2
                 ) => {

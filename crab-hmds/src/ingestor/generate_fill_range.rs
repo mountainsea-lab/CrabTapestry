@@ -135,11 +135,13 @@ fn generate_ranges_for_span(
             ranges.push(NewHmdsMarketFillRange {
                 exchange: sub.exchange.to_string(),
                 symbol: sub.symbol.to_string(),
+                quote: sub.quote.to_string(),
                 period: period_str.to_string(),
                 start_time: current_start,
                 end_time: current_end,
                 status: 0,
                 retry_count: 0,
+                batch_size: 0,
                 last_try_time: None,
             });
         } else {

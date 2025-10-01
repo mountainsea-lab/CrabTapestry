@@ -33,12 +33,15 @@ diesel::table! {
         exchange -> Varchar,
         #[max_length = 50]
         symbol -> Varchar,
+        #[max_length = 50]
+        quote -> Varchar,
         #[max_length = 10]
         period -> Varchar,
         start_time -> Bigint,
         end_time -> Bigint,
         status -> Tinyint,
         retry_count -> Integer,
+        batch_size -> Integer,
         last_try_time -> Nullable<Timestamp>,
         created_at -> Nullable<Timestamp>,
         updated_at -> Nullable<Timestamp>,

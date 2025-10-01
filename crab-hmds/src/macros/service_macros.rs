@@ -20,8 +20,8 @@ macro_rules! impl_full_service {
                 self.repo.get_all()
             }
 
-            pub fn get_by_id(&mut self, id: u64) -> AppResult<Option<$model>> {
-                self.repo.get_by_id(id)
+            pub fn get_by_id(&mut self, record_id: u64) -> AppResult<Option<$model>> {
+                self.repo.get_by_id(record_id)
             }
 
             pub fn insert(&mut self, entity: &$new_model) -> AppResult<usize> {
@@ -32,8 +32,8 @@ macro_rules! impl_full_service {
                 self.repo.update(entity)
             }
 
-            pub fn delete(&mut self, id: u64) -> AppResult<usize> {
-                self.repo.delete(id)
+            pub fn delete(&mut self, record_id: u64) -> AppResult<usize> {
+                self.repo.delete(record_id)
             }
 
             // ⬇️ 可以在外部添加额外业务方法，例如 save_coin_rank_info

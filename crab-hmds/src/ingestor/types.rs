@@ -1,5 +1,4 @@
 use crate::ingestor::dedup::Deduplicatable;
-use chrono::{DateTime, Utc};
 use crab_infras::aggregator::AggregatorOutput;
 use crab_infras::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crab_types::TimeRange;
@@ -44,47 +43,6 @@ pub struct Tick {
     pub order_id: Option<String>, // 原始订单号，可选
     pub tick_id: Option<u64>,     // 原始交易所序号，可选
 }
-//
-// #[derive(Clone, Debug)]
-// pub struct PublicTradeEvent {
-//     pub exchange: String,
-//     pub symbol: String,
-//     pub trade: PublicTrade, // market realtime trade data
-//     pub timestamp: i64,     // data timestamp
-//     pub time_period: u64,
-// }
-//
-// /// from barter trade data event to PublicTradeEvent
-// impl From<Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>> for PublicTradeEvent {
-//     fn from(event: Event<ExchangeId, MarketEvent<MarketDataInstrument, PublicTrade>>) -> Self {
-//         match event {
-//             Event::Item(market_event) => {
-//                 PublicTradeEvent {
-//                     exchange: market_event.exchange.to_string(),
-//                     symbol: format!("{}", market_event.instrument.base), // 根据你的需求调整
-//                     trade: market_event.kind,                            // PublicTrade
-//                     timestamp: market_event.time_exchange.timestamp_millis(), // 时间戳转换 注意毫秒单位
-//                     time_period: M1.get(),
-//                 }
-//             }
-//             _ => {
-//                 // if not PublicTrade data，return default
-//                 PublicTradeEvent {
-//                     exchange: String::new(),
-//                     symbol: String::new(),
-//                     trade: PublicTrade {
-//                         id: String::new(),
-//                         price: 0.0,
-//                         amount: 0.0,
-//                         side: Side::Buy,
-//                     },
-//                     timestamp: 0,
-//                     time_period: M1.get(),
-//                 }
-//             }
-//         }
-//     }
-// }
 
 ///  多类型统一封装 内存中流转的市场数据事件
 /// memory-based market data event.
@@ -211,12 +169,12 @@ pub struct HistoricalSource {
 /// Context for fetching historical data.
 #[derive(Debug, Clone)]
 pub struct FetchContext {
-    pub source: HistoricalSource,
+    pub range_id: Option<u64>,
     pub exchange: Arc<str>,
     pub symbol: Arc<str>,
-    pub period: Option<Arc<str>>, // ✅ 和 HistoricalBatch 对齐，也用 Arc<str>
+    pub period: Option<Arc<str>>,
     pub range: TimeRange,
-    pub limit: u16,
+    pub limit: i32,
 }
 
 /// 批量历史数据接口，统一 Trade 或Tick 或 OHLCV
@@ -252,84 +210,24 @@ impl HistoricalSource {
     }
 }
 impl FetchContext {
-    pub fn new(source: HistoricalSource, exchange: &str, symbol: &str, period: Option<&str>, range: TimeRange) -> Self {
-        let limit = 500;
+    pub fn new(
+        range_id: Option<u64>,
+        exchange: &str,
+        symbol: &str,
+        quote: &str,
+        period: Option<&str>,
+        range: TimeRange,
+        limit: i32,
+    ) -> Self {
+        let full_symbol = format!("{}{}", symbol.to_uppercase(), quote.to_uppercase());
         Self {
-            source,
+            range_id,
             exchange: Arc::<str>::from(exchange),
-            symbol: Arc::<str>::from(symbol),
+            symbol: Arc::<str>::from(full_symbol),
             period: period.map(|p| Arc::<str>::from(p)),
             range,
             limit,
         }
-    }
-
-    /// 创建 FetchContext，并生成一个安全的时间区间
-    ///
-    /// `past_hours` / `past_days` 可选，优先使用小时
-    pub fn new_with_past(
-        source: HistoricalSource,
-        exchange: &str,
-        symbol: &str,
-        period: Option<&str>,
-        past_hours: Option<i64>,
-        past_days: Option<i64>,
-    ) -> Arc<Self> {
-        // 当前 UTC 时间（毫秒）
-        let end_ts = Utc::now().timestamp_millis();
-
-        // 计算开始时间
-        let start_ts = if let Some(hours) = past_hours {
-            end_ts - hours * 60 * 60 * 1000
-        } else if let Some(days) = past_days {
-            end_ts - days * 24 * 60 * 60 * 1000
-        } else {
-            end_ts - 60 * 60 * 1000 // 默认过去 1 小时
-        };
-
-        let range = TimeRange::new(start_ts, end_ts);
-        let limit = source.batch_size;
-
-        Arc::new(Self {
-            source,
-            exchange: Arc::from(exchange),
-            symbol: Arc::from(symbol),
-            period: period.map(|p| Arc::from(p)),
-            range,
-            limit,
-        })
-    }
-
-    /// 为指定交易对创建一个明确时间区间的 FetchContext
-    pub fn new_with_range(
-        exchange: &str,
-        symbol: &str,
-        quote: &str,
-        period: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Self {
-        let source = HistoricalSource::with_defaults(exchange);
-
-        let range = TimeRange::new(start.timestamp_millis(), end.timestamp_millis());
-        let full_symbol = format!("{}{}", symbol.to_uppercase(), quote.to_uppercase());
-        let limit = source.batch_size;
-
-        Self {
-            source,
-            exchange: Arc::from(exchange),
-            symbol: Arc::from(full_symbol),
-            period: Some(Arc::from(period)),
-            range,
-            limit,
-        }
-    }
-
-    /// 简化版构造：为指定交易对创建 FetchContext，支持过去 N 小时
-    pub fn new_with_past_for_symbol(exchange: &str, symbol: &str, period: &str, past_hours: i64) -> Arc<Self> {
-        let source = HistoricalSource::with_defaults(exchange);
-
-        Self::new_with_past(source, exchange, symbol, Some(period), Some(past_hours), None)
     }
 }
 //==============HistoricalFetcher Base Model===

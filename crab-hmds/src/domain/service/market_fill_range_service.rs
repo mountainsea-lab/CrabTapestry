@@ -1,5 +1,6 @@
 use crate::domain::model::market_fill_range::{
-    FillRangeFilter, HmdsMarketFillRange, NewHmdsMarketFillRange, UpdateHmdsMarketFillRange,
+    FillRangeFilter, FillRangeStatus, HmdsMarketFillRange, NewHmdsMarketFillRange, Sequence, UpdateHmdsMarketFillRange,
+    UpsertHmdsMarketFillRange,
 };
 use crate::domain::model::{AppError, AppResult, PageResult, SortOrder};
 use crate::domain::repository::Repository;
@@ -8,7 +9,7 @@ use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepo
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::global::get_app_config;
 use crate::ingestor::generate_fill_range::{generate_fill_ranges_full, should_generate_ranges};
-use crate::schema::hmds_market_fill_range::dsl::hmds_market_fill_range;
+use crate::schema::hmds_market_fill_range::id;
 use crate::{impl_full_service, load_subscriptions};
 use anyhow::Result;
 use chrono::Utc;
@@ -50,6 +51,15 @@ impl<'a> MarketFillRangeService<'a> {
 
     pub async fn query_latest_ranges(&mut self) -> AppResult<Vec<HmdsMarketFillRange>> {
         query_latest_ranges(&mut self.repo.conn).await
+    }
+
+    pub async fn update_fill_ranges_status(&mut self, ids: &[u64], status: FillRangeStatus) -> AppResult<usize> {
+        let result = update_fill_ranges_status(&mut self.repo.conn, ids, status).await?;
+        Ok(result)
+    }
+
+    pub async fn update_or_insert(&mut self, upsert_fill_range: UpsertHmdsMarketFillRange) -> AppResult<u64> {
+        update_or_insert_returning_id(&mut self.repo.conn, upsert_fill_range).await
     }
 }
 
@@ -267,4 +277,50 @@ fn batch_insert_ranges(conn: &mut MysqlConnection, ranges: &[NewHmdsMarketFillRa
         .execute(conn)?;
 
     Ok(inserted)
+}
+
+/// 更新区间任务状态
+pub async fn update_fill_ranges_status(
+    conn: &mut MysqlConnection,
+    ids: &[u64],
+    new_status: FillRangeStatus,
+) -> AppResult<usize> {
+    use crate::schema::hmds_market_fill_range::dsl::*;
+
+    let count = diesel::update(hmds_market_fill_range.filter(id.eq_any(ids)))
+        .set(status.eq(new_status.as_i8()))
+        .execute(conn)
+        .map_err(|e| AppError::DatabaseError(e.into()))?;
+
+    Ok(count)
+}
+
+/// 新增或修改，并返回记录 id
+pub async fn update_or_insert_returning_id(
+    conn: &mut MysqlConnection,
+    upsert_fill_range: UpsertHmdsMarketFillRange,
+) -> AppResult<u64> {
+    use crate::schema::hmds_market_fill_range::dsl::*;
+
+    if let Some(id_val) = upsert_fill_range.id {
+        // 🔄 更新逻辑，直接返回 id
+        // 更新
+        diesel::update(hmds_market_fill_range.filter(id.eq(id_val)))
+            .set(&upsert_fill_range)
+            .execute(conn)?;
+        Ok(id_val)
+    } else {
+        diesel::insert_into(hmds_market_fill_range)
+            .values(&upsert_fill_range)
+            .execute(conn)?;
+
+        // 查询 LAST_INSERT_ID()
+        let new_id = diesel::sql_query("SELECT LAST_INSERT_ID() AS id")
+            .load::<Sequence>(conn)?
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("failed to get last_insert_id"))?
+            .id;
+
+        Ok(new_id as u64)
+    }
 }

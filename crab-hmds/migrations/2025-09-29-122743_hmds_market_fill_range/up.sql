@@ -7,7 +7,8 @@ CREATE TABLE `hmds_market_fill_range` (
                                           `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
 
                                           `exchange` VARCHAR(50) NOT NULL COMMENT '交易所名称，例如 binance',
-                                          `symbol` VARCHAR(50) NOT NULL COMMENT '交易对，例如 BTC/USDT',
+                                          `symbol` VARCHAR(50) NOT NULL COMMENT '交易对本币，例如 BTC',
+                                          `quote` VARCHAR(50) NOT NULL COMMENT '交易对结算币种，例如 USDT',
                                           `period` VARCHAR(10) NOT NULL COMMENT 'K线周期，例如 1m, 5m, 1h',
 
                                           `start_time` BIGINT NOT NULL COMMENT '数据区间起始时间戳（毫秒）',
@@ -15,6 +16,7 @@ CREATE TABLE `hmds_market_fill_range` (
 
                                           `status` TINYINT NOT NULL DEFAULT 0 COMMENT '同步状态，0: 未同步, 1: 同步中, 2: 已同步, 3: 同步失败',
                                           `retry_count` INT NOT NULL DEFAULT 0 COMMENT '重试次数',
+                                          `batch_size` INT NOT NULL DEFAULT 0 COMMENT '每批次最大数据量',
                                           `last_try_time` TIMESTAMP DEFAULT NULL COMMENT '最后一次尝试同步时间',
 
                                           `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
