@@ -170,7 +170,7 @@ table! {
 
 // 用于获取id
 #[derive(QueryableByName)]
-#[table_name = "sequences"]
+#[diesel(table_name = sequences)]
 pub struct Sequence {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub id: i64,

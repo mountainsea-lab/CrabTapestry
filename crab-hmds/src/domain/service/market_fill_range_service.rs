@@ -9,7 +9,6 @@ use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepo
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::global::get_app_config;
 use crate::ingestor::generate_fill_range::{generate_fill_ranges_full, should_generate_ranges};
-use crate::schema::hmds_market_fill_range::id;
 use crate::{impl_full_service, load_subscriptions};
 use anyhow::Result;
 use chrono::Utc;

@@ -104,7 +104,7 @@ where
     where
         S1: Into<String>,
         S2: Into<String>,
-        S3: Into<Option<u16>>,
+        S3: Into<Option<i32>>,
         S4: Into<Option<u64>>,
         S5: Into<Option<u64>>,
     {
