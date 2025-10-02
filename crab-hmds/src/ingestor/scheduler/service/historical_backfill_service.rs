@@ -353,7 +353,7 @@ where
                     self.backfill_historical(data_type.clone()).await;
 
                     // 2️⃣ 最新数据维护
-                    // self.init_recent_tasks(data_type.clone()).await;
+                    self.init_recent_tasks(data_type.clone()).await;
                 }
             }
         }
