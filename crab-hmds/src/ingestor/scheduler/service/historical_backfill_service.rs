@@ -18,6 +18,7 @@ use std::collections::BinaryHeap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
+use tokio::time::sleep;
 
 /// HistoricalBackfillService
 pub struct HistoricalBackfillService<F>
@@ -71,14 +72,27 @@ where
 
     /// 执行任务，批量提交
     async fn execute_job_atomic(&self, job: BackfillJob<F>) {
-        let mut attempts = 0;
-        while attempts < self.max_retries {
-            attempts += 1;
-
-            let _ = job
+        for attempt in 1..=self.max_retries {
+            let job_ids = job
                 .scheduler
                 .add_batch_tasks(job.ctx.clone(), job.data_type.clone(), job.step_millis, vec![])
                 .await;
+
+            if job_ids.is_ok() {
+                // 如果成功，直接退出循环
+                break;
+            }
+
+            // 如果是最后一次尝试，可以在这里进行一些处理或日志记录
+            if attempt == self.max_retries {
+                // 处理最大重试次数
+                warn!("Max retries reached for job: {:?}", job);
+            } else {
+                // 如果不是最后一次重试，延迟一段时间再重试
+                warn!("Retry attempt {}/{} failed, retrying...", attempt, self.max_retries);
+                // 延迟，例如 1 秒
+                sleep(tokio::time::Duration::from_secs(1)).await;
+            }
         }
     }
 
