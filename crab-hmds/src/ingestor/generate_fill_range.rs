@@ -1,7 +1,7 @@
 use crate::domain::model::market_fill_range::NewHmdsMarketFillRange;
 use crab_infras::config::sub_config::Subscription;
 use crab_types::time_frame::TimeFrame;
-use ms_tracing::tracing_utils::internal::{debug, info, warn};
+use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::str::FromStr;
 
 /// 生成填充区间 - 支持初始化情况和增量情况
@@ -132,6 +132,13 @@ fn generate_ranges_for_span(
 
         // ✅ 校验：区间必须至少包含一个完整周期
         if current_end - current_start >= period_ms {
+            let batch_size = match period_str.parse::<TimeFrame>() {
+                Ok(tf) => ((current_end - current_start) / tf.to_millis()) as i32,
+                Err(e) => {
+                    error!("Invalid period_str: {}, err: {}", period_str, e);
+                    0 // 或者 return Err(e) / continue
+                }
+            };
             ranges.push(NewHmdsMarketFillRange {
                 exchange: sub.exchange.to_string(),
                 symbol: sub.symbol.to_string(),
@@ -141,7 +148,7 @@ fn generate_ranges_for_span(
                 end_time: current_end,
                 status: 0,
                 retry_count: 0,
-                batch_size: 0,
+                batch_size,
                 last_try_time: None,
             });
         } else {

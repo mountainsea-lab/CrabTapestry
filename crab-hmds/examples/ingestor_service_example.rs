@@ -8,8 +8,7 @@ use crab_hmds::ingestor::realtime::subscriber::RealtimeSubscriber;
 use crab_hmds::ingestor::realtime::subscriber::binance_subscriber::BinanceSubscriber;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crab_hmds::ingestor::scheduler::service::InMemoryBackfillMetaStore;
-use crab_hmds::ingestor::scheduler::service::historical_backfill_service_update::HistoricalBackfillService;
-use crab_hmds::load_app_config;
+use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,9 +19,6 @@ use tokio::time::sleep;
 async fn main() -> anyhow::Result<()> {
     ms_tracing::setup_tracing();
 
-    let app_config = load_app_config().expect("系统应用配置信息读取失败");
-    let lookback_days = app_config.app.lookback_days;
-
     // -------------------------------
     // 1️⃣ 初始化历史数据维护服务
     // -------------------------------
@@ -30,13 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let fetcher = Arc::new(BinanceFetcher::new());
     let scheduler = BaseBackfillScheduler::new(fetcher.clone(), 3); // retry_limit=3
 
-    let back_fill_service = Arc::new(HistoricalBackfillService::new(
-        scheduler.clone(),
-        meta_store.clone(),
-        4, // default_max_batch_hours
-        3, // max_retries
-        lookback_days,
-    ));
+    let back_fill_service = Arc::new(HistoricalBackfillService::new(scheduler.clone(), meta_store.clone(), 3));
 
     // -------------------------------
     // Step 2: 初始化 实时数据维护服务pipeline

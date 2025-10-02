@@ -5,7 +5,7 @@ use crab_hmds::global::get_app_config;
 use crab_hmds::ingestor::dedup::Deduplicatable;
 use crab_hmds::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
-use crab_hmds::ingestor::scheduler::service::historical_backfill_service_update::HistoricalBackfillService;
+use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crab_hmds::{load_app_config, load_subscriptions};
@@ -23,9 +23,6 @@ use tokio::sync::broadcast;
 async fn main() -> Result<()> {
     ms_tracing::setup_tracing();
 
-    // 假设 hmds.toml 在当前目录
-    let app_config = load_app_config().expect("系统应用配置信息读取失败");
-    let lookback_days = app_config.app.lookback_days;
     // -------------------------------
     // 1️⃣ 初始化存储和调度器
     // -------------------------------
@@ -36,15 +33,12 @@ async fn main() -> Result<()> {
     let service = Arc::new(HistoricalBackfillService::new(
         scheduler.clone(),
         meta_store.clone(),
-        4, // default_max_batch_hours
-        3, // max_retries
-        lookback_days,
+        3, // default_max_batch_hours
     ));
 
     // -------------------------------
     // 2️⃣ 加载订阅配置
     // -------------------------------
-    let subscriptions = load_subscriptionMaps(app_config.clone())?;
 
     // -------------------------------
     // 3️⃣ (1)历史数据拉取调阅器启动,等待拉取任务到来 (2) 启动 worker 维护tasks
@@ -106,12 +100,9 @@ async fn main() -> Result<()> {
     // 6️⃣ 启动后台维护任务
     // -------------------------------
 
-    let subscriptions_clone = subscriptions.clone();
-
     let svc = service.clone();
     tokio::spawn(async move {
-        svc.loop_maintain_tasks_notify(&subscriptions_clone, BackfillDataType::OHLCV, &shutdown)
-            .await;
+        svc.loop_maintain_tasks_notify(BackfillDataType::OHLCV, &shutdown).await;
     });
 
     // -------------------------------
@@ -121,22 +112,6 @@ async fn main() -> Result<()> {
     tokio::signal::ctrl_c().await?;
     info!("Shutdown signal received, stopping service...");
 
-    // -------------------------------
-    // 8️⃣ 输出最终 meta
-    // -------------------------------
-    for (_key_tuple, sub) in subscriptions.iter().map(|e| (e.key().clone(), e.value().clone())) {
-        for period in &sub.periods {
-            let key = MarketKey {
-                exchange: sub.exchange.to_string(),
-                symbol: sub.symbol.to_string(),
-                interval: period.to_string(),
-            };
-            let meta = meta_store.get_meta(&key).await.unwrap();
-            info!("Market: {:?}, Meta: {:?}", key, meta);
-        }
-    }
-
-    info!("✅ Service stopped gracefully");
     Ok(())
 }
 

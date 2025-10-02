@@ -151,20 +151,6 @@ impl Deduplicatable for TradeRecord {
 }
 //==============HistoricalFetcher Base Model=================
 
-/// 历史数据源信息
-/// Metadata about a historical data source.
-#[derive(Debug, Clone)]
-pub struct HistoricalSource {
-    pub name: String,         // Data source name, e.g., "Binance API"
-    pub exchange: String,     // Exchange name, e.g., "binance"
-    pub last_success_ts: i64, // Last successfully saved data timestamp
-    pub last_fetch_ts: i64,   // Last fetch attempt timestamp
-    pub batch_size: u16,      // Batch size for each fetch
-    pub supports_tick: bool,  // Supports tick data
-    pub supports_trade: bool, // Supports trade data
-    pub supports_ohlcv: bool, // Supports OHLCV data
-}
-
 /// 拉取上下文信息
 /// Context for fetching historical data.
 #[derive(Debug, Clone)]
@@ -186,28 +172,6 @@ pub struct HistoricalBatch<T> {
     pub period: Option<Arc<str>>, // ✅ 改成 Arc<str>，和 FetchContext 对齐
     pub range: TimeRange,         // Covered time range
     pub data: Vec<T>,             // TickRecord, TradeRecord, or OHLCVRecord
-}
-
-impl HistoricalSource {
-    pub fn with_defaults(exchange: &str) -> Self {
-        let batch_size = match exchange.to_lowercase().as_str() {
-            "BinanceFuturesUsd" => 1000,
-            "okx" => 500,
-            "bybit" => 1000,
-            _ => 500, // 默认保守一点
-        };
-
-        Self {
-            name: format!("{}_api", exchange),
-            exchange: exchange.to_string(),
-            last_success_ts: 0,
-            last_fetch_ts: 0,
-            batch_size,
-            supports_tick: true,
-            supports_trade: true,
-            supports_ohlcv: true,
-        }
-    }
 }
 impl FetchContext {
     pub fn new(
