@@ -270,7 +270,7 @@ where
         let shutdown = self.shutdown.clone();
 
         // 1️⃣ 启动 worker 消费任务
-        let _shutdown_tx = service.clone().start_workers(4, shutdown); // worker 数量可配置
+        let _shutdown_tx = service.clone().start_workers(4, shutdown).await; // worker 数量可配置
 
         let shutdown1 = self.shutdown.clone();
         // 2️⃣ 启动 scheduler
@@ -289,7 +289,7 @@ where
             }
         });
         let shutdown2 = self.shutdown.clone();
-        // 3️⃣ 启动 maintain loop（缺口扫描 + 最近补齐）
+        // 3️⃣ 启动 maintain loop
         tokio::spawn(async move {
             tokio::select! {
                 _ = shutdown2.notified() => {

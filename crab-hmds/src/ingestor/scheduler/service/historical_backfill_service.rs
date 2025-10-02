@@ -122,7 +122,7 @@ where
             ctx,
             data_type,
             priority,
-            retries: 0,
+            retries: self.max_retries,
             scheduler: self.scheduler.clone(),
             key,
             step_millis,
@@ -323,12 +323,10 @@ where
     pub async fn start_workers(self: Arc<Self>, worker_count: usize, shutdown: Arc<Notify>) {
         // 缓存维护区间最新时间
         self.cache_latest_range_time().await;
-
         for _ in 0..worker_count {
             let svc = self.clone();
             let notify_clone = svc.notify.clone(); // 内部任务通知
             let shutdown_clone = shutdown.clone(); // 统一 shutdown 控制
-
             tokio::spawn(async move {
                 svc.worker_loop(shutdown_clone, notify_clone).await;
             });
@@ -355,7 +353,7 @@ where
                     self.backfill_historical(data_type.clone()).await;
 
                     // 2️⃣ 最新数据维护
-                    self.init_recent_tasks(data_type.clone()).await;
+                    // self.init_recent_tasks(data_type.clone()).await;
                 }
             }
         }

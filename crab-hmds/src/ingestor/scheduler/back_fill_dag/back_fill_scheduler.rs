@@ -333,34 +333,21 @@ where
 mod tests {
     use super::*;
     use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
-    use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
     use futures_util::{join, try_join};
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn make_source() -> HistoricalSource {
-        HistoricalSource {
-            name: "Binance API".to_string(),
-            exchange: "binance".to_string(),
-            last_success_ts: 0,
-            last_fetch_ts: 0,
-            batch_size: 0,
-            supports_tick: false,
-            supports_trade: false,
-            supports_ohlcv: true,
-        }
-    }
-
     fn make_ctx(period: &str, past_hours: i64) -> Arc<FetchContext> {
-        FetchContext::new_with_past(
-            make_source(),
+        Arc::new(FetchContext::new(
+            Some(1),
             "binance",
             "BTCUSDT",
+            "USDT",
             Some(period),
-            Some(past_hours),
-            None,
-        )
+            TimeRange::new(1200, 10000),
+            500,
+        ))
     }
 
     #[tokio::test]
