@@ -46,6 +46,7 @@ pub fn generate_fill_ranges_full(
                     "Generating lookback ranges for {}/{}/{} from {} to {}",
                     sub.exchange, sub.symbol, period_str, lookback_ts, existing_start_ts
                 );
+                let lookback_ts = calculate_extended_lookback_ts(lookback_ts, existing_start_ts, max_span);
                 ranges.extend(generate_ranges_for_span(
                     sub,
                     period_str,
@@ -177,6 +178,33 @@ fn align_to_period(timestamp: i64, period_ms: i64, floor: bool) -> i64 {
         timestamp - remainder // 向下对齐
     } else {
         timestamp + (period_ms - remainder) // 向上对齐
+    }
+}
+
+/// 计算并返回延展后的 lookback_ts
+/// 如果 `lookback_ts` 与 `existing_start_ts` 之间的时间跨度不足 `max_span`，则会延展 `lookback_ts`
+/// 否则直接返回原来的 `lookback_ts`
+fn calculate_extended_lookback_ts(lookback_ts: i64, existing_start_ts: i64, max_span: i64) -> i64 {
+    // 计算 lookback_ts 和 existing_start_ts 之间的时间差
+    let span_to_fill = existing_start_ts - lookback_ts;
+
+    // 计算剩余的时间，看它是否满足一个完整的 max_span
+    let remaining_time = span_to_fill % max_span;
+
+    // 如果剩余时间不满一个周期，延展 lookback_ts
+    if remaining_time > 0 {
+        // 计算需要延展的时间，使其整到 max_span 的倍数
+        let extension = max_span - remaining_time;
+        debug!(
+            "Lookback ts {} is too short, extending to {}",
+            lookback_ts,
+            lookback_ts - extension
+        );
+        // 延展 lookback_ts
+        lookback_ts - extension
+    } else {
+        // 如果不需要延展，直接返回原来的 lookback_ts
+        lookback_ts
     }
 }
 
