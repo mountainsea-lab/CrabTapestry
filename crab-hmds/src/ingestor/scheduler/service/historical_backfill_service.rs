@@ -143,7 +143,7 @@ where
             let futures_vec = ranges
                 .iter()
                 .filter_map(|r| {
-                    let market_key = MarketKey::new(&r.exchange, &r.symbol, &r.period);
+                    let market_key = MarketKey::new(Some(r.id), &r.exchange, &r.symbol, &r.period);
 
                     // 安全解析时间
                     let start_time = match r.start_time.to_utc() {
@@ -305,7 +305,7 @@ where
         let range_millis = range.end_time - range.start_time;
 
         // 任务调度 key 用 MarketKey
-        let market_key = MarketKey::new(&range.exchange, &range.symbol, &range.period);
+        let market_key = MarketKey::new(Some(range.id), &range.exchange, &range.symbol, &range.period);
 
         self.schedule_backfill(
             ctx,

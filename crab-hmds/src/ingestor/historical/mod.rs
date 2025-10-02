@@ -32,6 +32,8 @@ pub trait HistoricalFetcherExt: HistoricalFetcher {
             data.push(item?);
         }
         Ok(HistoricalBatch {
+            range_id: ctx.range_id,
+            limit: ctx.limit,
             symbol: ctx.symbol.clone(),
             exchange: ctx.exchange.clone(),
             period: ctx.period.clone(), // ✅ 直接 clone Arc
@@ -49,6 +51,8 @@ pub trait HistoricalFetcherExt: HistoricalFetcher {
             data.push(item?);
         }
         Ok(HistoricalBatch {
+            range_id: ctx.range_id,
+            limit: ctx.limit,
             symbol: ctx.symbol.clone(),
             exchange: ctx.exchange.clone(),
             period: ctx.period.clone(), // ✅ 直接 clone Arc

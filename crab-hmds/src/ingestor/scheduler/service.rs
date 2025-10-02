@@ -12,14 +12,17 @@ use std::str::FromStr;
 /// 交易所/币种/周期的唯一键
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MarketKey {
+    /// 维护区间数据id
+    pub range_id: Option<u64>,
     pub exchange: String,
     pub symbol: String,
     pub period: String, // e.g. "1m", "5m", "1h"
 }
 
 impl MarketKey {
-    fn new(exchange: &str, symbol: &str, period: &str) -> MarketKey {
+    fn new(range_id: Option<u64>, exchange: &str, symbol: &str, period: &str) -> MarketKey {
         MarketKey {
+            range_id,
             exchange: exchange.to_string(),
             symbol: symbol.to_string(),
             period: period.to_string(),

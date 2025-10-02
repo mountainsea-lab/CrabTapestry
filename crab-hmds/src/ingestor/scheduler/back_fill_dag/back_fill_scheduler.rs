@@ -195,7 +195,7 @@ where
             let mut meta = node_arc.meta.lock().await;
             meta.status = NodeStatus::Running;
             meta.started_at = Some(Instant::now());
-            info!("Node {} running", node_id);
+            // info!("Node {} running", node_id);
         }
 
         // 重试循环
@@ -237,7 +237,7 @@ where
                     let mut meta = node_arc.meta.lock().await;
                     meta.status = NodeStatus::Completed;
                     meta.finished_at = Some(Instant::now());
-                    info!("Node {} completed", node_id);
+                    // info!("Node {} completed", node_id);
 
                     // 推进下游
                     let dependents = node_arc.dependents.lock().await.clone();
@@ -451,7 +451,7 @@ mod tests {
             if let Some(batch_enum) = sub.recv_timeout(Duration::from_secs(3)).await {
                 match batch_enum {
                     HistoricalBatchEnum::OHLCV(batch) => {
-                        println!("Task completed for range {:?}", batch.range);
+                        info!("Task completed for range {:?}", batch.range);
                         completed_ids.push(batch.range);
                     }
                     _ => panic!("Expected OHLCV batch"),

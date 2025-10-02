@@ -167,6 +167,8 @@ pub struct FetchContext {
 /// Batch of historical data, unified for Trade, Tick, or OHLCV records.
 #[derive(Debug, Clone)]
 pub struct HistoricalBatch<T> {
+    pub range_id: Option<u64>,
+    pub limit: i32,
     pub symbol: Arc<str>,
     pub exchange: Arc<str>,
     pub period: Option<Arc<str>>, // ✅ 改成 Arc<str>，和 FetchContext 对齐

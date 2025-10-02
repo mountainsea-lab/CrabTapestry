@@ -24,14 +24,14 @@ impl BinanceFetcher {
     /// internal method: fetch single page of OHLCV
     async fn fetch_ohlcv_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
         let symbol = ctx.symbol.clone();
-        let interval = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
+        let period = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
 
         // 调用 BinanceExchange 获取 KlineSummary
         let kline_summaries: Vec<KlineSummary> = self
             .client
             .get_klines(
                 symbol.as_ref(),
-                interval.as_ref(),
+                period.as_ref(),
                 Some(ctx.limit),
                 Some(start_ts as u64),
                 Some(end_ts as u64),
@@ -58,10 +58,11 @@ impl BinanceFetcher {
                 },
                 symbol: ctx.symbol.clone(),
                 exchange: ctx.exchange.clone(),
-                period: interval.as_ref().to_string(),
+                period: period.as_ref().to_string(),
             })
             .collect();
-
+        // info!("ctx range_id-{}, limit_size {}, start_time {},end_time {}, records size {}",
+        //     ctx.range_id.unwrap(), ctx.limit, ctx.range.start, ctx.range.end, records.len());
         Ok(records)
     }
 

@@ -287,7 +287,9 @@ pub async fn update_fill_ranges_status(
     use crate::schema::hmds_market_fill_range::dsl::*;
 
     let count = diesel::update(hmds_market_fill_range.filter(id.eq_any(ids)))
-        .set(status.eq(new_status.as_i8()))
+        // .set(status.eq(new_status.as_i8()))
+        // .set(retry_count + 1)
+        .set((status.eq(new_status.as_i8()), retry_count.eq(retry_count + 1)))
         .execute(conn)
         .map_err(|e| AppError::DatabaseError(e.into()))?;
 

@@ -1,5 +1,6 @@
+use crate::domain::model::market_fill_range::FillRangeStatus;
 use crate::domain::model::ohlcv_record::to_new_records_with_hash;
-use crate::domain::service::save_ohlcv_records_batch;
+use crate::domain::service::{save_ohlcv_records_batch, update_fill_ranges_status};
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{ControlMsg, InternalMsg, ServiceParams, ServiceState};
 use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
@@ -78,7 +79,7 @@ where
         let dedup_tick = Arc::new(Deduplicator::<TickRecord>::new(60_000));
         let dedup_trade = Arc::new(Deduplicator::<TradeRecord>::new(60_000));
 
-        let buffer_ohlcv = DataBuffer::new(Some(1000), 10, CapacityStrategy::DropOldest);
+        let buffer_ohlcv = DataBuffer::new(Some(1000), 10000, CapacityStrategy::DropOldest);
         let buffer_tick = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
         let buffer_trade = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
 
@@ -378,10 +379,20 @@ where
                                 match batch {
                                     HistoricalBatchEnum::OHLCV(hb) => {
                                         if !hb.data.is_empty() {
+                                            let mut rang_status = if hb.data.len() as i32 >= hb.limit {
+                                                FillRangeStatus::Synced
+                                            } else {
+                                                FillRangeStatus::Syncing
+                                            };
                                             if let Err(e) = self.buffer_ohlcv.push_batch(hb.data).await {
+                                                 rang_status = FillRangeStatus::Failed;
                                                 let _ = self.internal_tx.send(
                                                     InternalMsg::Error(format!("Backfill OHLCV push failed: {}", e))
                                                 ).await;
+                                            }
+                                            /// 更新区间状态
+                                            if let Some(range_id) = hb.range_id {
+                                              let _ = update_fill_ranges_status(&[range_id],rang_status).await;
                                             }
                                         }
                                     }
