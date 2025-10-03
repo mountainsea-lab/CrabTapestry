@@ -9,7 +9,10 @@ use crate::schema::hmds_ohlcv_record::dsl::hmds_ohlcv_record;
 use crate::schema::hmds_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
 use anyhow::Result;
 use diesel::sql_types::*;
-use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
+use hex;
+use std::error::Error;
+use std::io::Write;
 
 impl_full_service!(
     OhlcvRecordService,
@@ -58,7 +61,7 @@ pub async fn insert_new_ohlcv_records_batch(
     // 按 batch_size 拆分数据
     for batch in ohlcv_records.chunks(batch_size) {
         for rec in batch {
-            diesel::sql_query(
+            sql_query(
                 "INSERT IGNORE INTO hmds_ohlcv_record \
                 (hash_id, ts, period_start_ts, symbol, exchange, period, open, high, low, close, volume, turnover, num_trades, vwap, created_at) \
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
@@ -81,6 +84,69 @@ pub async fn insert_new_ohlcv_records_batch(
 
             total_inserted += 1;
         }
+    }
+
+    Ok(total_inserted)
+}
+
+/// 批量安全插入 K 线，重复 hash_id 自动忽略 批量优化版本
+pub fn insert_new_ohlcv_records_batch_file(
+    conn: &mut MysqlConnection,
+    ohlcv_records: &[NewHmdsOhlcvRecord],
+    batch_size: usize, // 每批大小，例如 10_000
+    created_at: &str,  // 固定时间戳，例如 "2025-10-03 12:00:00"
+) -> Result<usize, Box<dyn Error>> {
+    if ohlcv_records.is_empty() {
+        return Ok(0);
+    }
+
+    let mut total_inserted = 0;
+
+    for batch in ohlcv_records.chunks(batch_size) {
+        // 1️⃣ 创建临时文件
+        let mut tmpfile = tempfile::NamedTempFile::new()?;
+
+        // 2️⃣ 写入制表符分隔的 CSV 数据
+        for rec in batch {
+            writeln!(
+                tmpfile,
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                hex::encode(&rec.hash_id),
+                rec.ts,
+                rec.period_start_ts.unwrap_or(0),
+                &rec.symbol,
+                &rec.exchange,
+                &rec.period,
+                rec.open,
+                rec.high,
+                rec.low,
+                rec.close,
+                rec.volume,
+                rec.turnover.unwrap_or(0.0),
+                rec.num_trades.unwrap_or(0),
+                rec.vwap.unwrap_or(0.0),
+                created_at // 固定 created_at
+            )?;
+        }
+        tmpfile.flush()?;
+        let path = tmpfile.path().to_str().unwrap();
+
+        // 3️⃣ 构造 LOAD DATA LOCAL INFILE IGNORE SQL
+        let sql = format!(
+            r#"LOAD DATA LOCAL INFILE '{}'
+            IGNORE
+            INTO TABLE hmds_ohlcv_record
+            FIELDS TERMINATED BY '\t'
+            LINES TERMINATED BY '\n'
+            (hash_id, ts, period_start_ts, symbol, exchange, period,
+             open, high, low, close, volume, turnover, num_trades, vwap, created_at)"#,
+            path
+        );
+
+        // 4️⃣ 执行 SQL
+        sql_query(sql).execute(conn)?;
+
+        total_inserted += batch.len();
     }
 
     Ok(total_inserted)
