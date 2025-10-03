@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Barter Ecosystem
+barter-integration = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+barter-instrument = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+barter-execution = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+barter = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
