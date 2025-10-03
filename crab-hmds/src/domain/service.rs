@@ -2,7 +2,7 @@ use crate::domain::model::PageResult;
 use crate::domain::model::market_fill_range::{
     FillRangeFilter, FillRangeStatus, HmdsMarketFillRange, UpsertHmdsMarketFillRange,
 };
-use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter};
+use crate::domain::model::ohlcv_record::{HmdsOhlcvRecord, NewHmdsOhlcvRecord, OhlcvFilter};
 use crate::domain::repository::market_fill_range_repository::MarketFillRangeRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::service::market_fill_range_service::MarketFillRangeService;
@@ -13,14 +13,14 @@ pub mod market_fill_range_service;
 mod ohlcv_record_service;
 
 /// 批量保存K线数据
-pub async fn save_ohlcv_records_batch(datas: &[NewCrabOhlcvRecord]) -> Result<(), anyhow::Error> {
+pub async fn save_ohlcv_records_batch(datas: &[NewHmdsOhlcvRecord]) -> Result<(), anyhow::Error> {
     let mut conn = get_mysql_pool().get()?;
     let repo = OhlcvRecordRepository::new(&mut conn);
     let mut ohlcv_record_service = OhlcvRecordService { repo };
     ohlcv_record_service.insert_new_ohlcv_records_batch(datas).await
 }
 /// 分页查询ohlcv records数据
-pub async fn query_ohlcv_page(ohlcv_filter: OhlcvFilter) -> Result<PageResult<CrabOhlcvRecord>, anyhow::Error> {
+pub async fn query_ohlcv_page(ohlcv_filter: OhlcvFilter) -> Result<PageResult<HmdsOhlcvRecord>, anyhow::Error> {
     let mut conn = get_mysql_pool().get()?;
     let repo = OhlcvRecordRepository::new(&mut conn);
     let mut ohlcv_record_service = OhlcvRecordService { repo };
@@ -34,7 +34,7 @@ pub async fn query_ohlcv_page(ohlcv_filter: OhlcvFilter) -> Result<PageResult<Cr
 }
 
 /// 条件查询ohlcv records线集合
-pub async fn query_ohlcv_list(ohlcv_filter: OhlcvFilter) -> Result<Vec<CrabOhlcvRecord>, anyhow::Error> {
+pub async fn query_ohlcv_list(ohlcv_filter: OhlcvFilter) -> Result<Vec<HmdsOhlcvRecord>, anyhow::Error> {
     let mut conn = get_mysql_pool().get()?;
     let repo = OhlcvRecordRepository::new(&mut conn);
     let mut ohlcv_record_service = OhlcvRecordService { repo };

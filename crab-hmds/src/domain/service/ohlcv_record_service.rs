@@ -1,12 +1,12 @@
-use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter, UpdateCrabOhlcvRecord};
+use crate::domain::model::ohlcv_record::{HmdsOhlcvRecord, NewHmdsOhlcvRecord, OhlcvFilter, UpdateHmdsOhlcvRecord};
 use crate::domain::model::{AppError, AppResult, PageResult, SortOrder};
 use crate::domain::repository::Repository;
 use crate::domain::repository::UpdatableRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::impl_full_service;
-use crate::schema::crab_ohlcv_record::dsl::crab_ohlcv_record;
-use crate::schema::crab_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
+use crate::schema::hmds_ohlcv_record::dsl::hmds_ohlcv_record;
+use crate::schema::hmds_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
 use anyhow::Result;
 use diesel::sql_types::*;
 use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
@@ -14,9 +14,9 @@ use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
 impl_full_service!(
     OhlcvRecordService,
     OhlcvRecordRepository,
-    CrabOhlcvRecord,
-    NewCrabOhlcvRecord,
-    UpdateCrabOhlcvRecord
+    HmdsOhlcvRecord,
+    NewHmdsOhlcvRecord,
+    UpdateHmdsOhlcvRecord
 );
 
 impl<'a> OhlcvRecordService<'a> {
@@ -25,18 +25,18 @@ impl<'a> OhlcvRecordService<'a> {
         filter: OhlcvFilter,
         page: i64,
         per_page: i64,
-    ) -> AppResult<PageResult<CrabOhlcvRecord>> {
+    ) -> AppResult<PageResult<HmdsOhlcvRecord>> {
         let data = self.repo.filter_paginated(&filter, page, per_page)?;
         let total = self.repo.count_filtered(&filter)?;
         Ok(PageResult { data, total, page, per_page })
     }
 
-    pub async fn insert_new_ohlcv_records_batch(&mut self, datas: &[NewCrabOhlcvRecord]) -> Result<()> {
+    pub async fn insert_new_ohlcv_records_batch(&mut self, datas: &[NewHmdsOhlcvRecord]) -> Result<()> {
         insert_new_ohlcv_records_batch(&mut self.repo.conn, datas, 500).await?;
         Ok(())
     }
 
-    pub async fn query_list(&mut self, filter: OhlcvFilter) -> AppResult<Vec<CrabOhlcvRecord>> {
+    pub async fn query_list(&mut self, filter: OhlcvFilter) -> AppResult<Vec<HmdsOhlcvRecord>> {
         let data = query_list_by_filter(&mut self.repo.conn, &filter).await?;
         Ok(data)
     }
@@ -46,7 +46,7 @@ impl<'a> OhlcvRecordService<'a> {
 /// 自动按 batch_size 拆分
 pub async fn insert_new_ohlcv_records_batch(
     conn: &mut MysqlConnection,
-    ohlcv_records: &[NewCrabOhlcvRecord],
+    ohlcv_records: &[NewHmdsOhlcvRecord],
     batch_size: usize, // 每批大小，例如 500
 ) -> Result<usize, diesel::result::Error> {
     if ohlcv_records.is_empty() {
@@ -59,7 +59,7 @@ pub async fn insert_new_ohlcv_records_batch(
     for batch in ohlcv_records.chunks(batch_size) {
         for rec in batch {
             diesel::sql_query(
-                "INSERT IGNORE INTO crab_ohlcv_record \
+                "INSERT IGNORE INTO hmds_ohlcv_record \
                 (hash_id, ts, period_start_ts, symbol, exchange, period, open, high, low, close, volume, turnover, num_trades, vwap, created_at) \
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
             )
@@ -89,8 +89,8 @@ pub async fn insert_new_ohlcv_records_batch(
 pub async fn query_list_by_filter(
     conn: &mut MysqlConnection,
     ohlcv_filter: &OhlcvFilter,
-) -> AppResult<Vec<CrabOhlcvRecord>> {
-    let mut query = crab_ohlcv_record.into_boxed(); // 初始化为可扩展查询
+) -> AppResult<Vec<HmdsOhlcvRecord>> {
+    let mut query = hmds_ohlcv_record.into_boxed(); // 初始化为可扩展查询
 
     // 根据 `OhlcvFilter` 动态添加筛选条件
     if let Some(ref symbol_val) = ohlcv_filter.symbol {
@@ -126,7 +126,7 @@ pub async fn query_list_by_filter(
 
     // 执行查询并返回结果
     let result = query
-        .load::<CrabOhlcvRecord>(conn)
+        .load::<HmdsOhlcvRecord>(conn)
         .map_err(|e| AppError::DatabaseError(e.into()))?;
 
     Ok(result)

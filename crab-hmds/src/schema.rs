@@ -1,7 +1,29 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    crab_ohlcv_record (id) {
+    hmds_market_fill_range (id) {
+        id -> Unsigned<Bigint>,
+        #[max_length = 50]
+        exchange -> Varchar,
+        #[max_length = 50]
+        symbol -> Varchar,
+        #[max_length = 50]
+        quote -> Varchar,
+        #[max_length = 10]
+        period -> Varchar,
+        start_time -> Bigint,
+        end_time -> Bigint,
+        status -> Tinyint,
+        retry_count -> Integer,
+        batch_size -> Integer,
+        last_try_time -> Nullable<Timestamp>,
+        created_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    hmds_ohlcv_record (id) {
         id -> Unsigned<Bigint>,
         #[max_length = 16]
         hash_id -> Binary,
@@ -26,26 +48,4 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    hmds_market_fill_range (id) {
-        id -> Unsigned<Bigint>,
-        #[max_length = 50]
-        exchange -> Varchar,
-        #[max_length = 50]
-        symbol -> Varchar,
-        #[max_length = 50]
-        quote -> Varchar,
-        #[max_length = 10]
-        period -> Varchar,
-        start_time -> Bigint,
-        end_time -> Bigint,
-        status -> Tinyint,
-        retry_count -> Integer,
-        batch_size -> Integer,
-        last_try_time -> Nullable<Timestamp>,
-        created_at -> Nullable<Timestamp>,
-        updated_at -> Nullable<Timestamp>,
-    }
-}
-
-diesel::allow_tables_to_appear_in_same_query!(crab_ohlcv_record, hmds_market_fill_range,);
+diesel::allow_tables_to_appear_in_same_query!(hmds_market_fill_range, hmds_ohlcv_record,);

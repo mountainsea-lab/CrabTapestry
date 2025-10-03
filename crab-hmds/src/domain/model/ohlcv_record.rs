@@ -1,20 +1,20 @@
 use crate::domain::model::SortOrder;
 use crate::ingestor::types::OHLCVRecord;
-use crate::schema::crab_ohlcv_record;
+use crate::schema::hmds_ohlcv_record;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::task;
 
-/// 查询模型：对应表 `crab_ohlcv_record`
+/// 查询模型：对应表 `Hmds_ohlcv_record`
 ///
 /// - `id` 为自增主键，只在数据库生成
 /// - `hash_id` 是 BINARY(16)，这里映射为 `Vec<u8>`
 /// - `created_at` 和 `updated_at` 使用 `chrono::NaiveDateTime`
 #[derive(Queryable, Selectable, Serialize, Deserialize, Identifiable, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
-pub struct CrabOhlcvRecord {
+#[diesel(table_name = hmds_ohlcv_record)]
+pub struct HmdsOhlcvRecord {
     pub id: u64,                           // 自增主键 (BIGINT UNSIGNED)
     pub hash_id: Vec<u8>,                  // 幂等校验用的 MD5 哈希 (16字节)
     pub ts: i64,                           // K线结束时间戳
@@ -34,13 +34,13 @@ pub struct CrabOhlcvRecord {
     pub updated_at: Option<NaiveDateTime>, // 记录更新时间
 }
 
-/// 插入模型：用于 `insert_into(crab_ohlcv_record)`
+/// 插入模型：用于 `insert_into(Hmds_ohlcv_record)`
 ///
 /// - 不包含 `id`，由数据库自增生成
 /// - 不包含 `created_at` 和 `updated_at`，交由 MySQL 默认值自动生成
 #[derive(Insertable, Serialize, Deserialize, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
-pub struct NewCrabOhlcvRecord {
+#[diesel(table_name = hmds_ohlcv_record)]
+pub struct NewHmdsOhlcvRecord {
     pub hash_id: Vec<u8>,             // 幂等校验用的 MD5 哈希 (16字节)
     pub ts: i64,                      // K线结束时间戳
     pub period_start_ts: Option<i64>, // K线开始时间戳 (可选)
@@ -59,8 +59,8 @@ pub struct NewCrabOhlcvRecord {
 
 /// Upsert 模型
 #[derive(AsChangeset, Serialize, Deserialize, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
-pub struct UpsertCrabOhlcvRecord {
+#[diesel(table_name = hmds_ohlcv_record)]
+pub struct UpsertHmdsOhlcvRecord {
     pub ts: i64,
     pub period_start_ts: Option<i64>,
     pub open: f64,
@@ -78,8 +78,8 @@ pub struct UpsertCrabOhlcvRecord {
 /// - 只包含可更新字段，避免修改唯一标识
 /// - 支持部分更新，可选择性设置字段
 #[derive(AsChangeset, Serialize, Deserialize, Debug, Clone)]
-#[diesel(table_name = crab_ohlcv_record)]
-pub struct UpdateCrabOhlcvRecord {
+#[diesel(table_name = hmds_ohlcv_record)]
+pub struct UpdateHmdsOhlcvRecord {
     pub id: u64,         // 必须：定位记录
     pub ts: Option<i64>, // 可选更新
     pub period_start_ts: Option<i64>,
@@ -93,7 +93,7 @@ pub struct UpdateCrabOhlcvRecord {
     pub vwap: Option<f64>,
 }
 
-impl From<OHLCVRecord> for NewCrabOhlcvRecord {
+impl From<OHLCVRecord> for NewHmdsOhlcvRecord {
     fn from(rec: OHLCVRecord) -> Self {
         // 计算 hash_id: md5(symbol+exchange+period+ts)
         let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
@@ -118,7 +118,7 @@ impl From<OHLCVRecord> for NewCrabOhlcvRecord {
     }
 }
 
-impl From<&OHLCVRecord> for NewCrabOhlcvRecord {
+impl From<&OHLCVRecord> for NewHmdsOhlcvRecord {
     fn from(rec: &OHLCVRecord) -> Self {
         let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
         let digest = md5::compute(input);
@@ -142,7 +142,7 @@ impl From<&OHLCVRecord> for NewCrabOhlcvRecord {
     }
 }
 
-pub async fn to_new_records_with_hash(batch: &[Arc<OHLCVRecord>]) -> Vec<NewCrabOhlcvRecord> {
+pub async fn to_new_records_with_hash(batch: &[Arc<OHLCVRecord>]) -> Vec<NewHmdsOhlcvRecord> {
     let mut handles = Vec::with_capacity(batch.len());
 
     for arc_rec in batch.iter().cloned() {
@@ -151,7 +151,7 @@ pub async fn to_new_records_with_hash(batch: &[Arc<OHLCVRecord>]) -> Vec<NewCrab
             let input = format!("{}{}{}{}", rec.symbol, rec.exchange, rec.period, rec.ts);
             let digest = md5::compute(input);
 
-            NewCrabOhlcvRecord {
+            NewHmdsOhlcvRecord {
                 hash_id: digest.0.to_vec(),
                 ts: rec.ts,
                 period_start_ts: rec.period_start_ts,
@@ -179,10 +179,10 @@ pub async fn to_new_records_with_hash(batch: &[Arc<OHLCVRecord>]) -> Vec<NewCrab
     out
 }
 
-impl From<(OHLCVRecord, u64)> for UpdateCrabOhlcvRecord {
+impl From<(OHLCVRecord, u64)> for UpdateHmdsOhlcvRecord {
     /// 将业务结构体和记录 id 转换为更新模型
     fn from((rec, id): (OHLCVRecord, u64)) -> Self {
-        UpdateCrabOhlcvRecord {
+        UpdateHmdsOhlcvRecord {
             id, // 数据库主键
             ts: Some(rec.ts),
             period_start_ts: rec.period_start_ts,
