@@ -10,3 +10,18 @@ barter-instrument = { git = "https://github.com/ztNozdormu/barter-rs.git", branc
 barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
 barter-execution = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
 barter = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+
+# tracing
+ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
+
+# Time
+chrono =  { workspace = true }
+
+# SerDe Data
+serde_json =  { workspace = true }
+serde =  { workspace = true }
+
+# itertools = "0.14.0"
+smol_str = { workspace = true }
+rust_decimal ={ workspace = true }
+
