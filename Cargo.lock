@@ -643,7 +643,6 @@ dependencies = [
  "crab-types",
  "criterion",
  "crossbeam",
- "csv",
  "dashmap",
  "diesel",
  "dotenvy",
