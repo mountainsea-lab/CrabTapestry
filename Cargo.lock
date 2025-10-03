@@ -725,6 +725,7 @@ dependencies = [
  "barter-instrument",
  "barter-integration",
  "chrono",
+ "fnv",
  "ms-tracing",
  "rust_decimal",
  "serde",

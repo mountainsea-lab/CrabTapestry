@@ -12,10 +12,9 @@ use barter::strategy::algo::AlgoStrategy;
 use barter::strategy::close_positions::{ClosePositionsStrategy, close_open_positions_with_market_orders};
 use barter::strategy::on_disconnect::OnDisconnectStrategy;
 use barter::strategy::on_trading_disabled::OnTradingDisabled;
-use barter_execution::order::id::{ClientOrderId, OrderId, StrategyId};
+use barter_execution::order::id::{ClientOrderId, StrategyId};
 use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen, RequestOpen};
 use barter_execution::order::{OrderKey, OrderKind, TimeInForce};
-use barter_execution::trade::TradeId;
 use barter_instrument::Side;
 use barter_instrument::asset::AssetIndex;
 use barter_instrument::exchange::{ExchangeId, ExchangeIndex};
@@ -24,7 +23,7 @@ use barter_integration::channel::UnboundedTx;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 
-struct EmaStrategy {
+pub struct EmaStrategy {
     id: StrategyId,
 }
 
@@ -72,22 +71,6 @@ impl AlgoStrategy for EmaStrategy {
 
         (std::iter::empty(), opens)
     }
-}
-
-fn strategy_id() -> StrategyId {
-    StrategyId::new("EmaStrategy")
-}
-
-fn gen_cid(instrument: usize) -> ClientOrderId {
-    ClientOrderId::new(InstrumentIndex(instrument).to_string())
-}
-
-fn gen_trade_id(instrument: usize) -> TradeId {
-    TradeId::new(InstrumentIndex(instrument).to_string())
-}
-
-fn gen_order_id(instrument: usize) -> OrderId {
-    OrderId::new(InstrumentIndex(instrument).to_string())
 }
 
 impl ClosePositionsStrategy for EmaStrategy {

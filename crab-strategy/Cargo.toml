@@ -21,7 +21,8 @@ chrono =  { workspace = true }
 serde_json =  { workspace = true }
 serde =  { workspace = true }
 
-# itertools = "0.14.0"
+# Data Structures
 smol_str = { workspace = true }
 rust_decimal ={ workspace = true }
+fnv = "1.0.7"
 
