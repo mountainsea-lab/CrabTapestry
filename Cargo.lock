@@ -695,6 +695,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "crab-strategy"
+version = "0.1.0"
+
+[[package]]
 name = "crab-types"
 version = "0.1.0"
 dependencies = [
