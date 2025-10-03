@@ -2,6 +2,7 @@ mod ingestor_service_flow;
 pub mod response;
 mod routes;
 
+use crate::domain::service::generate_and_insert_fill_ranges;
 use crate::global::init_global_services;
 use crate::server::ingestor_service_flow::start_ingestor_service_flow;
 use ms_tracing::tracing_utils::internal::info;
@@ -33,7 +34,8 @@ pub async fn start() {
 
     // init global comments domain
     let _ = init_global_services().await;
-
+    // init fill_ranges
+    let _ = generate_and_insert_fill_ranges().await;
     // ========== 启动数据维护控制服务（启动 -> 实时数据服务+历史数据服务 -> 落盘） ==========
     tokio::spawn(async move {
         start_ingestor_service_flow().await;
