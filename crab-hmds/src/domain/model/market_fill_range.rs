@@ -156,7 +156,7 @@ pub struct FillRangeFilter {
     pub retry_count: Option<i32>,
     pub last_try_time: Option<NaiveDateTime>, // 可选更新最后一次尝试同步时间
     pub sort_by_start_time: Option<SortOrder>,
-    pub limit: Option<i32>, // 限制查询条数 默认100条(每次处理100个归档区间)
+    pub limit: Option<i32>, // 限制查询条数 默认100条(每次处理100个归档区间)--暂时改为50个区间
     pub page: Option<usize>,
     pub page_size: Option<usize>,
 }

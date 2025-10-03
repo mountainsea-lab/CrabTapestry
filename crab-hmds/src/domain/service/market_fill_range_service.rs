@@ -95,7 +95,7 @@ pub async fn query_list_by_filter(
     };
 
     // 限制查询条数
-    let limit_count = filter.limit.unwrap_or(100);
+    let limit_count = filter.limit.unwrap_or(50);
     query = query.limit(limit_count as i64);
 
     // 执行查询
