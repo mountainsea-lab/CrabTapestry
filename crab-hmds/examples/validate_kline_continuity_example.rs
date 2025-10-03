@@ -1,5 +1,5 @@
 use crab_hmds::domain::model::AppError;
-use crab_hmds::domain::model::ohlcv_record::{CrabOhlcvRecord, OhlcvFilter};
+use crab_hmds::domain::model::ohlcv_record::{HmdsOhlcvRecord, OhlcvFilter};
 use crab_hmds::domain::service::query_ohlcv_list;
 use crab_hmds::global::init_global_services;
 use crab_hmds::load_app_config;
@@ -18,7 +18,8 @@ async fn main() -> anyhow::Result<()> {
     unsafe {
         env::set_var(
             "DATABASE_URL",
-            "mysql://root:root@mysql.infra.orb.local:3306/crabtapestry",
+            // "mysql://root:root@mysql.infra.orb.local:3306/crabtapestry",
+            "mysql://root:root@113.44.153.48:3306/crabtapestry",
         );
     }
 
@@ -74,7 +75,7 @@ pub struct Discontinuity {
 // 允许的最大容差（毫秒）
 const TOLERANCE: i64 = 1000; // 允许的最大误差是 1000 毫秒，即 1 秒
 
-fn validate_kline_continuity(records: &[CrabOhlcvRecord]) -> Result<Vec<Discontinuity>, AppError> {
+fn validate_kline_continuity(records: &[HmdsOhlcvRecord]) -> Result<Vec<Discontinuity>, AppError> {
     let mut discontinuities = Vec::new();
 
     // 遍历记录，检查时间戳连续性

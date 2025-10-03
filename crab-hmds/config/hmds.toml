@@ -1,7 +1,7 @@
 # config/hmds.toml
 [app]
 # 设置回溯数据天数
-lookback_days = 1
+lookback_days = 120
 
 [[subscriptions]]
 exchange = "BinanceFuturesUsd"
