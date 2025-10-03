@@ -29,7 +29,7 @@ services:
       - ${CRAB_HMDS_ENV}
     volumes:
       - "${CRAB_HMDS_ENV}:/app/.env:ro"
-      - "${PWD}/crab-hmds/subscriptions.toml:/app/crab-hmds/subscriptions.toml:ro"
+      - "${PWD}/crab-hmds/config/hmds.toml:/app/crab-hmds/config/hmds.toml:ro"
     command: ["crab-hmds"]
     ports:
       - "10088:10088"

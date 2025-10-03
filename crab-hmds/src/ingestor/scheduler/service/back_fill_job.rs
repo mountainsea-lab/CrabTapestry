@@ -1,7 +1,7 @@
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::scheduler::BackfillDataType;
 use crate::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
-use crate::ingestor::scheduler::service::{BackfillMetaStore, MarketKey};
+use crate::ingestor::scheduler::service::MarketKey;
 use crate::ingestor::types::FetchContext;
 use std::sync::Arc;
 
@@ -20,7 +20,6 @@ where
     pub(crate) priority: BackfillPriority,
     pub(crate) retries: usize,
     pub(crate) scheduler: Arc<BaseBackfillScheduler<F>>,
-    pub(crate) db: Arc<dyn BackfillMetaStore>,
     pub(crate) key: MarketKey,
     pub(crate) step_millis: i64,
 }

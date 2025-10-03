@@ -41,7 +41,7 @@ chrono =  { workspace = true }
 serde_json =  { workspace = true }
 serde =  { workspace = true }
 dashmap =  { workspace = true }
-
+config = "0.13"
 
 rand =  { workspace = true }
 
@@ -51,6 +51,7 @@ md5 = { workspace = true }
 
 # env
 dotenvy = { workspace = true }
+toml = "0.5.11"
 
 [dev-dependencies]
 criterion = "0.7.0"

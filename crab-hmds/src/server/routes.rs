@@ -1,5 +1,7 @@
 use super::AppState;
+use crate::domain::model::ohlcv_record::OhlcvFilter;
 use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_cache, with_tx};
+use crate::server::routes::handlers::ohlcv_record_handlers::{query_list, query_page};
 use ms_tracing::LogQuery;
 use warp::{self, Filter};
 
@@ -31,11 +33,23 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
         )
         .and_then(query_logs);
 
+    //=====================ohlcv================================
+    let ohlcv_records = api
+        .and(warp::path("ohlcv").and(warp::path("list").and(warp::get()).and(warp::query::<OhlcvFilter>())))
+        .and_then(query_list);
+
+    let ohlcv_page = api
+        .and(warp::path("ohlcv").and(warp::path("page").and(warp::get()).and(warp::query::<OhlcvFilter>())))
+        .and_then(query_page);
+    //=====================ohlcv================================
+
     warp::path::end()
         .map(handlers::index)
         .or(ping)
         .or(logs_sse)
         .or(logs)
+        .or(ohlcv_records)
+        .or(ohlcv_page)
         .or(version)
         .or(sysinfo)
         .or(health)

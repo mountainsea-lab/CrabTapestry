@@ -195,7 +195,7 @@ where
             let mut meta = node_arc.meta.lock().await;
             meta.status = NodeStatus::Running;
             meta.started_at = Some(Instant::now());
-            info!("Node {} running", node_id);
+            // info!("Node {} running", node_id);
         }
 
         // 重试循环
@@ -237,7 +237,7 @@ where
                     let mut meta = node_arc.meta.lock().await;
                     meta.status = NodeStatus::Completed;
                     meta.finished_at = Some(Instant::now());
-                    info!("Node {} completed", node_id);
+                    // info!("Node {} completed", node_id);
 
                     // 推进下游
                     let dependents = node_arc.dependents.lock().await.clone();
@@ -333,34 +333,21 @@ where
 mod tests {
     use super::*;
     use crate::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
-    use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
     use futures_util::{join, try_join};
     use std::time::Duration;
     use tokio::time::timeout;
 
-    fn make_source() -> HistoricalSource {
-        HistoricalSource {
-            name: "Binance API".to_string(),
-            exchange: "binance".to_string(),
-            last_success_ts: 0,
-            last_fetch_ts: 0,
-            batch_size: 0,
-            supports_tick: false,
-            supports_trade: false,
-            supports_ohlcv: true,
-        }
-    }
-
     fn make_ctx(period: &str, past_hours: i64) -> Arc<FetchContext> {
-        FetchContext::new_with_past(
-            make_source(),
+        Arc::new(FetchContext::new(
+            Some(1),
             "binance",
             "BTCUSDT",
+            "USDT",
             Some(period),
-            Some(past_hours),
-            None,
-        )
+            TimeRange::new(1200, 10000),
+            500,
+        ))
     }
 
     #[tokio::test]
@@ -464,7 +451,7 @@ mod tests {
             if let Some(batch_enum) = sub.recv_timeout(Duration::from_secs(3)).await {
                 match batch_enum {
                     HistoricalBatchEnum::OHLCV(batch) => {
-                        println!("Task completed for range {:?}", batch.range);
+                        info!("Task completed for range {:?}", batch.range);
                         completed_ids.push(batch.range);
                     }
                     _ => panic!("Expected OHLCV batch"),

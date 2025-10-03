@@ -24,15 +24,15 @@ impl BinanceFetcher {
     /// internal method: fetch single page of OHLCV
     async fn fetch_ohlcv_page(&self, ctx: &FetchContext, start_ts: i64, end_ts: i64) -> Result<Vec<OHLCVRecord>> {
         let symbol = ctx.symbol.clone();
-        let interval = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
+        let period = ctx.period.clone().unwrap_or_else(|| Arc::from("1m"));
 
         // 调用 BinanceExchange 获取 KlineSummary
         let kline_summaries: Vec<KlineSummary> = self
             .client
             .get_klines(
                 symbol.as_ref(),
-                interval.as_ref(),
-                Some(1000),
+                period.as_ref(),
+                Some(ctx.limit),
                 Some(start_ts as u64),
                 Some(end_ts as u64),
             )
@@ -58,10 +58,11 @@ impl BinanceFetcher {
                 },
                 symbol: ctx.symbol.clone(),
                 exchange: ctx.exchange.clone(),
-                period: interval.as_ref().to_string(),
+                period: period.as_ref().to_string(),
             })
             .collect();
-
+        // info!("ctx range_id-{}, limit_size {}, start_time {},end_time {}, records size {}",
+        //     ctx.range_id.unwrap(), ctx.limit, ctx.range.start, ctx.range.end, records.len());
         Ok(records)
     }
 
@@ -78,24 +79,19 @@ impl HistoricalFetcher for BinanceFetcher {
     /// 流式拉取 OHLCV
     /// stream pull ohlcv from exchange
     async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-        let chunk_ms = 60 * 60 * 1000; // 每小时为例
-        let ranges = ctx.range.split(chunk_ms);
-        let ctx_clone = ctx.clone();
         let client = Arc::clone(&self.client);
 
-        let s = stream::iter(ranges.into_iter())
-            .then(move |range| {
-                let ctx = ctx_clone.clone();
-                let client = Arc::clone(&client);
-                async move {
-                    let fetcher = BinanceFetcher { client };
-                    fetcher.fetch_ohlcv_page(&ctx, range.start, range.end).await
-                }
-            })
-            .flat_map(|res| match res {
-                Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
-                Err(e) => stream::iter(vec![Err(e)]).boxed(),
-            });
+        let s = stream::once({
+            let ctx = ctx.clone();
+            async move {
+                let fetcher = BinanceFetcher { client };
+                fetcher.fetch_ohlcv_page(&ctx, ctx.range.start, ctx.range.end).await
+            }
+        })
+        .flat_map(|res| match res {
+            Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
+            Err(e) => stream::iter(vec![Err(e)]).boxed(),
+        });
 
         Ok(s.boxed())
     }
@@ -132,29 +128,21 @@ impl HistoricalFetcher for BinanceFetcher {
 mod tests {
     use super::*;
     use crate::ingestor::historical::HistoricalFetcherExt;
-    use crate::ingestor::types::HistoricalSource;
     use anyhow::Result;
+    use crab_types::TimeRange;
 
     #[tokio::test]
     async fn test_fetch_ohlcv_pipeline() -> Result<()> {
         // 构造 FetchContext
-        let ctx = FetchContext::new_with_past(
-            HistoricalSource {
-                name: "Binance API".to_string(),
-                exchange: "binance".to_string(),
-                last_success_ts: 0,
-                last_fetch_ts: 0,
-                batch_size: 0,
-                supports_tick: false,
-                supports_trade: false,
-                supports_ohlcv: false,
-            },
+        let ctx = Arc::new(FetchContext::new(
+            Some(1),
             "binance",
             "BTCUSDT",
+            "USDT",
             Some("1h"),
-            Some(3), // 最近 3 小时
-            None,    // 最近 3 小时, // 3 小时
-        );
+            TimeRange::new(100000, 120000), // 最近 3 小时
+            500,                            // 最近 3 小时, // 3 小时
+        ));
 
         let fetcher = BinanceFetcher::new();
 

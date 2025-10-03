@@ -1,7 +1,8 @@
 use crab_hmds::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum, OutputSubscriber};
-use crab_hmds::ingestor::types::{FetchContext, HistoricalSource};
+use crab_hmds::ingestor::types::FetchContext;
+use crab_types::TimeRange;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,30 +14,17 @@ struct MarketConfig {
     past_hours: i64, // 初始历史回溯
 }
 
-/// 构建 HistoricalSource
-fn make_source_for_exchange(exchange: &str) -> HistoricalSource {
-    HistoricalSource {
-        name: format!("{} API", exchange),
-        exchange: exchange.to_string(),
-        last_success_ts: 0,
-        last_fetch_ts: 0,
-        batch_size: 0,
-        supports_tick: false,
-        supports_trade: false,
-        supports_ohlcv: true,
-    }
-}
-
 /// 构建 FetchContext
-fn make_ctx(exchange: &str, symbol: &str, period: &str, past_hours: i64) -> Arc<FetchContext> {
-    FetchContext::new_with_past(
-        make_source_for_exchange(exchange),
+fn make_ctx(exchange: &str, symbol: &str, period: &str) -> Arc<FetchContext> {
+    Arc::new(FetchContext::new(
+        Some(0),
         exchange,
         symbol,
+        "USDT",
         Some(period),
-        Some(past_hours),
-        None,
-    )
+        TimeRange::new(1000, 2000),
+        500,
+    ))
 }
 
 /// 启动自动拉取调度器
@@ -54,7 +42,7 @@ pub async fn start_auto_scheduler(configs: Vec<MarketConfig>) -> Arc<BaseBackfil
     for cfg in &configs {
         for symbol in &cfg.symbols {
             for period in &cfg.periods {
-                let ctx = make_ctx(&cfg.exchange, symbol, period, cfg.past_hours);
+                let ctx = make_ctx(&cfg.exchange, symbol, period);
                 // 可用 batch_tasks 切片历史数据，例如每 2 小时一片
                 let step_millis = 2 * 60 * 60 * 1000;
                 let _task_ids = scheduler
@@ -74,7 +62,7 @@ pub async fn start_auto_scheduler(configs: Vec<MarketConfig>) -> Arc<BaseBackfil
                 for symbol in &cfg.symbols {
                     for period in &cfg.periods {
                         // 这里可以根据 last_fetch_ts 或数据库记录生成增量 ctx
-                        let ctx = make_ctx(&cfg.exchange, symbol, period, 0); // 0 表示最新增量
+                        let ctx = make_ctx(&cfg.exchange, symbol, period); // 0 表示最新增量
                         let _ = scheduler_clone.add_task(ctx, BackfillDataType::OHLCV, vec![]).await;
                     }
                 }

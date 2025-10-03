@@ -1,2 +1,2 @@
 -- This file should undo anything in `up.sql`
-DROP TABLE crab_ohlcv_record;
+DROP TABLE hmds_ohlcv_record;

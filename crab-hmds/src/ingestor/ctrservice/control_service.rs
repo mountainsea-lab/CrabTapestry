@@ -1,16 +1,16 @@
+use crate::domain::model::market_fill_range::FillRangeStatus;
 use crate::domain::model::ohlcv_record::to_new_records_with_hash;
-use crate::domain::service::save_ohlcv_records_batch;
+use crate::domain::service::{save_ohlcv_records_batch, update_fill_ranges_status};
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{ControlMsg, InternalMsg, ServiceParams, ServiceState};
-use crate::ingestor::dedup::Deduplicatable;
 use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::realtime::market_data_pipe_line::MarketDataPipeline;
 use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
 use crate::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
 use crate::ingestor::types::{OHLCVRecord, TickRecord, TradeRecord};
-use crate::load_subscriptions_config;
-use crab_infras::config::sub_config::{Subscription, SubscriptionMap, load_subscriptions_map};
+use crate::load_subscriptions;
+use crab_infras::config::sub_config::{Subscription, SubscriptionMap};
 use ms_tracing::tracing_utils::internal::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -71,10 +71,7 @@ where
         pipeline: Arc<MarketDataPipeline>,
         shutdown: Arc<Notify>,
     ) -> Self {
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
-            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-            Arc::new(Default::default())
-        });
+        let subscriptions: SubscriptionMap = Arc::new(Default::default());
         let (control_tx, control_rx) = mpsc::channel(1024);
         let (internal_tx, internal_rx) = mpsc::channel(64);
 
@@ -82,7 +79,7 @@ where
         let dedup_tick = Arc::new(Deduplicator::<TickRecord>::new(60_000));
         let dedup_trade = Arc::new(Deduplicator::<TradeRecord>::new(60_000));
 
-        let buffer_ohlcv = DataBuffer::new(Some(1000), 10, CapacityStrategy::DropOldest);
+        let buffer_ohlcv = DataBuffer::new(Some(1000), 10000, CapacityStrategy::DropOldest);
         let buffer_tick = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
         let buffer_trade = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
 
@@ -113,10 +110,7 @@ where
         shutdown: Arc<Notify>,
         params: ServiceParams,
     ) -> Self {
-        let subscriptions: SubscriptionMap = load_subscriptions_map("subscriptions.yaml").unwrap_or_else(|err| {
-            warn!("Failed to load subscriptions file: {}. Using empty default.", err);
-            Arc::new(Default::default())
-        });
+        let subscriptions: SubscriptionMap = Arc::new(Default::default());
 
         let (control_tx, control_rx) = mpsc::channel(params.control_channel_size);
         let (internal_tx, internal_rx) = mpsc::channel(params.internal_channel_size);
@@ -168,7 +162,6 @@ where
         params: ServiceParams,
     ) -> Arc<Self> {
         let service = Arc::new(Self::with_params(backfill, pipeline, shutdown, params));
-        // service.initialize_subscriptions(config).await;
         service
     }
 
@@ -213,7 +206,7 @@ where
                 match msg {
                     ControlMsg::Start => {
                         // ✅ 启动 Realtime + Backfill 服务
-                        self.start_market_data_pipeline().await;
+                        // self.start_market_data_pipeline().await;
                         self.start_historical_backfill_service().await;
                     }
                     ControlMsg::Stop => {
@@ -275,11 +268,10 @@ where
     /// - 异常时发送 InternalMsg::Error
     async fn start_historical_backfill_service(&self) {
         let service = self.backfill.clone();
-        let subscriptions = self.subscriptions.clone();
         let shutdown = self.shutdown.clone();
 
         // 1️⃣ 启动 worker 消费任务
-        let _shutdown_tx = service.clone().start_workers(4, shutdown); // worker 数量可配置
+        let _shutdown_tx = service.clone().start_workers(4, shutdown).await; // worker 数量可配置
 
         let shutdown1 = self.shutdown.clone();
         // 2️⃣ 启动 scheduler
@@ -298,14 +290,13 @@ where
             }
         });
         let shutdown2 = self.shutdown.clone();
-        // 3️⃣ 启动 maintain loop（缺口扫描 + 最近补齐）
+        // 3️⃣ 启动 maintain loop
         tokio::spawn(async move {
             tokio::select! {
                 _ = shutdown2.notified() => {
                     info!("Backfill maintain loop received shutdown2, stopping");
                 }
                 _ = service.loop_maintain_tasks_notify(
-                    &subscriptions,
                     BackfillDataType::OHLCV,
                     &shutdown2
                 ) => {
@@ -388,10 +379,20 @@ where
                                 match batch {
                                     HistoricalBatchEnum::OHLCV(hb) => {
                                         if !hb.data.is_empty() {
+                                            let mut rang_status = if hb.data.len() as i32 >= hb.limit {
+                                                FillRangeStatus::Synced
+                                            } else {
+                                                FillRangeStatus::Syncing
+                                            };
                                             if let Err(e) = self.buffer_ohlcv.push_batch(hb.data).await {
+                                                 rang_status = FillRangeStatus::Failed;
                                                 let _ = self.internal_tx.send(
                                                     InternalMsg::Error(format!("Backfill OHLCV push failed: {}", e))
                                                 ).await;
+                                            }
+                                            /// 更新区间状态
+                                            if let Some(range_id) = hb.range_id {
+                                              let _ = update_fill_ranges_status(&[range_id],rang_status).await;
                                             }
                                         }
                                     }
@@ -485,20 +486,20 @@ where
         }
 
         // 打印每条记录用于验证
-        for record in &deduped {
-            let r = record.as_ref();
-            info!(
-                "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
-                r.symbol,
-                r.period,
-                r.timestamp(),
-                r.open,
-                r.high,
-                r.low,
-                r.close,
-                r.volume
-            );
-        }
+        // for record in &deduped {
+        //     let r = record.as_ref();
+        //     info!(
+        //         "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
+        //         r.symbol,
+        //         r.period,
+        //         r.timestamp(),
+        //         r.open,
+        //         r.high,
+        //         r.low,
+        //         r.close,
+        //         r.volume
+        //     );
+        // }
 
         let duration = start.elapsed();
         self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());
@@ -521,13 +522,13 @@ where
         // 落库并记录日志
         match save_ohlcv_records_batch(&new_records).await {
             Ok(_) => {
-                info!(
-                    "✅ Saved {} OHLCV records. first_ts={:?}, last_ts={:?}, symbol={}",
-                    new_records.len(),
-                    new_records.first().map(|r| r.ts),
-                    new_records.last().map(|r| r.ts),
-                    new_records.first().map(|r| r.symbol.clone()).unwrap_or_default(),
-                );
+                // info!(
+                //     "✅ Saved {} OHLCV records. first_ts={:?}, last_ts={:?}, symbol={}",
+                //     new_records.len(),
+                //     new_records.first().map(|r| r.ts),
+                //     new_records.last().map(|r| r.ts),
+                //     new_records.first().map(|r| r.symbol.clone()).unwrap_or_default(),
+                // );
                 Ok(())
             }
             Err(e) => {
@@ -544,7 +545,7 @@ where
 
     /// 异步初始化订阅配置（仅加载到服务状态，不启动任务）
     pub async fn initialize_subscriptions(self: &Arc<Self>) {
-        match load_subscriptions_config() {
+        match load_subscriptions() {
             Ok(subscriptions) => {
                 info!("Loaded {} subscriptions", subscriptions.len());
 

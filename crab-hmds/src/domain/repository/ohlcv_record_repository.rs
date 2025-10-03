@@ -1,4 +1,4 @@
-use crate::domain::model::ohlcv_record::{CrabOhlcvRecord, NewCrabOhlcvRecord, OhlcvFilter, UpdateCrabOhlcvRecord};
+use crate::domain::model::ohlcv_record::{HmdsOhlcvRecord, NewHmdsOhlcvRecord, OhlcvFilter, UpdateHmdsOhlcvRecord};
 use crate::domain::model::{AppError, AppResult, SortOrder};
 use crate::domain::repository::Repository;
 use crate::{impl_full_repository, impl_repository_with_filter};
@@ -17,21 +17,21 @@ impl<'a> OhlcvRecordRepository<'a> {
 
 impl_full_repository!(
     OhlcvRecordRepository, // Repository struct
-    crab_ohlcv_record,     // Table name from schema.rs
-    CrabOhlcvRecord,       // Model
-    NewCrabOhlcvRecord,    // Insert model
-    UpdateCrabOhlcvRecord  // Update model
+    hmds_ohlcv_record,     // Table name from schema.rs
+    HmdsOhlcvRecord,       // Model
+    NewHmdsOhlcvRecord,    // Insert model
+    UpdateHmdsOhlcvRecord  // Update model
 );
 
 impl_repository_with_filter!(
     OhlcvRecordRepository,
-    crab_ohlcv_record,
-    CrabOhlcvRecord,
+    hmds_ohlcv_record,
+    HmdsOhlcvRecord,
     OhlcvFilter,
     @filter_var = filter,
     {
-        use crate::schema::crab_ohlcv_record::dsl::*;
-        let mut q = crab_ohlcv_record.into_boxed();
+        use crate::schema::hmds_ohlcv_record::dsl::*;
+        let mut q = hmds_ohlcv_record.into_boxed();
 
 
         if let Some(ref exchange_arg) = filter.exchange {

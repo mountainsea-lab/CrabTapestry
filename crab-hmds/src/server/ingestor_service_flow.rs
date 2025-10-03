@@ -22,7 +22,6 @@ pub async fn start_ingestor_service_flow() {
     let back_fill_service = Arc::new(HistoricalBackfillService::new(
         scheduler.clone(),
         meta_store.clone(),
-        4, // default_max_batch_hours
         3, // max_retries
     ));
 
@@ -49,8 +48,8 @@ pub async fn start_ingestor_service_flow() {
         control_channel_size: 1024,
         internal_channel_size: 64,
         dedup_window_ms: 60_000,
-        buffer_cap_ohlcv: 1000,
-        buffer_batch_size_ohlcv: 10,
+        buffer_cap_ohlcv: 100000,
+        buffer_batch_size_ohlcv: 100000,
         buffer_cap_tick: 10_000,
         buffer_batch_size_tick: 50,
         buffer_cap_trade: 10_000,

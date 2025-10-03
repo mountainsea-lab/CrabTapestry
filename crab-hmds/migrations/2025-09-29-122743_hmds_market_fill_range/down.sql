@@ -1,2 +1,2 @@
 -- This file should undo anything in `up.sql`
-DROP TABLE market_backfill_meta;
+DROP TABLE hmds_market_fill_range;

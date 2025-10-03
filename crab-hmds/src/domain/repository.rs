@@ -1,5 +1,6 @@
 use crate::domain::model::AppResult;
 
+pub mod market_fill_range_repository;
 pub mod ohlcv_record_repository;
 
 // 定义 Repository trait

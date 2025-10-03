@@ -18,6 +18,7 @@ use tokio::time::sleep;
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     ms_tracing::setup_tracing();
+
     // -------------------------------
     // 1️⃣ 初始化历史数据维护服务
     // -------------------------------
@@ -25,12 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let fetcher = Arc::new(BinanceFetcher::new());
     let scheduler = BaseBackfillScheduler::new(fetcher.clone(), 3); // retry_limit=3
 
-    let back_fill_service = Arc::new(HistoricalBackfillService::new(
-        scheduler.clone(),
-        meta_store.clone(),
-        4, // default_max_batch_hours
-        3, // max_retries
-    ));
+    let back_fill_service = Arc::new(HistoricalBackfillService::new(scheduler.clone(), meta_store.clone(), 3));
 
     // -------------------------------
     // Step 2: 初始化 实时数据维护服务pipeline

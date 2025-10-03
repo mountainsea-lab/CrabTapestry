@@ -8,7 +8,7 @@
 --   2. hash_id (MD5 of symbol+exchange+period+ts) 唯一索引，用于幂等写入
 --   3. symbol+exchange+period+ts 复合索引，用于范围查询
 -- ===============================================
-CREATE TABLE `crab_ohlcv_record` (
+CREATE TABLE `hmds_ohlcv_record` (
                                  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键，用于表内唯一标识及外键关联',
 
                                  `hash_id` BINARY(16) NOT NULL COMMENT 'symbol+exchange+period+ts 的 MD5 哈希值，用于幂等插入',

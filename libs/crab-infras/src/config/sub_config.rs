@@ -1,6 +1,5 @@
 use dashmap::DashMap;
 use serde::Deserialize;
-use std::fs;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -15,11 +14,6 @@ pub struct SubscriptionConfig {
     pub exchange: String,
     pub default_periods: Option<Vec<String>>, // 新增可选默认周期
     pub symbols: Vec<SymbolConfig>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SubscriptionsFile {
-    subscriptions: Vec<SubscriptionConfig>,
 }
 
 /// 实时订阅配置
@@ -57,21 +51,6 @@ impl SubscriptionConfig {
             })
             .collect()
     }
-}
-
-/// 从 TOML 文件加载并初始化 SubscriptionMap
-pub fn load_subscriptions_map(path: &str) -> anyhow::Result<Arc<DashMap<(String, String), Subscription>>> {
-    let content = fs::read_to_string(path)?;
-    let file: SubscriptionsFile = toml::from_str(&content)?;
-
-    let map = Arc::new(DashMap::new());
-    for exch_cfg in file.subscriptions {
-        for sub in exch_cfg.to_subscriptions() {
-            let key = (sub.exchange.to_string(), sub.symbol.to_string());
-            map.insert(key, sub);
-        }
-    }
-    Ok(map)
 }
 
 impl Subscription {

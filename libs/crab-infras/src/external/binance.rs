@@ -104,7 +104,7 @@ where
     where
         S1: Into<String>,
         S2: Into<String>,
-        S3: Into<Option<u16>>,
+        S3: Into<Option<i32>>,
         S4: Into<Option<u64>>,
         S5: Into<Option<u64>>,
     {
@@ -125,6 +125,7 @@ where
         }
 
         let fetch_klines_request = FetchKlineSummaryRequest { query_params: parameters };
+        // info!("Fetching kline summary client execute {:?}", fetch_klines_request);
         match self.rest_client.execute(fetch_klines_request).await {
             Ok((response, _)) => response.0,
             Err(err) => {
