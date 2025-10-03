@@ -11,17 +11,17 @@ use rust_decimal::Decimal;
 
 //====== 策略市场数据对象和自定元数据对象集合=====
 #[derive(Debug, Clone, Default)]
-pub(crate) struct EmaStData {
+pub(crate) struct StEmaData {
     pub(crate) market_data: MarketTradeData,
 }
 
-impl EmaStData {
+impl StEmaData {
     pub fn init() -> Self {
         Self { market_data: MarketTradeData::default() }
     }
 }
 
-impl InstrumentDataState for EmaStData {
+impl InstrumentDataState for StEmaData {
     type MarketEventKind = DataKind;
 
     fn price(&self) -> Option<Decimal> {
@@ -29,7 +29,7 @@ impl InstrumentDataState for EmaStData {
     }
 }
 
-impl<InstrumentKey: std::fmt::Display> Processor<&MarketEvent<InstrumentKey, DataKind>> for EmaStData {
+impl<InstrumentKey: std::fmt::Display> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaData {
     type Audit = ();
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
@@ -38,7 +38,7 @@ impl<InstrumentKey: std::fmt::Display> Processor<&MarketEvent<InstrumentKey, Dat
     }
 }
 
-impl Processor<&AccountEvent> for EmaStData {
+impl Processor<&AccountEvent> for StEmaData {
     type Audit = ();
 
     fn process(&mut self, event: &AccountEvent) -> Self::Audit {
@@ -50,7 +50,7 @@ impl Processor<&AccountEvent> for EmaStData {
     }
 }
 
-impl InFlightRequestRecorder for EmaStData {
+impl InFlightRequestRecorder for StEmaData {
     fn record_in_flight_cancel(&mut self, _: &OrderRequestCancel<ExchangeIndex, InstrumentIndex>) {}
 
     fn record_in_flight_open(&mut self, _: &OrderRequestOpen<ExchangeIndex, InstrumentIndex>) {}
