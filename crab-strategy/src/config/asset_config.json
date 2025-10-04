@@ -1,0 +1,16 @@
+{
+  "assets": {
+    "InstrumentIndex(0)": {
+      "symbol": "btcusdt",
+      "timeframes": ["m1", "m5"]
+    },
+    "InstrumentIndex(1)": {
+      "symbol": "ethusdt",
+      "timeframes": ["m1", "m5"]
+    },
+    "InstrumentIndex(2)": {
+      "symbol": "solusdt",
+      "timeframes": ["m1", "m5"]
+    }
+  }
+}

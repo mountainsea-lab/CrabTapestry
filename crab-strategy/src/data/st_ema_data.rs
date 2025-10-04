@@ -11,7 +11,7 @@ use rust_decimal::Decimal;
 
 //====== 策略市场数据对象和自定元数据对象集合=====
 #[derive(Debug, Clone, Default)]
-pub(crate) struct StEmaData {
+pub struct StEmaData {
     pub(crate) market_data: MarketTradeData,
 }
 

@@ -1,4 +1,5 @@
 use crate::data::st_ema_data::StEmaData;
+use crate::strategy::gen_cid;
 use barter::engine::Engine;
 use barter::engine::clock::HistoricalClock;
 use barter::engine::execution_tx::MultiExchangeTxMap;
@@ -96,7 +97,7 @@ impl ClosePositionsStrategy for EmaStrategy {
 }
 
 #[derive(Debug, PartialEq)]
-struct OnDisconnectOutput;
+pub struct OnDisconnectOutput;
 impl
     OnDisconnectStrategy<
         HistoricalClock,
@@ -122,7 +123,7 @@ impl
 }
 
 #[derive(Debug, PartialEq)]
-struct OnTradingDisabledOutput;
+pub struct OnTradingDisabledOutput;
 impl
     OnTradingDisabled<
         HistoricalClock,
