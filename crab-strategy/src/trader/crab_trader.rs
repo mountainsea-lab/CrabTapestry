@@ -1,14 +1,21 @@
 use crate::data::st_ema_data::StEmaData;
+use barter::engine::EngineOutput;
+use barter::engine::audit::state_replica::StateReplicaManager;
+use barter::engine::audit::{AuditTick, EngineAudit};
 use barter::engine::clock::LiveClock;
 use barter::engine::execution_tx::MultiExchangeTxMap;
+use barter::engine::state::connectivity::{ConnectivityState, ConnectivityStates, Health};
 use barter::engine::state::global::DefaultGlobalData;
+use barter::engine::state::position::Position;
 use barter::error::BarterError;
 use barter::risk::DefaultRiskManager;
+use barter::statistic::summary::TradingSummary;
+use barter::statistic::time::Daily;
 use barter::strategy::DefaultStrategy;
 use barter::system::builder::{AuditMode, EngineFeedMode, SystemArgs, SystemBuilder};
 use barter::system::config::SystemConfig;
 use barter::{
-    EngineEvent,
+    EngineEvent, Sequence,
     engine::{
         Engine,
         state::{EngineState, instrument::filter::InstrumentFilter, trading::TradingState},
@@ -18,21 +25,23 @@ use barter::{
 use barter_data::streams::builder::dynamic::indexed::init_indexed_multi_exchange_market_stream;
 use barter_data::subscription::SubKind;
 use barter_execution::order::request::OrderRequestOpen;
+use barter_instrument::asset::AssetIndex;
 use barter_instrument::index::IndexedInstruments;
-use barter_integration::collection::one_or_many::OneOrMany;
+use barter_integration::collection::FnvIndexMap;
+use barter_integration::{channel::UnboundedRx, collection::one_or_many::OneOrMany, snapshot::SnapUpdates};
 use chrono::{DateTime, Utc};
+use ms_tracing::tracing_utils::internal::{error, info};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 
 const FILE_PATH_SYSTEM_CONFIG: &str = "crab-strategy/config/system_config.json";
-
-// Risk-free rate of 5% (configure as needed)
 const RISK_FREE_RETURN: Decimal = dec!(0.05);
 
 // 定义具体的引擎类型
@@ -73,6 +82,7 @@ pub enum SystemCommand {
     CancelAllOrders,
     CloseAllPositions,
     Shutdown,
+    RequestStateSnapshot,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -85,6 +95,34 @@ pub enum TradingError {
     ShutdownFailed(String),
     #[error("System already shutdown")]
     AlreadyShutdown,
+    #[error("State replica not initialized")]
+    StateReplicaNotInitialized,
+    #[error("State replica error: {0}")]
+    StateReplicaError(String),
+    #[error("Audit stream not available")]
+    AuditStreamNotAvailable,
+    #[error("Failed to take audit stream: {0}")]
+    AuditStreamTakeFailed(String),
+}
+
+// 类型别名简化复杂类型
+type CrabStateReplica = StateReplicaManager<
+    EngineState<DefaultGlobalData, StEmaData>,
+    UnboundedRx<AuditTick<EngineAudit<EngineEvent, EngineOutput<(), ()>>>>,
+>;
+
+// 轻量级状态快照（用于广播）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TradingOverview {
+    pub timestamp: DateTime<Utc>,
+    pub sequence: Sequence,
+    pub trading_state: TradingState,
+    pub total_positions: usize,
+    pub total_orders: usize,
+    pub account_balance: f64,
+    pub total_pnl: f64,
+    pub market_connected: Health,
+    pub account_connected: Health,
 }
 
 // 使用具体类型而不是泛型
@@ -100,32 +138,74 @@ pub struct CrabTrader {
 
     /// 启动时间
     startup_time: DateTime<Utc>,
+
+    /// 状态副本管理器（使用 Barter-rs 官方实现）
+    state_replica: Arc<RwLock<Option<CrabStateReplica>>>,
+
+    /// 状态概览广播（用于UI/监控等）
+    overview_broadcast: broadcast::Sender<TradingOverview>,
+
+    /// 状态副本管理器运行状态
+    replica_running: Arc<Mutex<bool>>,
 }
 
 impl CrabTrader {
-    pub fn new(system: System<DefaultEngine, EngineEvent>) -> Self {
+    pub async fn new(mut system: System<DefaultEngine, EngineEvent>) -> Result<Self, TradingError> {
         let (command_tx, command_rx) = mpsc::channel(100);
+
+        // 创建状态广播通道
+        let (overview_broadcast, _) = broadcast::channel(100);
+
+        // 获取审计流并初始化状态副本管理器
+        let state_replica = Self::init_state_replica(&mut system).await?;
 
         let service = Self {
             system: Arc::new(Mutex::new(Some(system))),
             status: Arc::new(Mutex::new(SystemStatus::default())),
             command_tx,
             startup_time: Utc::now(),
+            state_replica: Arc::new(RwLock::new(Some(state_replica))),
+            overview_broadcast,
+            replica_running: Arc::new(Mutex::new(false)),
         };
 
         // 启动命令处理循环
         service.spawn_command_handler(command_rx);
 
-        service
+        // 启动状态副本管理器
+        service.start_state_replica().await?;
+
+        // 启动状态广播
+        service.start_overview_broadcast().await?;
+
+        Ok(service)
+    }
+
+    /// 初始化状态副本管理器 - 使用 System 的审计流
+    async fn init_state_replica(
+        system: &mut System<DefaultEngine, EngineEvent>,
+    ) -> Result<CrabStateReplica, TradingError> {
+        // Take ownership of the Engine audit snapshot with updates
+        let SnapUpdates {
+            snapshot: audit_snapshot,
+            updates: audit_updates,
+        } = system.audit.take().unwrap();
+
+        // Construct StateReplicaManager w/ initial EngineState
+        let state_replica_manager = StateReplicaManager::new(audit_snapshot, audit_updates);
+
+        Ok(state_replica_manager)
     }
 
     /// 从已构建的系统创建 CrabTrader
     pub async fn create() -> Result<Self, BarterError> {
         let system = Self::build_system().await?;
-        Ok(Self::new(system))
+        Ok(Self::new(system)
+            .await
+            .map_err(|e| BarterError::ExecutionBuilder(e.to_string()))?)
     }
 
-    /// 构建交易系统
+    /// 构建交易系统（启用审计模式）
     pub async fn build_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
         // Load SystemConfig
         let SystemConfig { instruments, executions } =
@@ -149,10 +229,10 @@ impl CrabTrader {
             |_| StEmaData::default(),
         );
 
-        // Construct SystemBuild
+        // Construct SystemBuild - 确保启用审计模式
         let system = SystemBuilder::new(args)
             .engine_feed_mode(EngineFeedMode::Iterator)
-            .audit_mode(AuditMode::Enabled)
+            .audit_mode(AuditMode::Enabled) // 关键：启用审计
             .trading_state(TradingState::Disabled)
             .build::<EngineEvent, _>()?
             .init_with_runtime(tokio::runtime::Handle::current())
@@ -193,7 +273,6 @@ impl CrabTrader {
         match command {
             SystemCommand::EnableTrading => {
                 system.trading_state(TradingState::Enabled);
-                // 直接更新状态
                 let mut status_guard = status.lock().await;
                 status_guard.trading_enabled = true;
             }
@@ -214,9 +293,137 @@ impl CrabTrader {
             SystemCommand::Shutdown => {
                 // 关闭逻辑在单独的 shutdown 方法中处理
             }
+            SystemCommand::RequestStateSnapshot => {
+                // 状态快照现在通过状态副本管理器获取
+            }
         }
 
         Ok(())
+    }
+
+    /// 启动状态副本管理器
+    pub async fn start_state_replica(&self) -> Result<(), TradingError> {
+        let mut running_guard = self.replica_running.lock().await;
+        if *running_guard {
+            return Ok(()); // 已经在运行
+        }
+        *running_guard = true;
+        drop(running_guard);
+
+        // 克隆需要的 Arc，而不是引用 self
+        let state_replica = Arc::clone(&self.state_replica);
+        let replica_running = Arc::clone(&self.replica_running);
+
+        tokio::spawn(async move {
+            info!("Starting state replica manager");
+
+            // 在阻塞任务中运行状态副本管理器
+            let result = tokio::task::spawn_blocking(move || {
+                let mut replica_guard = state_replica.blocking_write();
+                if let Some(mut replica) = replica_guard.as_mut() {
+                    replica.run()
+                } else {
+                    Err("State replica not initialized".to_string())
+                }
+            })
+            .await;
+
+            match result {
+                Ok(Ok(())) => {
+                    info!("State replica manager stopped gracefully");
+                }
+                Ok(Err(e)) => {
+                    error!("State replica manager error: {}", e);
+                }
+                Err(e) => {
+                    error!("State replica manager task error: {}", e);
+                }
+            }
+
+            // 重置运行状态
+            let mut running_guard = replica_running.blocking_lock();
+            *running_guard = false;
+        });
+
+        Ok(())
+    }
+
+    /// 获取交易概览
+    pub async fn get_trading_overview(&self) -> Result<TradingOverview, TradingError> {
+        let replica_guard = self.state_replica.read().await;
+        let replica = replica_guard.as_ref().ok_or(TradingError::StateReplicaNotInitialized)?;
+
+        let engine_state = replica.replica_engine_state();
+
+        Ok(TradingOverview {
+            timestamp: Utc::now(),
+            sequence: replica.state_replica.context.sequence,
+            trading_state: engine_state.trading.clone(),
+            total_positions: 0,
+            total_orders: 0,
+            account_balance: 0.0,
+            total_pnl: 0.0,
+            market_connected: engine_state.connectivity.global,
+            account_connected: engine_state.connectivity.global,
+        })
+    }
+
+    /// 获取详细的持仓信息
+    pub async fn get_detailed_positions(&self) -> Result<HashMap<String, Position>, TradingError> {
+        let replica_guard = self.state_replica.read().await;
+        let replica = replica_guard.as_ref().ok_or(TradingError::StateReplicaNotInitialized)?;
+
+        let _engine_state = replica.replica_engine_state();
+        todo!()
+        // Ok(engine_state.positions
+        //     .iter()
+        //     .map(|(asset, position)| (asset.to_string(), position.clone()))
+        //     .collect())
+    }
+
+    /// 获取连接状态
+    pub async fn get_connectivity(&self) -> Result<ConnectivityStates, TradingError> {
+        let replica_guard = self.state_replica.read().await;
+        let replica = replica_guard.as_ref().ok_or(TradingError::StateReplicaNotInitialized)?;
+
+        let engine_state = replica.replica_engine_state();
+        Ok(engine_state.connectivity.clone())
+    }
+
+    /// 启动概览广播任务
+    pub async fn start_overview_broadcast(&self) -> Result<(), TradingError> {
+        let overview_broadcast = self.overview_broadcast.clone();
+        let trader_clone = self.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            let mut last_sequence = Sequence(0u64);
+
+            loop {
+                interval.tick().await;
+
+                // 获取当前概览并广播
+                match trader_clone.get_trading_overview().await {
+                    Ok(overview) => {
+                        // 只在状态实际更新时广播
+                        if overview.sequence > last_sequence {
+                            last_sequence = overview.sequence;
+                            let _ = overview_broadcast.send(overview);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to get trading overview for broadcasting: {}", e);
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    /// 订阅概览更新
+    pub fn subscribe_overview_updates(&self) -> broadcast::Receiver<TradingOverview> {
+        self.overview_broadcast.subscribe()
     }
 
     /// 启用交易
@@ -259,6 +466,14 @@ impl CrabTrader {
             .map_err(|_| TradingError::CommandChannelClosed)
     }
 
+    /// 请求状态快照
+    pub async fn request_state_snapshot(&self) -> Result<(), TradingError> {
+        self.command_tx
+            .send(SystemCommand::RequestStateSnapshot)
+            .await
+            .map_err(|_| TradingError::CommandChannelClosed)
+    }
+
     /// 获取系统状态
     pub async fn get_status(&self) -> Result<SystemStatus, TradingError> {
         let status_guard = self.status.lock().await;
@@ -292,6 +507,7 @@ impl CrabTrader {
     }
 }
 
+// 为 CrabTrader 实现 Clone
 impl Clone for CrabTrader {
     fn clone(&self) -> Self {
         Self {
@@ -299,44 +515,11 @@ impl Clone for CrabTrader {
             status: Arc::clone(&self.status),
             command_tx: self.command_tx.clone(),
             startup_time: self.startup_time,
+            state_replica: Arc::clone(&self.state_replica),
+            overview_broadcast: self.overview_broadcast.clone(),
+            replica_running: Arc::clone(&self.replica_running),
         }
     }
-}
-
-/// 独立的系统构建函数
-pub async fn build_trading_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
-    // Load SystemConfig
-    let SystemConfig { instruments, executions } =
-        load_config().map_err(|e| BarterError::ExecutionBuilder(format!("Config error: {}", e)))?;
-
-    // Construct IndexedInstruments
-    let instruments = IndexedInstruments::new(instruments);
-
-    // Initialise MarketData Stream
-    let market_stream = init_indexed_multi_exchange_market_stream(&instruments, &[SubKind::PublicTrades]).await?;
-
-    // Construct System Args
-    let args = SystemArgs::new(
-        &instruments,
-        executions,
-        LiveClock,
-        DefaultStrategy::default(),
-        DefaultRiskManager::default(),
-        market_stream,
-        DefaultGlobalData::default(),
-        |_| StEmaData::default(),
-    );
-
-    // Construct SystemBuild
-    let system = SystemBuilder::new(args)
-        .engine_feed_mode(EngineFeedMode::Iterator)
-        .audit_mode(AuditMode::Enabled)
-        .trading_state(TradingState::Disabled)
-        .build::<EngineEvent, _>()?
-        .init_with_runtime(tokio::runtime::Handle::current())
-        .await?;
-
-    Ok(system)
 }
 
 pub fn load_config() -> Result<SystemConfig, Box<dyn std::error::Error>> {
