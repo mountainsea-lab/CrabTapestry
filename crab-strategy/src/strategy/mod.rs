@@ -6,9 +6,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
 
 pub mod ema_strategy;
-pub mod engine_builder;
 pub mod events;
-
 const STARTING_TIMESTAMP: DateTime<Utc> = DateTime::<Utc>::MIN_UTC;
 
 const STARTING_BALANCE_USDT: Balance = Balance {

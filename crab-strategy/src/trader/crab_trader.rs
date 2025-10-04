@@ -1,20 +1,48 @@
+use crate::data::st_ema_data::StEmaData;
+use barter::engine::clock::LiveClock;
+use barter::engine::execution_tx::MultiExchangeTxMap;
+use barter::engine::state::global::DefaultGlobalData;
+use barter::error::BarterError;
+use barter::risk::DefaultRiskManager;
+use barter::strategy::DefaultStrategy;
+use barter::system::builder::{AuditMode, EngineFeedMode, SystemArgs, SystemBuilder};
+use barter::system::config::SystemConfig;
 use barter::{
+    EngineEvent,
     engine::{
-        Engine, Processor,
-        audit::{Auditor, context::EngineContext},
-        command::Command,
-        state::{instrument::filter::InstrumentFilter, trading::TradingState},
+        Engine,
+        state::{EngineState, instrument::filter::InstrumentFilter, trading::TradingState},
     },
-    shutdown::Shutdown,
     system::System,
 };
+use barter_data::streams::builder::dynamic::indexed::init_indexed_multi_exchange_market_stream;
+use barter_data::subscription::SubKind;
 use barter_execution::order::request::OrderRequestOpen;
+use barter_instrument::index::IndexedInstruments;
 use barter_integration::collection::one_or_many::OneOrMany;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::fs::File;
+use std::io::BufReader;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
+
+const FILE_PATH_SYSTEM_CONFIG: &str = "crab-strategy/config/system_config.json";
+
+// Risk-free rate of 5% (configure as needed)
+const RISK_FREE_RETURN: Decimal = dec!(0.05);
+
+// 定义具体的引擎类型
+pub type DefaultEngine = Engine<
+    LiveClock,
+    EngineState<DefaultGlobalData, StEmaData>,
+    MultiExchangeTxMap,
+    DefaultStrategy<EngineState<DefaultGlobalData, StEmaData>>,
+    DefaultRiskManager<EngineState<DefaultGlobalData, StEmaData>>,
+>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemStatus {
@@ -59,15 +87,10 @@ pub enum TradingError {
     AlreadyShutdown,
 }
 
-pub struct CrabTrader<Eng, Evt>
-where
-    Eng: Processor<Evt> + Auditor<Eng::Audit, Context = EngineContext> + Send + 'static,
-    Eng::Audit: Send + 'static,
-    Eng::Snapshot: Send + 'static, // 添加 Snapshot Send 约束
-    Evt: Debug + Clone + Send + From<Command> + From<TradingState> + 'static,
-{
+// 使用具体类型而不是泛型
+pub struct CrabTrader {
     /// 核心交易系统实例
-    system: Arc<Mutex<Option<System<Eng, Evt>>>>,
+    system: Arc<Mutex<Option<System<DefaultEngine, EngineEvent>>>>,
 
     /// 系统状态
     status: Arc<Mutex<SystemStatus>>,
@@ -79,14 +102,8 @@ where
     startup_time: DateTime<Utc>,
 }
 
-impl<Eng, Evt> CrabTrader<Eng, Evt>
-where
-    Eng: Processor<Evt> + Auditor<Eng::Audit, Context = EngineContext> + Send + 'static,
-    Eng::Audit: Send + 'static,
-    Eng::Snapshot: Send + 'static, // 添加 Snapshot Send 约束
-    Evt: Debug + Clone + Send + From<Command> + From<TradingState> + From<Shutdown> + 'static,
-{
-    pub fn new(system: System<Eng, Evt>) -> Self {
+impl CrabTrader {
+    pub fn new(system: System<DefaultEngine, EngineEvent>) -> Self {
         let (command_tx, command_rx) = mpsc::channel(100);
 
         let service = Self {
@@ -100,6 +117,48 @@ where
         service.spawn_command_handler(command_rx);
 
         service
+    }
+
+    /// 从已构建的系统创建 CrabTrader
+    pub async fn create() -> Result<Self, BarterError> {
+        let system = Self::build_system().await?;
+        Ok(Self::new(system))
+    }
+
+    /// 构建交易系统
+    pub async fn build_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
+        // Load SystemConfig
+        let SystemConfig { instruments, executions } =
+            load_config().map_err(|e| BarterError::ExecutionBuilder(format!("Config error: {}", e)))?;
+
+        // Construct IndexedInstruments
+        let instruments = IndexedInstruments::new(instruments);
+
+        // Initialise MarketData Stream
+        let market_stream = init_indexed_multi_exchange_market_stream(&instruments, &[SubKind::PublicTrades]).await?;
+
+        // Construct System Args
+        let args = SystemArgs::new(
+            &instruments,
+            executions,
+            LiveClock,
+            DefaultStrategy::default(),
+            DefaultRiskManager::default(),
+            market_stream,
+            DefaultGlobalData::default(),
+            |_| StEmaData::default(),
+        );
+
+        // Construct SystemBuild
+        let system = SystemBuilder::new(args)
+            .engine_feed_mode(EngineFeedMode::Iterator)
+            .audit_mode(AuditMode::Enabled)
+            .trading_state(TradingState::Disabled)
+            .build::<EngineEvent, _>()?
+            .init_with_runtime(tokio::runtime::Handle::current())
+            .await?;
+
+        Ok(system)
     }
 
     fn spawn_command_handler(&self, mut command_rx: mpsc::Receiver<SystemCommand>) {
@@ -122,7 +181,7 @@ where
     }
 
     async fn process_command(
-        system: &Arc<Mutex<Option<System<Eng, Evt>>>>,
+        system: &Arc<Mutex<Option<System<DefaultEngine, EngineEvent>>>>,
         status: &Arc<Mutex<SystemStatus>>,
         command: SystemCommand,
     ) -> Result<(), TradingError> {
@@ -233,13 +292,7 @@ where
     }
 }
 
-impl<Eng, Evt> Clone for CrabTrader<Eng, Evt>
-where
-    Eng: Processor<Evt> + Auditor<Eng::Audit, Context = EngineContext> + Send + 'static,
-    Eng::Audit: Send + 'static,
-    Eng::Snapshot: Send + 'static, // 添加 Snapshot Send 约束
-    Evt: Debug + Clone + Send + From<Command> + From<TradingState> + 'static,
-{
+impl Clone for CrabTrader {
     fn clone(&self) -> Self {
         Self {
             system: Arc::clone(&self.system),
@@ -248,4 +301,47 @@ where
             startup_time: self.startup_time,
         }
     }
+}
+
+/// 独立的系统构建函数
+pub async fn build_trading_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
+    // Load SystemConfig
+    let SystemConfig { instruments, executions } =
+        load_config().map_err(|e| BarterError::ExecutionBuilder(format!("Config error: {}", e)))?;
+
+    // Construct IndexedInstruments
+    let instruments = IndexedInstruments::new(instruments);
+
+    // Initialise MarketData Stream
+    let market_stream = init_indexed_multi_exchange_market_stream(&instruments, &[SubKind::PublicTrades]).await?;
+
+    // Construct System Args
+    let args = SystemArgs::new(
+        &instruments,
+        executions,
+        LiveClock,
+        DefaultStrategy::default(),
+        DefaultRiskManager::default(),
+        market_stream,
+        DefaultGlobalData::default(),
+        |_| StEmaData::default(),
+    );
+
+    // Construct SystemBuild
+    let system = SystemBuilder::new(args)
+        .engine_feed_mode(EngineFeedMode::Iterator)
+        .audit_mode(AuditMode::Enabled)
+        .trading_state(TradingState::Disabled)
+        .build::<EngineEvent, _>()?
+        .init_with_runtime(tokio::runtime::Handle::current())
+        .await?;
+
+    Ok(system)
+}
+
+pub fn load_config() -> Result<SystemConfig, Box<dyn std::error::Error>> {
+    let file = File::open(FILE_PATH_SYSTEM_CONFIG)?;
+    let reader = BufReader::new(file);
+    let config = serde_json::from_reader(reader)?;
+    Ok(config)
 }
