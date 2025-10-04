@@ -10,7 +10,6 @@ use barter_instrument::Side;
 use barter_instrument::exchange::ExchangeId;
 use barter_instrument::instrument::InstrumentIndex;
 use barter_integration::collection::one_or_many::OneOrMany;
-use rust_decimal::Decimal;
 
 /// 构造市场成交事件
 pub fn market_event_trade(time_plus: u64, instrument: usize, price: f64) -> EngineEvent<DataKind> {

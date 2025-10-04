@@ -54,6 +54,7 @@ dashmap = "6.1.0"
 #itertools = "0.14.0"
 smol_str = { version = "0.3.2" }
 rust_decimal = { version = "1.36.0", features = ["maths"] }
+rust_decimal_macros = { version = "1.29.1" }
 
 # Time
 time = { version = "^0.3.41", features = ["serde", "formatting", "parsing"] }

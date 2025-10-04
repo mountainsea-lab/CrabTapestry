@@ -25,7 +25,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 
 pub struct EmaStrategy {
-    id: StrategyId,
+    pub(crate) id: StrategyId,
 }
 
 impl AlgoStrategy for EmaStrategy {

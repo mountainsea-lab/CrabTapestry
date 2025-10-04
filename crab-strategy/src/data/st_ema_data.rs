@@ -1,57 +1,72 @@
-use crate::data::market_trade_data::MarketTradeData;
+use barter::Timed;
 use barter::engine::Processor;
 use barter::engine::state::instrument::data::InstrumentDataState;
 use barter::engine::state::order::in_flight_recorder::InFlightRequestRecorder;
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::AccountEvent;
 use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen};
-use barter_execution::{AccountEvent, AccountEventKind};
-use barter_instrument::exchange::ExchangeIndex;
-use barter_instrument::instrument::InstrumentIndex;
+use derive_more::Constructor;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 
-//====== 策略市场数据对象和自定元数据对象集合=====
-#[derive(Debug, Clone, Default)]
+/// Basic [`InstrumentDataState`] implementation that tracks the [`OrderBookL1`] and last traded
+/// price for an instrument.
+///
+/// This is a simple example of instrument level data. Trading strategies typically maintain more
+/// comprehensive data, such as candles, technical indicators, market depth (L2 book), volatility metrics,
+/// or strategy-specific state data.
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default, Deserialize, Serialize, Constructor)]
 pub struct StEmaData {
-    pub(crate) market_data: MarketTradeData,
-}
-
-impl StEmaData {
-    pub fn init() -> Self {
-        Self { market_data: MarketTradeData::default() }
-    }
+    pub last_traded_price: Option<Timed<Decimal>>,
 }
 
 impl InstrumentDataState for StEmaData {
     type MarketEventKind = DataKind;
 
     fn price(&self) -> Option<Decimal> {
-        self.market_data.price()
-    }
-}
-
-impl<InstrumentKey: std::fmt::Display> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaData {
-    type Audit = ();
-
-    fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
-        // todo process逻辑里面完成 BarSeries的初始化以及 最新bar的追加逻辑
-        self.market_data.process(event)
-    }
-}
-
-impl Processor<&AccountEvent> for StEmaData {
-    type Audit = ();
-
-    fn process(&mut self, event: &AccountEvent) -> Self::Audit {
-        let AccountEventKind::Trade(_trade) = &event.kind else {
-            return;
-        };
-        // 账号相关数据处理
+        // self.l1
+        //     .volume_weighed_mid_price()
+        //     .or(self.last_traded_price.as_ref().map(|timed| timed.value))
         todo!()
     }
 }
 
-impl InFlightRequestRecorder for StEmaData {
-    fn record_in_flight_cancel(&mut self, _: &OrderRequestCancel<ExchangeIndex, InstrumentIndex>) {}
+impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaData {
+    type Audit = ();
 
-    fn record_in_flight_open(&mut self, _: &OrderRequestOpen<ExchangeIndex, InstrumentIndex>) {}
+    fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
+        match &event.kind {
+            DataKind::Trade(trade) => {
+                // if self
+                //     .last_traded_price
+                //     .as_ref()
+                //     .is_none_or(|price| price.time < event.time_exchange)
+                //     && let Some(price) = Decimal::from_f64(trade.price)
+                // {
+                //     self.last_traded_price
+                //         .replace(Timed::new(price, event.time_exchange));
+                // }
+            }
+            DataKind::OrderBookL1(l1) => {
+                // if self.l1.last_update_time < event.time_exchange {
+                //     self.l1 = l1.clone()
+                // }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl<ExchangeKey, AssetKey, InstrumentKey> Processor<&AccountEvent<ExchangeKey, AssetKey, InstrumentKey>>
+    for StEmaData
+{
+    type Audit = ();
+
+    fn process(&mut self, _: &AccountEvent<ExchangeKey, AssetKey, InstrumentKey>) -> Self::Audit {}
+}
+
+impl<ExchangeKey, InstrumentKey> InFlightRequestRecorder<ExchangeKey, InstrumentKey> for StEmaData {
+    fn record_in_flight_cancel(&mut self, _: &OrderRequestCancel<ExchangeKey, InstrumentKey>) {}
+
+    fn record_in_flight_open(&mut self, _: &OrderRequestOpen<ExchangeKey, InstrumentKey>) {}
 }

@@ -5,11 +5,11 @@ edition = "2024"
 
 [dependencies]
 # Barter Ecosystem
-barter-integration = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
-barter-instrument = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
-barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
-barter-execution = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
-barter = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local" }
+barter-integration = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-instrument = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-data = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-execution = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
 
 # tracing
 ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
@@ -24,5 +24,10 @@ serde =  { workspace = true }
 # Data Structures
 smol_str = { workspace = true }
 rust_decimal ={ workspace = true }
+rust_decimal_macros = { workspace = true }
 fnv = "1.0.7"
-
+derive_more = { version = "2.0.1", features = [
+    "constructor",
+    "display",
+    "from",
+] }

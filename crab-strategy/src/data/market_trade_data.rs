@@ -2,10 +2,10 @@ use barter::Timed;
 use barter::engine::Processor;
 use barter::engine::state::instrument::data::InstrumentDataState;
 use barter::engine::state::order::in_flight_recorder::InFlightRequestRecorder;
-use barter_data::derive_more::Constructor;
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::AccountEvent;
 use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen};
+use derive_more::Constructor;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -15,7 +15,7 @@ use std::fmt::Display;
 ///
 /// Trading strategies may wish to maintain more data here, such as candles, indicators,
 /// KLines , etc.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Default, Deserialize, Serialize, Constructor)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default, Deserialize, Serialize, Constructor)]
 pub struct MarketTradeData {
     pub last_traded_price: Option<Timed<Decimal>>,
 }
@@ -32,7 +32,7 @@ impl<InstrumentKey: Display> Processor<&MarketEvent<InstrumentKey, DataKind>> fo
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
         match &event.kind {
-            DataKind::Trade(trade) => {
+            DataKind::Trade(_trade) => {
                 todo!()
             }
             _ => {}
