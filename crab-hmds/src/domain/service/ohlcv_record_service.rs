@@ -90,6 +90,7 @@ pub async fn insert_new_ohlcv_records_batch(
 }
 
 /// 批量安全插入 K 线，重复 hash_id 自动忽略 批量优化版本
+#[warn(unused_imports)]
 pub fn insert_new_ohlcv_records_batch_file(
     conn: &mut MysqlConnection,
     ohlcv_records: &[NewHmdsOhlcvRecord],

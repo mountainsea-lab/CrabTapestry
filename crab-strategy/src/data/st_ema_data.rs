@@ -36,7 +36,7 @@ impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaDa
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
         match &event.kind {
-            DataKind::Trade(trade) => {
+            DataKind::Trade(_trade) => {
                 // if self
                 //     .last_traded_price
                 //     .as_ref()
@@ -47,7 +47,7 @@ impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaDa
                 //         .replace(Timed::new(price, event.time_exchange));
                 // }
             }
-            DataKind::OrderBookL1(l1) => {
+            DataKind::OrderBookL1(_l1) => {
                 // if self.l1.last_update_time < event.time_exchange {
                 //     self.l1 = l1.clone()
                 // }

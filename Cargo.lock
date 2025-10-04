@@ -798,6 +798,7 @@ dependencies = [
 name = "crab-strategy"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "barter",
  "barter-data 0.10.2",
  "barter-execution",
@@ -812,6 +813,8 @@ dependencies = [
  "serde",
  "serde_json",
  "smol_str",
+ "thiserror 2.0.16",
+ "tokio",
 ]
 
 [[package]]
