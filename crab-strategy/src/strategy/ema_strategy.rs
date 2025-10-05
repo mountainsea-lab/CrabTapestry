@@ -1,4 +1,4 @@
-use crate::data::st_ema_data::StEmaData;
+use crate::data::market_trade_data::StEmaData;
 use crate::strategy::gen_cid;
 use barter::engine::Engine;
 use barter::engine::clock::HistoricalClock;

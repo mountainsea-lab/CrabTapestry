@@ -8,32 +8,49 @@ use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen};
 use derive_more::Constructor;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 
-/// Basic [`InstrumentDataState`] that tracks the [`Kline`] and sets traded kline for an
-/// instrument.
+/// Basic [`InstrumentDataState`] implementation that tracks the [`OrderBookL1`] and last traded
+/// price for an instrument.
 ///
-/// Trading strategies may wish to maintain more data here, such as candles, indicators,
-/// KLines , etc.
+/// This is a simple example of instrument level data. Trading strategies typically maintain more
+/// comprehensive data, such as candles, technical indicators, market depth (L2 book), volatility metrics,
+/// or strategy-specific state data.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default, Deserialize, Serialize, Constructor)]
-pub struct MarketTradeData {
+pub struct StEmaData {
     pub last_traded_price: Option<Timed<Decimal>>,
 }
 
-impl InstrumentDataState for MarketTradeData {
+impl InstrumentDataState for StEmaData {
     type MarketEventKind = DataKind;
+
     fn price(&self) -> Option<Decimal> {
-        self.last_traded_price.as_ref().map(|timed| timed.value)
+        // self.l1
+        //     .volume_weighed_mid_price()
+        //     .or(self.last_traded_price.as_ref().map(|timed| timed.value))
+        todo!()
     }
 }
 
-impl<InstrumentKey: Display> Processor<&MarketEvent<InstrumentKey, DataKind>> for MarketTradeData {
+impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaData {
     type Audit = ();
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
         match &event.kind {
             DataKind::Trade(_trade) => {
-                todo!()
+                // if self
+                //     .last_traded_price
+                //     .as_ref()
+                //     .is_none_or(|price| price.time < event.time_exchange)
+                //     && let Some(price) = Decimal::from_f64(trade.price)
+                // {
+                //     self.last_traded_price
+                //         .replace(Timed::new(price, event.time_exchange));
+                // }
+            }
+            DataKind::OrderBookL1(_l1) => {
+                // if self.l1.last_update_time < event.time_exchange {
+                //     self.l1 = l1.clone()
+                // }
             }
             _ => {}
         }
@@ -41,14 +58,14 @@ impl<InstrumentKey: Display> Processor<&MarketEvent<InstrumentKey, DataKind>> fo
 }
 
 impl<ExchangeKey, AssetKey, InstrumentKey> Processor<&AccountEvent<ExchangeKey, AssetKey, InstrumentKey>>
-    for MarketTradeData
+    for StEmaData
 {
     type Audit = ();
 
     fn process(&mut self, _: &AccountEvent<ExchangeKey, AssetKey, InstrumentKey>) -> Self::Audit {}
 }
 
-impl<ExchangeKey, InstrumentKey> InFlightRequestRecorder<ExchangeKey, InstrumentKey> for MarketTradeData {
+impl<ExchangeKey, InstrumentKey> InFlightRequestRecorder<ExchangeKey, InstrumentKey> for StEmaData {
     fn record_in_flight_cancel(&mut self, _: &OrderRequestCancel<ExchangeKey, InstrumentKey>) {}
 
     fn record_in_flight_open(&mut self, _: &OrderRequestOpen<ExchangeKey, InstrumentKey>) {}

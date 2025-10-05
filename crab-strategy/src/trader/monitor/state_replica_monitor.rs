@@ -1,4 +1,4 @@
-use crate::data::st_ema_data::StEmaData;
+use crate::data::market_trade_data::StEmaData;
 use crate::trader::crab_trader::CrabTrader;
 use barter::engine::state::EngineState;
 use barter::engine::state::global::DefaultGlobalData;

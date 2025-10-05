@@ -1,4 +1,5 @@
-use crate::data::st_ema_data::StEmaData;
+use crate::data::market_trade_data::StEmaData;
+use crate::global;
 use barter::engine::EngineOutput;
 use barter::engine::audit::state_replica::StateReplicaManager;
 use barter::engine::audit::{AuditTick, EngineAudit};
@@ -29,8 +30,6 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock, mpsc};
 
@@ -205,9 +204,9 @@ impl CrabTrader {
 
     /// 构建交易系统（启用审计模式）
     pub async fn build_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
-        // Load SystemConfig
-        let SystemConfig { instruments, executions } =
-            load_config().map_err(|e| BarterError::ExecutionBuilder(format!("Config error: {}", e)))?;
+        let strategy_config = global::get_strategy_config().get();
+        let instruments = strategy_config.system_config.instruments.clone();
+        let executions = strategy_config.system_config.executions.clone();
 
         // Construct IndexedInstruments
         let instruments = IndexedInstruments::new(instruments);
@@ -335,7 +334,7 @@ impl CrabTrader {
                     let r = replica.run();
                     (r, replica) // 将结果和 replica 一并返回
                 })
-                    .await;
+                .await;
 
                 match run_res {
                     Ok((Ok(()), returned_replica)) => {
@@ -464,11 +463,4 @@ impl Clone for CrabTrader {
             replica_running: Arc::clone(&self.replica_running),
         }
     }
-}
-
-pub fn load_config() -> Result<SystemConfig, Box<dyn std::error::Error>> {
-    let file = File::open(FILE_PATH_SYSTEM_CONFIG)?;
-    let reader = BufReader::new(file);
-    let config = serde_json::from_reader(reader)?;
-    Ok(config)
 }
