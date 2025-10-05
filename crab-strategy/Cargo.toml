@@ -4,9 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Web
+warp = { workspace = true }
+
 # Async
 tokio =  {workspace = true }
 once_cell = { workspace = true }
+async-stream = { workspace = true }
 
 # Barter Ecosystem
 barter-integration = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }

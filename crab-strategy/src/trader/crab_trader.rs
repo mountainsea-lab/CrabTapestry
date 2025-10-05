@@ -10,7 +10,6 @@ use barter::error::BarterError;
 use barter::risk::DefaultRiskManager;
 use barter::strategy::DefaultStrategy;
 use barter::system::builder::{AuditMode, EngineFeedMode, SystemArgs, SystemBuilder};
-use barter::system::config::SystemConfig;
 use barter::{
     EngineEvent,
     engine::{
