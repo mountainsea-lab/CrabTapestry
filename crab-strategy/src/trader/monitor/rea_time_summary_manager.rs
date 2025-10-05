@@ -119,7 +119,7 @@ where
     /// 启动自动更新订阅
     pub async fn start_auto_update(&self) {
         let mut summary_rx = self.summary_manager.subscribe();
-        let summary_manager = Arc::clone(&self.summary_manager);
+        let _summary_manager = Arc::clone(&self.summary_manager);
 
         tokio::spawn(async move {
             while let Ok(summary) = summary_rx.recv().await {

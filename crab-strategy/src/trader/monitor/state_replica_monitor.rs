@@ -77,7 +77,7 @@ impl StateReplicaMonitor {
         // 可以集成到 Telegram、邮件、Slack 等
     }
 
-    fn calculate_total_exposure(&self, state: &EngineState<DefaultGlobalData, StEmaData>) -> Decimal {
+    fn calculate_total_exposure(&self, _state: &EngineState<DefaultGlobalData, StEmaData>) -> Decimal {
         // 计算总风险暴露
         todo!()
         // state.positions.values()

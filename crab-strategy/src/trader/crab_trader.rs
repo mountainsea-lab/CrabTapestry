@@ -178,6 +178,23 @@ impl CrabTrader {
         Ok(replica.replica_engine_state().clone())
     }
 
+    /// 安全访问状态（通过闭包）——避免在 async fn 中返回对局部 guard 的引用
+    ///
+    /// 用法：
+    /// let result = trader.with_state(|state| {
+    ///     // 在这里执行只读操作（可以 clone 子字段）
+    ///     state.trading.clone()
+    /// }).await?;
+    pub async fn with_state<F, R>(&self, f: F) -> Result<R, TradingError>
+    where
+        F: FnOnce(&EngineState<DefaultGlobalData, StEmaData>) -> R,
+    {
+        let replica_guard = self.state_replica.read().await;
+        let replica = replica_guard.as_ref().ok_or(TradingError::StateReplicaNotInitialized)?;
+        let engine_state = replica.replica_engine_state();
+        Ok(f(engine_state))
+    }
+
     /// 从已构建的系统创建 CrabTrader
     pub async fn create() -> Result<Self, BarterError> {
         let system = Self::build_system().await?;
@@ -282,48 +299,73 @@ impl CrabTrader {
         Ok(())
     }
 
-    /// 启动状态副本管理器
+    /// 启动状态副本管理器（修正版）
+    ///
+    /// 说明：
+    /// - 我们先用 `write().await` 将 `Option<CrabStateReplica>` 的所有权取出（`take()`），
+    ///   然后把拥有的 `replica` 移入 `spawn_blocking` 执行 `replica.run()`（假设 run 是阻塞操作）。
+    /// - run 返回后，将 `replica` 放回 `state_replica`。
+    /// - 这样就不会在阻塞线程中持有 tokio 的 guard，也不会把 guard 传给阻塞线程。
     pub async fn start_state_replica(&self) -> Result<(), TradingError> {
         let mut running_guard = self.replica_running.lock().await;
         if *running_guard {
-            return Ok(()); // 已经在运行
+            return Ok(());
         }
         *running_guard = true;
         drop(running_guard);
 
-        // 克隆需要的 Arc，而不是引用 self
         let state_replica = Arc::clone(&self.state_replica);
         let replica_running = Arc::clone(&self.replica_running);
 
         tokio::spawn(async move {
             info!("Starting state replica manager");
 
-            // 在阻塞任务中运行状态副本管理器
-            let result = tokio::task::spawn_blocking(move || {
-                let mut replica_guard = state_replica.blocking_write();
-                if let Some(mut replica) = replica_guard.as_mut() {
-                    replica.run()
-                } else {
-                    Err("State replica not initialized".to_string())
-                }
-            })
-            .await;
+            // 1) 从 RwLock 中 take 出 Option<Replica> 的所有权
+            let replica_opt = {
+                let mut write_guard = state_replica.write().await;
+                write_guard.take()
+            };
 
-            match result {
-                Ok(Ok(())) => {
-                    info!("State replica manager stopped gracefully");
+            if let Some(mut replica) = replica_opt {
+                // 2) 将拥有的 replica 移入阻塞线程执行 run()
+                //    这里 spawn_blocking 返回的是 Result<run_result, JoinError>
+                let run_res = tokio::task::spawn_blocking(move || {
+                    // run() 是阻塞方法（假设签名为 `fn run(&mut self) -> Result<(), String>` 或类似）
+                    // 保持 mutable ownership，run 完后我们还拥有 replica，可以返回它
+                    let r = replica.run();
+                    (r, replica) // 将结果和 replica 一并返回
+                })
+                    .await;
+
+                match run_res {
+                    Ok((Ok(()), returned_replica)) => {
+                        info!("State replica manager stopped gracefully");
+                        // 把 replica 放回 state_replica
+                        let mut guard = state_replica.write().await;
+                        *guard = Some(returned_replica);
+                    }
+                    Ok((Err(e), returned_replica)) => {
+                        error!("State replica manager error: {}", e);
+                        // 仍将 replica 放回，以便后续重启或检查
+                        let mut guard = state_replica.write().await;
+                        *guard = Some(returned_replica);
+                    }
+                    Err(join_err) => {
+                        error!("State replica manager task join error: {}", join_err);
+                        // 无法获得 replica（理论上不会发生，因为我们 move 了 replica 进闭包并在返回时带回）
+                        // 为安全起见，置 None（或记录日志）
+                        let mut guard = state_replica.write().await;
+                        *guard = None;
+                    }
                 }
-                Ok(Err(e)) => {
-                    error!("State replica manager error: {}", e);
-                }
-                Err(e) => {
-                    error!("State replica manager task error: {}", e);
-                }
+            } else {
+                error!("State replica not initialized when starting replica manager");
             }
 
             // 重置运行状态
-            let mut running_guard = replica_running.blocking_lock();
+            let mut running_guard = replica_running.lock().await;
             *running_guard = false;
+            info!("State replica manager run finished");
         });
 
         Ok(())
