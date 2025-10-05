@@ -1,4 +1,6 @@
 pub mod log_handlers;
+pub mod trader_handlers;
+
 pub fn index() -> &'static str {
     "Welcome to crab-hmds!"
 }
