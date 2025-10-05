@@ -3,23 +3,23 @@ use crate::server::response::ErrorResponse;
 use warp::{Rejection, Reply, reply};
 
 /// 开启交易
-pub async fn enable_trading() -> &'static str {
+pub async fn enable_trading() -> Result<impl Reply, Rejection> {
     let trader = global::get_crab_trader();
 
     if trader.enable_trading().await.is_ok() {
-        "crab-strategy enable trading success..."
+        Ok(reply::json(&"crab-strategy enable trading success..."))
     } else {
-        "crab-strategy enable trading failed!"
+        Ok(reply::json(&"crab-strategy enable trading failed!"))
     }
 }
 /// 停止交易
-pub async fn disable_trading() -> &'static str {
+pub async fn disable_trading() -> Result<impl Reply, Rejection> {
     let trader = global::get_crab_trader();
 
     if trader.enable_trading().await.is_ok() {
-        "crab-strategy disable trading success..."
+        Ok(reply::json(&"crab-strategy disable trading success..."))
     } else {
-        "crab-strategy disable trading failed!"
+        Ok(reply::json(&"crab-strategy disable trading failed!"))
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::server::AppState;
 use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_cache, with_tx};
+use crate::server::routes::handlers::trader_handlers::{disable_trading, enable_trading, get_status};
 use ms_tracing::LogQuery;
 use warp::{self, Filter};
 
@@ -30,12 +31,28 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
             ),
         )
         .and_then(query_logs);
+    //===============trader handlers=================
+    let enable_trading = api
+        .and(warp::path("trader").and(warp::path("enable").and(warp::get())))
+        .and_then(enable_trading);
+
+    let disable_trading = api
+        .and(warp::path("trader").and(warp::path("disable").and(warp::get())))
+        .and_then(disable_trading);
+
+    let get_status = api
+        .and(warp::path("trader").and(warp::path("status").and(warp::get())))
+        .and_then(get_status);
+    //===============trader handlers=================
 
     warp::path::end()
         .map(handlers::index)
         .or(ping)
         .or(logs_sse)
         .or(logs)
+        .or(enable_trading)
+        .or(disable_trading)
+        .or(get_status)
         .or(version)
         .or(sysinfo)
         .or(health)
