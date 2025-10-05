@@ -33,7 +33,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock, mpsc};
 
-const FILE_PATH_SYSTEM_CONFIG: &str = "crab-strategy/config/system_config.json";
 const RISK_FREE_RETURN: Decimal = dec!(0.05);
 
 // 定义具体的引擎类型
