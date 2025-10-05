@@ -6,6 +6,7 @@ use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::AccountEvent;
 use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen};
 use derive_more::Constructor;
+use ms_tracing::tracing_utils::internal::info;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +37,8 @@ impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaDa
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
         match &event.kind {
-            DataKind::Trade(_trade) => {
+            DataKind::Trade(trade) => {
+                info!("Processing trade event{:?}", trade);
                 // if self
                 //     .last_traded_price
                 //     .as_ref()
