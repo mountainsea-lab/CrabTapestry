@@ -16,7 +16,7 @@ pub async fn enable_trading() -> Result<impl Reply, Rejection> {
 pub async fn disable_trading() -> Result<impl Reply, Rejection> {
     let trader = global::get_crab_trader();
 
-    if trader.enable_trading().await.is_ok() {
+    if trader.disable_trading().await.is_ok() {
         Ok(reply::json(&"crab-strategy disable trading success..."))
     } else {
         Ok(reply::json(&"crab-strategy disable trading failed!"))
