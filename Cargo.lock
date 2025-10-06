@@ -785,6 +785,7 @@ dependencies = [
  "bb8-redis",
  "chrono",
  "crab-common-utils",
+ "crab-types",
  "crossbeam",
  "dashmap",
  "diesel",

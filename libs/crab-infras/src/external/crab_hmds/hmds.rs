@@ -1,8 +1,7 @@
 use crate::external::crab_hmds::constant;
 use crate::external::crab_hmds::meta::OhlcvRecord;
 use barter_integration::protocol::http::rest::RestRequest;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 

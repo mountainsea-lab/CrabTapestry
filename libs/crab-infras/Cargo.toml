@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 # CrabTapestry Ecosystem
 crab-common-utils = { path  = "../crab-common-utils" }
+crab-types =  { path = "../crab-types" }
 
 # net
 reqwest ={workspace = true}

@@ -1,5 +1,11 @@
 use chrono::NaiveDateTime;
+use crab_types::time_frame::TimeFrame;
+use diesel::internal::derives::multiconnection::bigdecimal::FromPrimitive;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use ta4r::bar::base_bar::BaseBar;
+use ta4r::num::decimal_num::DecimalNum;
+use time::{Duration, OffsetDateTime};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OhlcvRecord {
@@ -20,4 +26,50 @@ pub struct OhlcvRecord {
     pub vwap: Option<f64>,                 // 成交量加权平均价 (可选)
     pub created_at: Option<NaiveDateTime>, // 记录创建时间
     pub updated_at: Option<NaiveDateTime>, // 记录更新时间
+}
+
+/// 单条转换，固定为 DecimalNum
+pub fn ohlcv_to_basebar(record: &OhlcvRecord) -> Result<BaseBar<DecimalNum>, String> {
+    // 解析 period 字符串
+    let period_tf = TimeFrame::from_str(&record.period).map_err(|e| format!("Invalid period: {}", e))?;
+
+    // 毫秒 -> std::time::Duration
+    let period_duration = Duration::milliseconds(period_tf.to_millis());
+
+    // f64 -> DecimalNum
+    let to_decimal = |v: f64| DecimalNum::from_f64(v);
+
+    let open = to_decimal(record.open);
+    let high = to_decimal(record.high);
+    let low = to_decimal(record.low);
+    let close = to_decimal(record.close);
+    let volume = to_decimal(record.volume).unwrap_or(DecimalNum::new(0));
+    let amount = record.turnover.map(to_decimal).unwrap_or(DecimalNum::from_f64(0.0));
+
+    // begin_time 优先 period_start_ts，否则 end_time - period
+    let end_time =
+        OffsetDateTime::from_unix_timestamp(record.ts).map_err(|e| format!("Invalid end timestamp: {}", e))?;
+    let begin_time = if let Some(ts) = record.period_start_ts {
+        OffsetDateTime::from_unix_timestamp(ts).map_err(|e| format!("Invalid begin timestamp: {}", e))?
+    } else {
+        end_time - period_duration
+    };
+
+    Ok(BaseBar {
+        time_period: period_duration,
+        begin_time,
+        end_time,
+        open_price: open,
+        high_price: high,
+        low_price: low,
+        close_price: close,
+        volume,
+        amount,
+        trades: record.num_trades.unwrap_or(0) as u64,
+    })
+}
+
+/// 批量转换
+pub fn ohlcv_vec_to_basebars(records: Vec<OhlcvRecord>) -> Result<Vec<BaseBar<DecimalNum>>, String> {
+    records.into_iter().map(|r| ohlcv_to_basebar(&r)).collect()
 }

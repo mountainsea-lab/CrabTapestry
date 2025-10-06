@@ -7,14 +7,13 @@ use barter_integration::protocol::http::rest::client::RestClient;
 use barter_integration::protocol::http::{BuildStrategy, HttpParser};
 use ms_tracing::tracing_utils::internal::error;
 use reqwest::RequestBuilder;
-use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-mod constant;
-mod hmds;
-mod meta;
+pub mod constant;
+pub mod hmds;
+pub mod meta;
 
 pub struct HmdsSigner;
 impl BuildStrategy for HmdsSigner {

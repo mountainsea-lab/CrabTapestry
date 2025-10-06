@@ -161,3 +161,67 @@ impl BarCacheManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::external::crab_hmds::DefaultHmdsExchange;
+    use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_to_basebar};
+    use std::time::Duration;
+    use ta4r::num::decimal_num::DecimalNum;
+
+    #[tokio::test]
+    async fn test_ensure_loaded_with_fetch_real_dbe() {
+        // 初始化缓存管理器
+        let manager = BarCacheManager::new(100);
+        let key = BarKey::new("BinanceFuturesUsd", "BTCUSDT", "5m");
+
+        // 初始化真实交易所接口
+        let dbe = DefaultHmdsExchange::default();
+        let exchange = "BinanceFuturesUsd";
+        let symbol = "BTC/USDT";
+        let period = "5m";
+        let limit = 5;
+
+        /// fetch_fn 使用 dbe.get_klines 异步获取数据
+        let fetch_fn = || {
+            let dbe = dbe.clone();
+            let exchange = exchange.to_string();
+            let symbol = symbol.to_string();
+            let period = period.to_string();
+            let limit = limit;
+
+            async move {
+                // 1️⃣ 获取 K 线
+                let klines: Vec<OhlcvRecord> = dbe.get_klines(&exchange, &symbol, &period, limit, None, None).await;
+
+                // 2️⃣ 转换成 BaseBar<DecimalNum>
+                let mut bars = Vec::with_capacity(klines.len());
+                for k in klines {
+                    let bar = ohlcv_to_basebar::<DecimalNum>(&k)?;
+                    bars.push(bar);
+                }
+
+                Ok::<Vec<BaseBar<DecimalNum>>, String>(bars)
+            }
+        };
+
+        // 确保加载（第一个调用者负责拉取）
+        manager.ensure_loaded_with_fetch(key.clone(), fetch_fn).await.unwrap();
+
+        // 等待 series ready
+        manager.wait_ready(&key, Duration::from_secs(10)).await.unwrap();
+
+        // 获取最近 3 根 bar
+        let last_three = manager.get_last_n_bars(&key, 3).await.unwrap();
+        assert!(!last_three.is_empty());
+
+        // 打印日志，便于调试
+        for b in last_three {
+            println!(
+                "Close: {:?}, High: {:?}, Low: {:?}, Open: {:?}",
+                b.close_price, b.high_price, b.low_price, b.open_price
+            );
+        }
+    }
+}
