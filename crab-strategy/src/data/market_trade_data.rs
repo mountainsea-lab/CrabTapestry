@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// This is a simple example of instrument level data. Trading strategies typically maintain more
 /// comprehensive data, such as candles, technical indicators, market depth (L2 book), volatility metrics,
-/// or strategy-specific state data.
+/// or bar_cache-specific state data.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default, Deserialize, Serialize, Constructor)]
 pub struct StEmaData {
     pub last_traded_price: Option<Timed<Decimal>>,

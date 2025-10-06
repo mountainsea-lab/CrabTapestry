@@ -19,8 +19,7 @@ barter-data = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch
 barter-execution = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
 barter = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
 
-# ta4r
-ta4r = { git = "https://github.com/mountainsea-lab/ta4r.git", branch = "main" }
+
 
 # CrabTapestry Ecosystem
 crab-types =  { path = "../libs/crab-types" }

@@ -54,7 +54,7 @@ impl StrategyConfigManager {
             Err(_) => {
                 // ❌ 若环境变量不存在，返回错误
                 return Err(anyhow::anyhow!(
-                    "❌ STRATEGY_CONFIG_PATH 未设置，请在运行环境中指定配置文件路径（例如：/app/config/strategy.json）"
+                    "❌ STRATEGY_CONFIG_PATH 未设置，请在运行环境中指定配置文件路径（例如：/app/config/bar_cache.json）"
                 ));
             }
         };
