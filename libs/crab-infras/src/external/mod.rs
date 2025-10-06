@@ -5,6 +5,7 @@ use thiserror::Error;
 
 pub mod binance;
 pub mod news;
+pub mod crab;
 
 /// Parser for third domain responses
 #[derive(Debug)]
