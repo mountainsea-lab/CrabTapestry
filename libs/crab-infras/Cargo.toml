@@ -14,6 +14,9 @@ reqwest ={workspace = true}
 barter-data = { workspace = true }
 barter-integration = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-integration" }
 
+# ta4r
+ta4r = { git = "https://github.com/mountainsea-lab/ta4r.git", branch = "main" }
+
 # redis
 bb8 = "0.9.0"
 bb8-redis = "0.20.0"

@@ -32,7 +32,9 @@ reqwest = { version = "0.12.9",default-features = false, features = ["rustls-tls
 trade_aggregation = "13.0.1"
 
 # Async
-tokio = { version = "1.44.2", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+tokio = { version = "1.42", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+
+#tokio = { version = "1.44.2", default-features = false, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
 futures-util = "0.3.31"
 crossbeam = "0.8.4"
 futures = "0.3.31"

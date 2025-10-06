@@ -3,6 +3,7 @@ use bb8_redis::redis::{Msg, Value};
 use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, serde::rfc3339};
 
+pub mod bar_cache;
 pub mod redis_cache;
 pub mod redis_helper;
 

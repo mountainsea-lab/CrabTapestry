@@ -254,7 +254,7 @@ where
 //
 //         producer.await.unwrap();
 //         let consumed = consumer.await.unwrap();
-//         assert_eq!(consumed, 10, "Block strategy should not drop data");
+//         assert_eq!(consumed, 10, "Block bar_cache should not drop data");
 //     }
 //
 //     #[tokio::test]
