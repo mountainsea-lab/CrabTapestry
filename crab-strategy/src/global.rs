@@ -1,6 +1,7 @@
 use crate::config::strategy_config::StrategyConfigManager;
 use crate::trader::crab_trader::CrabTrader;
 use anyhow::{Result, anyhow};
+use crab_infras::cache::bar_cache::bar_cache_manager::BarCacheManager;
 use ms_tracing::tracing_utils::internal::{error, info};
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
@@ -10,6 +11,9 @@ static STRATEGY_CONFIG: OnceCell<Arc<StrategyConfigManager>> = OnceCell::new();
 
 /// 全局交易器单例
 static CRAB_TRADER: OnceCell<Arc<CrabTrader>> = OnceCell::new();
+
+/// 全局 BarCacheManager 单例
+static BAR_CACHE_MANAGER: OnceCell<Arc<BarCacheManager>> = OnceCell::new();
 
 /// 初始化全局服务（配置 + 交易器）
 pub async fn init_global_services() -> Result<()> {
@@ -36,6 +40,14 @@ pub async fn init_global_services() -> Result<()> {
     }
     info!("✅ CrabTrader 全局实例初始化成功。");
 
+    // 3️⃣ 初始化 BarCacheManager
+    let cache_manager = Arc::new(BarCacheManager::new(300)); // 默认容量 100，可调整
+    if BAR_CACHE_MANAGER.set(cache_manager.clone()).is_err() {
+        error!("⚠️ BAR_CACHE_MANAGER 已初始化，重复调用被忽略。");
+        return Err(anyhow!("BAR_CACHE_MANAGER already initialized"));
+    }
+    info!("✅ BarCacheManager 全局实例初始化成功。");
+
     Ok(())
 }
 
@@ -52,5 +64,13 @@ pub fn get_crab_trader() -> Arc<CrabTrader> {
     CRAB_TRADER
         .get()
         .expect("❌ CRAB_TRADER not initialized — 请先调用 init_global_services()")
+        .clone()
+}
+
+/// 获取全局 BarCacheManager 实例
+pub fn get_bar_cache_manager() -> Arc<BarCacheManager> {
+    BAR_CACHE_MANAGER
+        .get()
+        .expect("❌ BAR_CACHE_MANAGER not initialized — 请先调用 init_global_services()")
         .clone()
 }

@@ -3,6 +3,7 @@ use crate::cache::bar_cache::series_entry::{STATE_LOADING, STATE_READY, STATE_UN
 use crate::external::crab_hmds::DefaultHmdsExchange;
 use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_vec_to_basebars};
 use dashmap::DashMap;
+use ms_tracing::tracing_utils::internal::error;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -11,6 +12,7 @@ use ta4r::bar::base_bar_series::BaseBarSeries;
 use ta4r::bar::base_bar_series_builder::BaseBarSeriesBuilder;
 use ta4r::bar::types::{BarSeries, BarSeriesBuilder};
 use ta4r::num::decimal_num::DecimalNum;
+use tokio::sync::RwLock;
 use tokio::time::timeout;
 
 #[derive(Clone)]
@@ -168,24 +170,96 @@ impl BarCacheManager {
             Err(format!("series {} not registered", key.id()))
         }
     }
+    /// 获取指定 key 对应的 BaseBarSeries 的共享引用
+    /// 如果 series 尚未 ready 或 key 不存在，则返回空的 BaseBarSeries（长度为0）
+    pub async fn get_series_arc(&self, key: &BarKey) -> Arc<RwLock<BaseBarSeries<DecimalNum>>> {
+        // 内部辅助函数：构建空 BaseBarSeries
+        fn empty_series(name: &str) -> Arc<RwLock<BaseBarSeries<DecimalNum>>> {
+            let series = BaseBarSeriesBuilder::<DecimalNum>::new()
+                .with_name(name)
+                .build()
+                .expect("Failed to build empty BaseBarSeries");
+            Arc::new(RwLock::new(series))
+        }
 
-    /// 读取最近 n 根 bar（异步）
-    pub async fn get_last_n_bars(&self, key: &BarKey, n: usize) -> Result<Vec<BaseBar<DecimalNum>>, String> {
         if let Some(entry_ref) = self.caches.get(key) {
             let entry = entry_ref.clone();
-            let r = entry.series.read().await;
-            let len = r.get_bar_count();
-            let start = len.saturating_sub(n);
-            let mut out = Vec::with_capacity(n.min(len));
-            for i in start..len {
-                if let Some(b) = r.get_bar(i).cloned() {
-                    out.push(b);
-                }
+            if entry.is_ready() {
+                entry.series.clone()
+            } else {
+                empty_series(&key.id())
             }
-            Ok(out)
         } else {
-            Err(format!("series {} not found", key.id()))
+            empty_series(&key.id())
         }
+    }
+
+    /// 读取最近 n 根 bar（异步）
+    /// 如果 series 尚未 ready 或 key 不存在，则返回空 Vec
+    pub async fn get_last_n_bars(&self, key: &BarKey, n: usize) -> Vec<BaseBar<DecimalNum>> {
+        if let Some(entry_ref) = self.caches.get(key) {
+            let entry = entry_ref.clone();
+            if entry.is_ready() {
+                let r = entry.series.read().await;
+                let len = r.get_bar_count();
+                let start = len.saturating_sub(n);
+                (start..len).filter_map(|i| r.get_bar(i).cloned()).collect::<Vec<_>>()
+            } else {
+                Vec::new() // series 未 ready
+            }
+        } else {
+            Vec::new() // key 不存在
+        }
+    }
+
+    /// 批量加载 BarKey 数据，带默认并发控制和间隔
+    pub async fn ensure_loaded_default_batch(&self, keys: Vec<BarKey>, limit: i32) -> Result<(), String> {
+        // 默认并发和间隔
+        let max_concurrent = 10;
+        let sleep_between = Some(Duration::from_millis(20));
+
+        use futures::stream::{self, StreamExt};
+
+        let keys_stream = stream::iter(keys.into_iter().map(|key| {
+            let sleep_between = sleep_between.clone();
+            let manager = self.clone();
+            async move {
+                let res = manager.ensure_loaded_default(key.clone(), limit).await;
+                if let Some(dur) = sleep_between {
+                    tokio::time::sleep(dur).await;
+                }
+                res
+            }
+        }));
+
+        keys_stream
+            .buffer_unordered(max_concurrent)
+            .for_each(|res| async {
+                if let Err(e) = res {
+                    error!("ensure_loaded_default_batch failed: {}", e);
+                }
+            })
+            .await;
+
+        Ok(())
+    }
+
+    /// 批量等待 ready 大多数准备好界定为true
+    pub async fn wait_ready_batch_majority(&self, keys: &[BarKey], dur: Duration) -> bool {
+        use futures::future::join_all;
+
+        let futures = keys.iter().map(|key| {
+            let key = key.clone();
+            async move { self.wait_ready(&key, dur).await.is_ok() }
+        });
+
+        let results: Vec<bool> = join_all(futures).await;
+
+        let total = results.len();
+        let success_count = results.iter().filter(|&&r| r).count();
+
+        // 大多数准备好返回 true
+        success_count * 2 >= total
     }
 }
 
@@ -243,7 +317,7 @@ mod tests {
         manager.wait_ready(&key, Duration::from_secs(10)).await.unwrap();
 
         // 获取最近 3 根 bar
-        let last_three = manager.get_last_n_bars(&key, 3).await.unwrap();
+        let last_three = manager.get_last_n_bars(&key, 3).await;
         assert!(!last_three.is_empty());
 
         // 打印日志，便于调试
@@ -280,7 +354,7 @@ mod tests {
             .expect("wait_ready failed");
 
         // 获取最近 3 根 bar
-        let last_three = manager.get_last_n_bars(&key, 3).await.expect("get_last_n_bars failed");
+        let last_three = manager.get_last_n_bars(&key, 3).await;
 
         // 验证结果
         assert!(!last_three.is_empty(), "Expected non-empty bars");
