@@ -37,6 +37,7 @@ impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaDa
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
         match &event.kind {
             DataKind::Trade(trade) => {
+                // todo 这里实时聚合然后 addbar
                 // info!("Processing trade event{:?}", trade);
                 // if self
                 //     .last_traded_price

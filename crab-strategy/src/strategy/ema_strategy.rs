@@ -51,7 +51,7 @@ impl AlgoStrategy for EmaStrategy {
 
             // Don't open if there is no instrument market price available
             let price = state.data.price()?;
-            // todo!() ta4r指标计算
+            // todo!()  直接获取或者通过ta4r指标计算
             // Generate Market order to buy the minimum allowed quantity
             Some(OrderRequestOpen {
                 key: OrderKey {

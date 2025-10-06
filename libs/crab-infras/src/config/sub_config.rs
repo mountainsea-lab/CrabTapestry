@@ -1,3 +1,4 @@
+use crate::cache::bar_cache::bar_key::BarKey;
 use dashmap::DashMap;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -50,6 +51,28 @@ impl SubscriptionConfig {
                 }
             })
             .collect()
+    }
+
+    /// 批量生成 BarKey 列表，用于 BarCacheManager 等缓存系统
+    pub fn generate_barkeys(&self) -> Vec<BarKey> {
+        let mut keys = Vec::new();
+        for symbol in &self.symbols {
+            // 获取周期列表：symbol.periods > default_periods > fallback
+            let periods = symbol
+                .periods
+                .clone()
+                .or_else(|| self.default_periods.clone())
+                .unwrap_or_else(|| vec!["1m".to_string()]);
+
+            for period in periods {
+                keys.push(BarKey {
+                    exchange: self.exchange.clone(),
+                    symbol: format!("{}{}", symbol.name, symbol.quote),
+                    period,
+                });
+            }
+        }
+        keys
     }
 }
 

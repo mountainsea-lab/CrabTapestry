@@ -244,13 +244,15 @@ impl BarCacheManager {
         Ok(())
     }
 
-    /// 批量等待 ready 大多数准备好界定为true
-    pub async fn wait_ready_batch_majority(&self, keys: &[BarKey], dur: Duration) -> bool {
+    /// 批量等待 ready，大多数准备好返回 true，默认超时 3 秒
+    pub async fn wait_ready_batch_majority(&self, keys: &[BarKey], dur: Option<Duration>) -> bool {
         use futures::future::join_all;
+        // 单 key 超时 3 秒(默认)
+        let timeout_dur = dur.unwrap_or_else(|| Duration::from_secs(3));
 
         let futures = keys.iter().map(|key| {
             let key = key.clone();
-            async move { self.wait_ready(&key, dur).await.is_ok() }
+            async move { self.wait_ready(&key, timeout_dur).await.is_ok() }
         });
 
         let results: Vec<bool> = join_all(futures).await;

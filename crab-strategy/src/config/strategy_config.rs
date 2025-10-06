@@ -20,7 +20,7 @@ pub struct StrategyConfig {
 }
 
 pub struct StrategyConfigManager {
-    inner: ArcSwap<StrategyConfig>,
+    pub(crate) inner: ArcSwap<StrategyConfig>,
 }
 
 impl StrategyConfigManager {
