@@ -74,9 +74,9 @@
       "exchange": "BinanceFuturesUsd",
       "default_periods": ["1m", "5m", "1h"],
       "symbols": [
-        { "name": "btc", "quote": "usdt", "periods": ["1m", "5m", "1h"] },
-        { "name": "eth", "quote": "usdt", "periods": ["1m", "5m", "1h"] },
-        { "name": "sol", "quote": "usdt", "periods": ["1m", "5m", "1h"] }
+        { "name": "btc", "quote": "usdt", "periods": ["1m"] },
+        { "name": "eth", "quote": "usdt", "periods": ["1m"] },
+        { "name": "sol", "quote": "usdt", "periods": ["1m"] }
       ]
     }
   ]

@@ -54,6 +54,6 @@ pub async fn start_strategy_flow() {
     // // 传给策略构建函数 todo 考虑策略指标组合是否也可以全局初始化
     // let strategy = build_strategy(series_map);
     //
-    // 启动交易器（可选）
-    trader.enable_trading().unwrap();
+    // 开启交易（可选）
+    // trader.enable_trading().await.unwrap();
 }
