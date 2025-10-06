@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use crab_types::time_frame::TimeFrame;
-use diesel::internal::derives::multiconnection::bigdecimal::FromPrimitive;
+use rust_decimal::prelude::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use ta4r::bar::base_bar::BaseBar;
@@ -46,13 +46,11 @@ pub fn ohlcv_to_basebar(record: &OhlcvRecord) -> Result<BaseBar<DecimalNum>, Str
     let volume = to_decimal(record.volume).unwrap_or(DecimalNum::new(0));
     let amount = record.turnover.map(to_decimal).unwrap_or(DecimalNum::from_f64(0.0));
 
-    // begin_time 优先 period_start_ts，否则 end_time - period
-    let end_time =
-        OffsetDateTime::from_unix_timestamp(record.ts).map_err(|e| format!("Invalid end timestamp: {}", e))?;
-    let begin_time = if let Some(ts) = record.period_start_ts {
-        OffsetDateTime::from_unix_timestamp(ts).map_err(|e| format!("Invalid begin timestamp: {}", e))?
-    } else {
-        end_time - period_duration
+    // ✅ 修复时间戳：毫秒 -> 秒 begin_time 优先 period_start_ts，否则 end_time - period
+    let end_time = to_datetime(record.ts)?;
+    let begin_time = match record.period_start_ts {
+        Some(ts) => to_datetime(ts)?,
+        None => end_time - period_duration,
     };
 
     Ok(BaseBar {
@@ -72,4 +70,16 @@ pub fn ohlcv_to_basebar(record: &OhlcvRecord) -> Result<BaseBar<DecimalNum>, Str
 /// 批量转换
 pub fn ohlcv_vec_to_basebars(records: Vec<OhlcvRecord>) -> Result<Vec<BaseBar<DecimalNum>>, String> {
     records.into_iter().map(|r| ohlcv_to_basebar(&r)).collect()
+}
+
+/// 安全转换 timestamp（自动识别秒/毫秒）
+#[inline]
+fn to_datetime(ts: i64) -> Result<OffsetDateTime, String> {
+    // 自动识别毫秒时间戳
+    let nanos = if ts > 1_000_000_000_000 {
+        (ts as i128) * 1_000_000
+    } else {
+        (ts as i128) * 1_000_000_000
+    };
+    OffsetDateTime::from_unix_timestamp_nanos(nanos).map_err(|e| format!("Invalid timestamp: {}", e))
 }

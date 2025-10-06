@@ -167,11 +167,14 @@ mod tests {
     use super::*;
     use crate::external::crab_hmds::DefaultHmdsExchange;
     use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_to_basebar};
+    use ms_tracing::setup_tracing;
+    use ms_tracing::tracing_utils::internal::info;
     use std::time::Duration;
     use ta4r::num::decimal_num::DecimalNum;
 
     #[tokio::test]
     async fn test_ensure_loaded_with_fetch_real_dbe() {
+        setup_tracing();
         // 初始化缓存管理器
         let manager = BarCacheManager::new(100);
         let key = BarKey::new("BinanceFuturesUsd", "BTCUSDT", "5m");
@@ -179,12 +182,12 @@ mod tests {
         // 初始化真实交易所接口
         let dbe = DefaultHmdsExchange::default();
         let exchange = "BinanceFuturesUsd";
-        let symbol = "BTC/USDT";
-        let period = "5m";
+        let symbol = "BTCUSDT";
+        let period = "1m";
         let limit = 5;
 
         /// fetch_fn 使用 dbe.get_klines 异步获取数据
-        let fetch_fn = || {
+        let fetch_fn = move || {
             let dbe = dbe.clone();
             let exchange = exchange.to_string();
             let symbol = symbol.to_string();
@@ -194,11 +197,11 @@ mod tests {
             async move {
                 // 1️⃣ 获取 K 线
                 let klines: Vec<OhlcvRecord> = dbe.get_klines(&exchange, &symbol, &period, limit, None, None).await;
-
+                info!("klines {:?}", klines);
                 // 2️⃣ 转换成 BaseBar<DecimalNum>
                 let mut bars = Vec::with_capacity(klines.len());
                 for k in klines {
-                    let bar = ohlcv_to_basebar::<DecimalNum>(&k)?;
+                    let bar = ohlcv_to_basebar(&k)?;
                     bars.push(bar);
                 }
 
