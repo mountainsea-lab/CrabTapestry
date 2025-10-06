@@ -7,6 +7,7 @@ use barter_integration::protocol::http::rest::client::RestClient;
 use barter_integration::protocol::http::{BuildStrategy, HttpParser};
 use ms_tracing::tracing_utils::internal::error;
 use reqwest::RequestBuilder;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -73,8 +74,9 @@ where
 
     pub async fn get_klines<S1, S2, S3, S4, S5>(
         &self,
+        exchange: S1,
         symbol: S1,
-        interval: S2,
+        period: S2,
         limit: S3,
         start_time: S4,
         end_time: S5,
@@ -87,19 +89,19 @@ where
         S5: Into<Option<u64>>,
     {
         let mut parameters: BTreeMap<String, String> = BTreeMap::new();
-
+        parameters.insert("exchange".into(), exchange.into());
         parameters.insert("symbol".into(), symbol.into());
-        parameters.insert("interval".into(), interval.into());
+        parameters.insert("period".into(), period.into());
 
         // Add three optional parameters
         if let Some(lt) = limit.into() {
             parameters.insert("limit".into(), format!("{}", lt));
         }
         if let Some(st) = start_time.into() {
-            parameters.insert("startTime".into(), format!("{}", st));
+            parameters.insert("start_time".into(), format!("{}", st));
         }
         if let Some(et) = end_time.into() {
-            parameters.insert("endTime".into(), format!("{}", et));
+            parameters.insert("end_time".into(), format!("{}", et));
         }
 
         let fetch_klines_request = FetchCrabHmdsKlineRequest { query_params: parameters };
@@ -124,10 +126,11 @@ mod tests {
     async fn test_get_klines() {
         setup_tracing();
         let dbe = DefaultHmdsExchange::default();
+        let exchange = "BinanceFuturesUsd";
         let symbol = "btcusdt";
-        let interval = "5m";
-        let limit = 1;
-        let klines = dbe.get_klines(symbol, interval, limit, None, None).await;
+        let period = "5m";
+        let limit = 2;
+        let klines = dbe.get_klines(exchange, symbol, period, limit, None, None).await;
 
         for kline in &klines {
             trace_kv!(info,

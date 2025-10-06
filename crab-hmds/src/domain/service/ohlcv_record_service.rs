@@ -157,41 +157,49 @@ pub async fn query_list_by_filter(
     conn: &mut MysqlConnection,
     ohlcv_filter: &OhlcvFilter,
 ) -> AppResult<Vec<HmdsOhlcvRecord>> {
-    let mut query = hmds_ohlcv_record.into_boxed(); // 初始化为可扩展查询
+    use crate::schema::hmds_ohlcv_record::dsl::*;
 
-    // 根据 `OhlcvFilter` 动态添加筛选条件
-    if let Some(ref symbol_val) = ohlcv_filter.symbol {
-        query = query.filter(symbol.eq(symbol_val)); // 确保符号匹配
+    let mut query = hmds_ohlcv_record.into_boxed(); // 支持动态查询组合
+
+    // === 动态条件过滤 ===
+    if let Some(ref sym) = ohlcv_filter.symbol {
+        query = query.filter(symbol.eq(sym));
     }
 
-    if let Some(ref exchange_val) = ohlcv_filter.exchange {
-        query = query.filter(exchange.eq(exchange_val)); // 确保交易所匹配
+    if let Some(ref ex) = ohlcv_filter.exchange {
+        query = query.filter(exchange.eq(ex));
     }
 
-    if let Some(ref period_arg) = ohlcv_filter.period {
-        query = query.filter(period.eq(period_arg)); // 确保周期匹配
+    if let Some(ref per) = ohlcv_filter.period {
+        query = query.filter(period.eq(per));
     }
 
-    if let Some(close_time) = ohlcv_filter.close_time {
-        query = query.filter(ts.eq(close_time)); // 根据时间戳过滤
+    // ✅ 时间区间过滤
+    if let Some(start_ts) = ohlcv_filter.start_time {
+        query = query.filter(ts.ge(start_ts)); // ts >= start_time
+    }
+    if let Some(end_ts) = ohlcv_filter.end_time {
+        query = query.filter(ts.le(end_ts)); // ts <= end_time
     }
 
-    // 默认排序：按 `period_start_ts` 升序排序
-    query = query.order_by(period_start_ts.asc());
+    // === 排序逻辑 ===
+    // 默认按 period_start_ts 降序
+    query = query.order(period_start_ts.desc());
 
-    // 添加排序功能：如果 `sort_by_close_time` 被指定，则按时间排序
+    // 若指定 sort_by_close_time，则覆盖默认排序
     if let Some(sort_order) = &ohlcv_filter.sort_by_close_time {
-        match sort_order {
-            SortOrder::Asc => {
-                query = query.order_by(ts.asc());
-            }
-            SortOrder::Desc => {
-                query = query.order_by(ts.desc());
-            }
-        }
+        query = match sort_order {
+            SortOrder::Asc => query.order(ts.asc()),
+            SortOrder::Desc => query.order(ts.desc()),
+        };
     }
 
-    // 执行查询并返回结果
+    // === 限制条数 ===
+    if let Some(limit_val) = ohlcv_filter.limit {
+        query = query.limit(limit_val as i64);
+    }
+
+    // === 执行查询 ===
     let result = query
         .load::<HmdsOhlcvRecord>(conn)
         .map_err(|e| AppError::DatabaseError(e.into()))?;
