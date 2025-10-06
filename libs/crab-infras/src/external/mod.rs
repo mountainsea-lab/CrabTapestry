@@ -4,8 +4,8 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 pub mod binance;
+pub mod crab_hmds;
 pub mod news;
-pub mod crab;
 
 /// Parser for third domain responses
 #[derive(Debug)]

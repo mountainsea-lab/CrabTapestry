@@ -2,7 +2,7 @@ pub mod log_handlers;
 pub mod trader_handlers;
 
 pub fn index() -> &'static str {
-    "Welcome to crab-hmds!"
+    "Welcome to crab_hmds-hmds!"
 }
 
 pub fn ping() -> &'static str {
@@ -10,11 +10,11 @@ pub fn ping() -> &'static str {
 }
 
 pub fn version() -> &'static str {
-    "crab-hmds version 0.1.0"
+    "crab_hmds-hmds version 0.1.0"
 }
 
 pub fn sysinfo() -> &'static str {
-    "sysinfo info: hello , I am a crab tapestry hmds server"
+    "sysinfo info: hello , I am a crab_hmds tapestry hmds server"
 }
 
 pub fn health() -> &'static str {

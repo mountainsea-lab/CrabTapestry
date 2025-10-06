@@ -21,7 +21,7 @@ COPY Cargo.toml  ./
 # COPY libs 下所有 crate 的 Cargo.toml
 COPY libs/*/Cargo.toml libs/*/
 
-# COPY 所有服务的 Cargo.toml（假设服务名以 crab- 开头）
+# COPY 所有服务的 Cargo.toml（假设服务名以 crab_hmds- 开头）
 COPY crab-*/Cargo.toml crab-*/
 
 # 生成依赖清单

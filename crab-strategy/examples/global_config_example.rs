@@ -2,7 +2,7 @@ use crab_strategy::global;
 use ms_tracing::tracing_utils::internal::info;
 use std::env;
 
-const FILE_PATH_SYSTEM_CONFIG: &str = "crab-bar_cache/config/strategy_config.json";
+const FILE_PATH_SYSTEM_CONFIG: &str = "crab_hmds-bar_cache/config/strategy_config.json";
 #[tokio::main]
 async fn main() {
     // 设置临时的 STRATEGY_CONFIG_PATH 环境变量，包裹在 unsafe 块中

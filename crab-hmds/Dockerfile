@@ -27,7 +27,7 @@ RUN mkdir -p /tmp/cargo-target
 # 依赖缓存优化
 # ------------------------------
 # 先拷贝 Cargo.toml/Cargo.lock 及 workspace 相关 Cargo.toml
-# 这里假设 workspace 中 libs/crab-infras 也在源码目录下
+# 这里假设 workspace 中 libs/crab_hmds-infras 也在源码目录下
 COPY Cargo.toml Cargo.lock ./
 COPY libs/crab-infras/Cargo.toml libs/crab-infras/Cargo.toml
 

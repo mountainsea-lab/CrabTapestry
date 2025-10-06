@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use warp::Filter;
 
-const APPLICATION_NAME: &str = "crab-hmds";
+const APPLICATION_NAME: &str = "crab_hmds-hmds";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -30,7 +30,7 @@ pub async fn start() {
     // 初始化 tracing 日志系统
     setup_tracing_with_broadcast(tx.clone(), cache.clone());
 
-    info!("Starting crab-hmds server...");
+    info!("Starting crab_hmds-hmds server...");
 
     // init global comments domain
     let _ = init_global_services().await;

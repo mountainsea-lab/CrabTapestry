@@ -9,11 +9,11 @@ pub fn ping() -> &'static str {
 }
 
 pub fn version() -> &'static str {
-    "crab-data-event version 0.1.0"
+    "crab_hmds-data-event version 0.1.0"
 }
 
 pub fn sysinfo() -> &'static str {
-    "sysinfo info: hello , I am a crab tapestry data event server"
+    "sysinfo info: hello , I am a crab_hmds tapestry data event server"
 }
 
 pub fn health() -> &'static str {

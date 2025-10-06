@@ -1,13 +1,13 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: crab-mysql-server
+    container_name: crab_hmds-mysql-server
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: crabtapestry
-      MYSQL_USER: crab
+      MYSQL_USER: crab_hmds
       MYSQL_PASSWORD: 123456
     volumes:
       - /usr/local/mysql/data:/var/lib/mysql
@@ -18,7 +18,7 @@ services:
       retries: 5
 
   redis:
-    container_name: crab-redis-server
+    container_name: crab_hmds-redis-server
     build:
       context: ./vendor/redis
       dockerfile: Dockerfile

@@ -7,9 +7,9 @@ pub async fn enable_trading() -> Result<impl Reply, Rejection> {
     let trader = global::get_crab_trader();
 
     if trader.enable_trading().await.is_ok() {
-        Ok(reply::json(&"crab-bar_cache enable trading success..."))
+        Ok(reply::json(&"crab_hmds-bar_cache enable trading success..."))
     } else {
-        Ok(reply::json(&"crab-bar_cache enable trading failed!"))
+        Ok(reply::json(&"crab_hmds-bar_cache enable trading failed!"))
     }
 }
 /// 停止交易
@@ -17,9 +17,9 @@ pub async fn disable_trading() -> Result<impl Reply, Rejection> {
     let trader = global::get_crab_trader();
 
     if trader.disable_trading().await.is_ok() {
-        Ok(reply::json(&"crab-bar_cache disable trading success..."))
+        Ok(reply::json(&"crab_hmds-bar_cache disable trading success..."))
     } else {
-        Ok(reply::json(&"crab-bar_cache disable trading failed!"))
+        Ok(reply::json(&"crab_hmds-bar_cache disable trading failed!"))
     }
 }
 
