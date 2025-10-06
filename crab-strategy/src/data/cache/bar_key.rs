@@ -23,9 +23,7 @@ impl BarKey {
 
 impl PartialEq for BarKey {
     fn eq(&self, other: &Self) -> bool {
-        self.exchange == other.exchange
-            && self.symbol == other.symbol
-            && self.period == other.period
+        self.exchange == other.exchange && self.symbol == other.symbol && self.period == other.period
     }
 }
 
