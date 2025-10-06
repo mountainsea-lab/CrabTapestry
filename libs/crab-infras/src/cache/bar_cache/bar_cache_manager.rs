@@ -1,5 +1,7 @@
 use crate::cache::bar_cache::bar_key::BarKey;
 use crate::cache::bar_cache::series_entry::{STATE_LOADING, STATE_READY, STATE_UNINIT, SeriesEntry};
+use crate::external::crab_hmds::DefaultHmdsExchange;
+use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_vec_to_basebars};
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -130,6 +132,31 @@ impl BarCacheManager {
         }
     }
 
+    /// 默认加载函数：自动从远端拉取数据（比如 Hmds 接口）
+    pub async fn ensure_loaded_default(&self, key: BarKey, limit: i32) -> Result<(), String> {
+        let dbe = DefaultHmdsExchange::default();
+        let exchange = key.exchange.clone();
+        let symbol = key.symbol.clone();
+        let period = key.period.clone();
+
+        self.ensure_loaded_with_fetch(key, move || {
+            let dbe = dbe.clone();
+            let exchange = exchange.clone();
+            let symbol = symbol.clone();
+            let period = period.clone();
+
+            async move {
+                // 拉取数据
+                let klines: Vec<OhlcvRecord> = dbe.get_klines(&exchange, &symbol, &period, limit, None, None).await;
+
+                // 批量转换成 BaseBar<DecimalNum>
+                let bars = ohlcv_vec_to_basebars(klines)?;
+                Ok::<Vec<BaseBar<DecimalNum>>, String>(bars)
+            }
+        })
+        .await
+    }
+
     /// 将新 bar 追加到 series（实时更新）
     pub async fn append_bar(&self, key: &BarKey, bar: BaseBar<DecimalNum>) -> Result<(), String> {
         if let Some(entry_ref) = self.caches.get(key) {
@@ -224,6 +251,45 @@ mod tests {
             println!(
                 "Close: {:?}, High: {:?}, Low: {:?}, Open: {:?}",
                 b.close_price, b.high_price, b.low_price, b.open_price
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ensure_loaded_default() {
+        setup_tracing();
+
+        // 初始化缓存管理器
+        let manager = BarCacheManager::new(100);
+        let key = BarKey::new("BinanceFuturesUsd", "BTCUSDT", "1m");
+
+        // 初始化真实交易所接口
+        let dbe = DefaultHmdsExchange::default();
+        let limit = 5;
+
+        // 调用默认加载函数
+        manager
+            .ensure_loaded_default(key.clone(), limit)
+            .await
+            .expect("ensure_loaded_default failed");
+
+        // 等待 series ready
+        manager
+            .wait_ready(&key, Duration::from_secs(10))
+            .await
+            .expect("wait_ready failed");
+
+        // 获取最近 3 根 bar
+        let last_three = manager.get_last_n_bars(&key, 3).await.expect("get_last_n_bars failed");
+
+        // 验证结果
+        assert!(!last_three.is_empty(), "Expected non-empty bars");
+
+        // 打印日志，便于调试
+        for b in &last_three {
+            info!(
+                "Close: {:?}, High: {:?}, Low: {:?}, Open: {:?}, Volume: {:?}",
+                b.close_price, b.high_price, b.low_price, b.open_price, b.volume
             );
         }
     }
