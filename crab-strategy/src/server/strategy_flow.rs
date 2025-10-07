@@ -5,34 +5,34 @@ use std::time::Duration;
 
 pub async fn start_strategy_flow() {
     // 1️⃣ 获取交易器 (后续可扩展实时交易、监控等)
-    let _trader = global::get_crab_trader();
+    // let _trader = global::get_crab_trader();
 
     // 2️⃣ 获取策略配置管理器 读取 subscriptions（clone 内部数据避免 move）
-    let strategy_config = global::get_strategy_config().get();
-    let subscriptions = strategy_config.subscriptions.clone();
+    // let strategy_config = global::get_strategy_config().get();
+    // let subscriptions = strategy_config.subscriptions.clone();
 
-    // 3️⃣ 获取 BarCacheManager
-    let series_cache_manager = global::get_bar_cache_manager();
+    // 3️⃣ 获取 BarCacheManager 先采用实时维护方式 这里暂时注释
+    // let series_cache_manager = global::get_bar_cache_manager();
 
     // 4️⃣ 根据 subscriptions 生成所有 BarKey
-    let mut keys = Vec::new();
-    for sub in subscriptions {
-        for symbol in &sub.symbols {
-            let periods = symbol
-                .periods
-                .clone()
-                .or_else(|| sub.default_periods.clone())
-                .unwrap_or_else(|| vec!["1m".into()]);
-            for period in periods {
-                keys.push(BarKey {
-                    exchange: sub.exchange.clone(),
-                    symbol: symbol.name.clone(),
-                    period,
-                });
-            }
-        }
-    }
-    info!("starting strategy flow  keys {:#?}", keys);
+    // let mut keys = Vec::new();
+    // for sub in subscriptions {
+    //     for symbol in &sub.symbols {
+    //         let periods = symbol
+    //             .periods
+    //             .clone()
+    //             .or_else(|| sub.default_periods.clone())
+    //             .unwrap_or_else(|| vec!["1m".into()]);
+    //         for period in periods {
+    //             keys.push(BarKey {
+    //                 exchange: sub.exchange.clone(),
+    //                 symbol: symbol.name.clone(),
+    //                 period,
+    //             });
+    //         }
+    //     }
+    // }
+    // info!("starting strategy flow  keys {:#?}", keys);
     //
     // // 5️⃣ 批量加载历史 K 线
     // series_cache_manager

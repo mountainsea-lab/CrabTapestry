@@ -3,7 +3,7 @@ use crate::cache::bar_cache::series_entry::{STATE_LOADING, STATE_READY, STATE_UN
 use crate::external::crab_hmds::DefaultHmdsExchange;
 use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_vec_to_basebars};
 use dashmap::DashMap;
-use ms_tracing::tracing_utils::internal::error;
+use ms_tracing::tracing_utils::internal::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -13,6 +13,7 @@ use ta4r::bar::base_bar_series::BaseBarSeries;
 use ta4r::bar::base_bar_series_builder::BaseBarSeriesBuilder;
 use ta4r::bar::types::{BarSeries, BarSeriesBuilder};
 use ta4r::num::decimal_num::DecimalNum;
+use tokio::runtime::Handle;
 use tokio::time::timeout;
 
 #[derive(Clone)]
@@ -153,6 +154,7 @@ impl BarCacheManager {
 
                 // 批量转换成 BaseBar<DecimalNum>
                 let bars = ohlcv_vec_to_basebars(klines)?;
+                info!("bars: {:?}", bars);
                 Ok::<Vec<BaseBar<DecimalNum>>, String>(bars)
             }
         })
@@ -262,6 +264,90 @@ impl BarCacheManager {
 
         // 大多数准备好返回 true
         success_count * 2 >= total
+    }
+
+    /// 智能加载或追加 bar：
+    /// - 如果 series 已 ready，直接 append；
+    /// - 如果未加载（Uninit），先 ensure_loaded_default；
+    /// - 如果 Loading 状态则等待；
+    pub async fn ensure_and_append(
+        &self,
+        key: &BarKey,
+        limit: i32,
+        new_bar: BaseBar<DecimalNum>,
+    ) -> Result<(), String> {
+        use std::time::Duration;
+
+        // 尝试获取 entry
+        let entry = self.get_or_create_placeholder(key);
+
+        // 根据状态判断
+        let state = entry.state.load(Ordering::SeqCst);
+        match state {
+            STATE_READY => {
+                // 已就绪，直接追加
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            STATE_LOADING => {
+                // 等待加载完成（最长 3s）
+                self.wait_ready(key, Duration::from_secs(3)).await?;
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            STATE_UNINIT => {
+                // 首次使用，先加载历史数据
+                self.ensure_loaded_default(key.clone(), limit).await?;
+                // 再次确认 ready
+                self.wait_ready(key, Duration::from_secs(3)).await?;
+                // 现在可以 safely append
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            _ => Err(format!("Unknown state for key {}", key.id())),
+        }
+    }
+
+    /// 同步版本：智能加载或追加 bar
+    /// - 如果 series 已 ready，直接 append；
+    /// - 如果未加载（Uninit），先 ensure_loaded_default；
+    /// - 如果 Loading 状态则等待；
+    pub fn ensure_and_append_sync(&self, key: &BarKey, limit: i32, new_bar: BaseBar<DecimalNum>) -> Result<(), String> {
+        use std::sync::atomic::Ordering;
+        use std::time::Duration;
+
+        let entry = self.get_or_create_placeholder(key);
+        let state = entry.state.load(Ordering::SeqCst);
+
+        match state {
+            STATE_READY => {
+                // ✅ 已 ready，直接追加
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            STATE_LOADING => {
+                // ⏳ 等待 ready（阻塞）
+                Handle::current().block_on(async { self.wait_ready(key, Duration::from_secs(3)).await })?;
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            STATE_UNINIT => {
+                // 🚀 首次使用：同步等待加载
+                Handle::current().block_on(async {
+                    self.ensure_loaded_default(key.clone(), limit).await?;
+                    self.wait_ready(key, Duration::from_secs(3)).await
+                })?;
+                let mut w = entry.series.write();
+                w.add_bar(new_bar);
+                Ok(())
+            }
+            _ => Err(format!("Unknown state for key {}", key.id())),
+        }
     }
 }
 
