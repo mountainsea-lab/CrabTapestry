@@ -1,4 +1,3 @@
-use crate::global;
 use barter::Timed;
 use barter::engine::Processor;
 use barter::engine::state::instrument::data::InstrumentDataState;
@@ -7,13 +6,11 @@ use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::AccountEvent;
 use barter_execution::order::request::{OrderRequestCancel, OrderRequestOpen};
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
-use dashmap::DashMap;
 use derive_more::Constructor;
+use ms_tracing::tracing_utils::internal::info;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::broadcast;
 
 /// Basic [`InstrumentDataState`] implementation that tracks the [`OrderBookL1`] and last traded
 /// price for an instrument.
@@ -38,6 +35,7 @@ impl StEmaData {
         }
     }
 }
+
 impl InstrumentDataState for StEmaData {
     type MarketEventKind = DataKind;
 
@@ -50,6 +48,12 @@ impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaDa
     type Audit = ();
 
     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
+        info!(
+            "Processing Market {:#?}@{:#?}",
+            event.exchange,
+            // event.instrument,
+            event.kind
+        );
         match &event.kind {
             DataKind::Trade(trade) => {
                 // todo 这里实时聚合然后 addbar

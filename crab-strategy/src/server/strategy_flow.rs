@@ -1,6 +1,6 @@
 use crate::global;
 use crab_infras::cache::bar_cache::bar_key::BarKey;
-use ms_tracing::tracing_utils::internal::error;
+use ms_tracing::tracing_utils::internal::{error, info};
 use std::time::Duration;
 
 pub async fn start_strategy_flow() {
@@ -32,20 +32,21 @@ pub async fn start_strategy_flow() {
             }
         }
     }
-
-    // 5️⃣ 批量加载历史 K 线
-    series_cache_manager
-        .ensure_loaded_default_batch(keys.clone(), 300)
-        .await
-        .expect("ensure load batch failed");
-
-    // ✅ 缓存初始化完成，可直接构建策略指标
-    let ready = series_cache_manager
-        .wait_ready_batch_majority(&keys, Some(Duration::from_secs(5)))
-        .await;
-    if !ready {
-        error!("⚠️ 大部分 K 线数据未加载完成，策略指标可能不完整");
-    }
+    info!("starting strategy flow  keys {:#?}", keys);
+    //
+    // // 5️⃣ 批量加载历史 K 线
+    // series_cache_manager
+    //     .ensure_loaded_default_batch(keys.clone(), 300)
+    //     .await
+    //     .expect("ensure load batch failed");
+    //
+    // // ✅ 缓存初始化完成，可直接构建策略指标
+    // let ready = series_cache_manager
+    //     .wait_ready_batch_majority(&keys, Some(Duration::from_secs(5)))
+    //     .await;
+    // if !ready {
+    //     error!("⚠️ 大部分 K 线数据未加载完成，策略指标可能不完整");
+    // }
     // todo 策略需要初始化
     // let series_map = keys.iter()
     //     .map(|key| (key.clone(), series_cache_manager.get_series_arc(key).await))
