@@ -1,5 +1,6 @@
 use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crate::aggregator::{AggregatorOutput, OutputSink};
+use crate::cache::bar_cache::bar_key::BarKey;
 use crate::config::sub_config::Subscription;
 use crab_common_utils::time_utils::{milliseconds_to_offsetdatetime, parse_period_to_millis, parse_period_to_secs};
 use crab_types::time_frame::TimeFrame;
@@ -187,54 +188,12 @@ impl TradeAggregatorPool {
         }
     }
 
-    // /// 聚合单笔交易，并返回生成的 TradeCandle
-    // pub async fn aggregate_trade(
-    //     &self,
-    //     event: &PublicTradeEvent,
-    //     periods: &[u64], // 毫秒单位
-    // ) -> Vec<(u64, BaseBar<DecimalNum>)> {
-    //     let mut results = Vec::new();
-    //
-    //     for &period in periods {
-    //         let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period);
-    //         let mut guard = aggregator.write().await;
-    //         guard.last_update = Instant::now();
-    //
-    //         // 转换为 trade_aggregation::Trade
-    //         let trade: Trade = event.into();
-    //
-    //         if let Some(trade_candle) = guard.aggregator.update(&trade) {
-    //             guard.candle_count += 1;
-    //             results.push((period, self.candle_to_basebar(&trade_candle, period).await));
-    //         }
-    //     }
-    //
-    //     results
-    // }
-    //
-    // /// trade_candle to basebar
-    // async fn candle_to_basebar(&self, candle: &TradeCandle, period: u64) -> BaseBar<DecimalNum> {
-    //     // 从 TradeCandle 转换到 BaseBar<DecimalNum>
-    //     BaseBar::<DecimalNum> {
-    //         time_period: time::Duration::milliseconds(period as i64),
-    //         begin_time: milliseconds_to_offsetdatetime(candle.time_range.open_time),
-    //         end_time: milliseconds_to_offsetdatetime(candle.time_range.close_time),
-    //         open_price: DecimalNum::from_f64(candle.open.value()),
-    //         high_price: DecimalNum::from_f64(candle.high.value()),
-    //         low_price: DecimalNum::from_f64(candle.low.value()),
-    //         close_price: DecimalNum::from_f64(candle.close.value()),
-    //         volume: DecimalNum::from_f64(candle.volume.value()).unwrap_or(DecimalNum::new(0)),
-    //         amount: DecimalNum::from_f64(candle.close.value() * candle.volume.value()),
-    //         trades: candle.num_trades.value() as u64,
-    //     }
-    // }
-
     /// 聚合单笔交易，并返回生成的 TradeCandle 转换后的 BaseBar
     pub async fn aggregate_trade(
         &self,
         event: &PublicTradeEvent,
         periods: &[u64], // 毫秒单位
-    ) -> Vec<(u64, BaseBar<DecimalNum>)> {
+    ) -> Vec<(BarKey, BaseBar<DecimalNum>)> {
         let mut results = Vec::with_capacity(periods.len());
 
         for &period in periods {
@@ -248,7 +207,12 @@ impl TradeAggregatorPool {
             if let Some(trade_candle) = guard.aggregator.update(&trade) {
                 guard.candle_count += 1;
                 // 直接同步转换为 BaseBar
-                results.push((period, Self::candle_to_basebar(&trade_candle, period)));
+                let exchange = event.exchange.clone();
+                let symbol = event.symbol.clone();
+                if let Some(period_str) = TimeFrame::millis_to_str(period) {
+                    let bar_key = BarKey::new(&exchange, &symbol, period_str);
+                    results.push((bar_key, Self::candle_to_basebar(&trade_candle, period)));
+                }
             }
         }
 

@@ -1,6 +1,8 @@
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +73,36 @@ impl TimeFrame {
             Ok(time_frame) => Some((time_frame.clone(), time_frame.to_millis() as u64)),
             Err(_) => None, // Return None for invalid TimeFrame strings
         }
+    }
+
+    /// 静态映射缓存: 毫秒 -> 字符串
+    pub fn millis_to_str(ms: u64) -> Option<&'static str> {
+        static MAP: OnceLock<HashMap<u64, &'static str>> = OnceLock::new();
+
+        let map = MAP.get_or_init(|| {
+            [
+                (Duration::minutes(1).num_milliseconds() as u64, "1m"),
+                (Duration::minutes(3).num_milliseconds() as u64, "3m"),
+                (Duration::minutes(5).num_milliseconds() as u64, "5m"),
+                (Duration::minutes(15).num_milliseconds() as u64, "15m"),
+                (Duration::minutes(30).num_milliseconds() as u64, "30m"),
+                (Duration::hours(1).num_milliseconds() as u64, "1h"),
+                (Duration::hours(2).num_milliseconds() as u64, "2h"),
+                (Duration::hours(4).num_milliseconds() as u64, "4h"),
+                (Duration::hours(6).num_milliseconds() as u64, "6h"),
+                (Duration::hours(8).num_milliseconds() as u64, "8h"),
+                (Duration::hours(12).num_milliseconds() as u64, "12h"),
+                (Duration::days(1).num_milliseconds() as u64, "1d"),
+                (Duration::days(3).num_milliseconds() as u64, "3d"),
+                (Duration::days(7).num_milliseconds() as u64, "1w"),
+                (Duration::days(30).num_milliseconds() as u64, "1M"),
+            ]
+            .iter()
+            .cloned()
+            .collect::<HashMap<_, _>>()
+        });
+
+        map.get(&ms).copied()
     }
 }
 
