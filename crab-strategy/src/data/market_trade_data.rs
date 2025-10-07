@@ -100,6 +100,10 @@ where
                 } else {
                     warn!("Instrument lookup failed for {:?}", event.instrument);
                 }
+                // todo
+                // 1. 聚合生成K线
+                // 2. k线转换为bar
+                // 3. add bar
             }
 
             DataKind::OrderBookL1(_l1) => {
