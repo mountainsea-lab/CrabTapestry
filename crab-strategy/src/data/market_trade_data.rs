@@ -105,6 +105,7 @@ where
                         // 3️⃣ 获取 BarCacheManager
                         let series_cache_manager = global::get_bar_cache_manager();
                         for latest_bar in latest_bars {
+                            // info!("latest_bar: {:?}", latest_bar);
                             let _ = series_cache_manager.ensure_and_append_sync(&latest_bar.0, 300, latest_bar.1);
                         }
                     }

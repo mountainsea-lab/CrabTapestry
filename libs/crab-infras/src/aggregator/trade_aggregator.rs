@@ -2,7 +2,7 @@ use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crate::aggregator::{AggregatorOutput, OutputSink};
 use crate::cache::bar_cache::bar_key::BarKey;
 use crate::config::sub_config::Subscription;
-use crab_common_utils::time_utils::{milliseconds_to_offsetdatetime, parse_period_to_millis, parse_period_to_secs};
+use crab_common_utils::time_utils::{milliseconds_to_offsetdatetime, parse_period_to_millis};
 use crab_types::time_frame::TimeFrame;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
@@ -210,6 +210,7 @@ impl TradeAggregatorPool {
                 // 直接同步转换为 BaseBar
                 let exchange = event.exchange.clone();
                 let symbol = event.symbol.clone();
+                // info!("trade_candle {:?}", trade_candle);
                 if let Some(period_str) = TimeFrame::millis_to_str(period) {
                     let bar_key = BarKey::new(&exchange, &symbol, period_str);
                     results.push((bar_key, Self::candle_to_basebar(&trade_candle, period)));

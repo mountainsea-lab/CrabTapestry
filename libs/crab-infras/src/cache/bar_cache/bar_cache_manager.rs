@@ -174,7 +174,7 @@ impl BarCacheManager {
     }
     /// 获取指定 key 对应的 BaseBarSeries 的共享引用
     /// 如果 series 尚未 ready 或 key 不存在，则返回空的 BaseBarSeries（长度为0）
-    pub async fn get_series_arc(&self, key: &BarKey) -> Arc<RwLock<BaseBarSeries<DecimalNum>>> {
+    pub fn get_series_arc(&self, key: &BarKey) -> Arc<RwLock<BaseBarSeries<DecimalNum>>> {
         // 内部辅助函数：构建空 BaseBarSeries
         fn empty_series(name: &str) -> Arc<RwLock<BaseBarSeries<DecimalNum>>> {
             let series = BaseBarSeriesBuilder::<DecimalNum>::new()
