@@ -5,6 +5,7 @@ use crab_common_utils::time_utils::parse_period_to_millis;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::info;
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, mpsc};
@@ -197,5 +198,25 @@ impl TradeAggregatorPool {
             }
         }
         removed
+    }
+}
+
+// 🌟 自定义 Debug
+impl fmt::Debug for TradeAggregatorPool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // 收集 keys（只打印前几个以避免太长）
+        let keys: Vec<_> = self.aggregators.iter().take(5).map(|entry| entry.key().clone()).collect();
+
+        write!(
+            f,
+            "TradeAggregatorPool {{ total_aggregators: {}, keys: {:?}{} }}",
+            self.aggregators.len(),
+            keys,
+            if self.aggregators.len() > keys.len() {
+                ", ..."
+            } else {
+                ""
+            }
+        )
     }
 }

@@ -221,7 +221,7 @@ impl CrabTrader {
             DefaultRiskManager::default(),
             market_stream,
             DefaultGlobalData::default(),
-            |_| StEmaData::default(),
+            |_| StEmaData::new(),
         );
 
         // Construct SystemBuild - 确保启用审计模式

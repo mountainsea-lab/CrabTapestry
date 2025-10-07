@@ -5,7 +5,7 @@ use std::time::Duration;
 
 pub async fn start_strategy_flow() {
     // 1️⃣ 获取交易器 (后续可扩展实时交易、监控等)
-    let trader = global::get_crab_trader();
+    let _trader = global::get_crab_trader();
 
     // 2️⃣ 获取策略配置管理器 读取 subscriptions（clone 内部数据避免 move）
     let strategy_config = global::get_strategy_config().get();
