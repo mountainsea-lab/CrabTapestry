@@ -29,6 +29,7 @@ futures = { workspace = true }
 crossbeam = { workspace = true }
 futures-util = { workspace = true }
 async-trait = "0.1.89"
+parking_lot = { workspace = true }
 
 # Error
 anyhow = { workspace = true}

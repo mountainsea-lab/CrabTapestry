@@ -89,21 +89,29 @@ where
                 if let Some((_instrument, exchange_id, symbol)) =
                     self.lookup_instrument(event.instrument.clone().into())
                 {
-                    let ev = PublicTradeEvent {
+                    let pub_tv = PublicTradeEvent {
                         exchange: exchange_id.to_string(),
                         symbol,
                         trade: trade.clone(),
                         timestamp: event.time_exchange.timestamp_millis(),
                         time_period: M1.to_millis() as u64,
                     };
-                    info!("Trade Event: {:?}", ev);
+                    // info!("Trade Event: {:?}", pub_tv);
+                    // 1. 聚合生成bar
+                    let aggregator_pool = self.aggregators.clone();
+                    let latest_bars = tokio::runtime::Handle::current()
+                        .block_on(aggregator_pool.aggregate_trade(&pub_tv, &[M1.to_millis()]));
+                    // 2. add bar
+                    if !latest_bars.is_empty() {
+                        // 3️⃣ 获取 BarCacheManager
+                        let series_cache_manager = global::get_bar_cache_manager();
+                        for latest_bar in latest_bars {
+                            let _ = series_cache_manager.append_bar(&latest_bar.0, latest_bar.1);
+                        }
+                    }
                 } else {
                     warn!("Instrument lookup failed for {:?}", event.instrument);
                 }
-                // todo
-                // 1. 聚合生成K线
-                // 2. k线转换为bar
-                // 3. add bar
             }
 
             DataKind::OrderBookL1(_l1) => {
@@ -114,66 +122,6 @@ where
         }
     }
 }
-
-// impl<InstrumentKey> Processor<&MarketEvent<InstrumentKey, DataKind>> for StEmaData
-// where
-//     InstrumentKey: Clone + std::fmt::Display + Into<InstrumentIndex> + std::fmt::Debug, // 关键：支持转换为 InstrumentIndex
-// {
-//     type Audit = ();
-//
-//     fn process(&mut self, event: &MarketEvent<InstrumentKey, DataKind>) -> Self::Audit {
-//         let strategy_config = global::get_strategy_config().get();
-//         let instruments_config = strategy_config.system_config.instruments.clone();
-//
-//         // 构建索引
-//         let indexed = IndexedInstruments::new(instruments_config);
-//
-//         match &event.kind {
-//             DataKind::Trade(trade) => {
-//                 // 1️⃣ 获取 instrument 索引
-//                 let instrument_index: InstrumentIndex = event.instrument.clone().into();
-//
-//                 // 2️⃣ 通过索引反查完整 Instrument 信息
-//                 match indexed.find_instrument(instrument_index) {
-//                     Ok(instrument) => {
-//                         // 3️⃣ 获取 exchange / base / quote
-//                         let exchange_id = indexed.find_exchange(instrument.exchange.key).unwrap();
-//                         let base = indexed.find_asset(instrument.underlying.base).unwrap();
-//                         let quote = indexed.find_asset(instrument.underlying.quote).unwrap();
-//                         info!(
-//                             "Trade @ {:?} | {:?}/{:?} ({:?})",
-//                             exchange_id, base.asset, quote.asset, instrument.kind
-//                         );
-//
-//                         // ✅ 构建更完整的 trade 事件
-//                         let ev = PublicTradeEvent {
-//                             exchange: exchange_id.to_string(),
-//                             symbol: format!(
-//                                 "{}{}",
-//                                 base.asset.name_exchange.name().to_uppercase(),
-//                                 quote.asset.name_exchange.name().to_uppercase(),
-//                             ),
-//                             trade: trade.clone(),
-//                             timestamp: event.time_exchange.timestamp_millis(),
-//                             time_period: 60,
-//                         };
-//
-//                         info!("Trade Event: {:?}", ev);
-//                     }
-//                     Err(err) => {
-//                         warn!("Instrument lookup failed for {:?}: {:?}", event.instrument, err);
-//                     }
-//                 }
-//             }
-//
-//             DataKind::OrderBookL1(_l1) => {
-//                 // 可在此同样反查资产信息
-//             }
-//
-//             _ => {}
-//         }
-//     }
-// }
 
 impl<ExchangeKey, AssetKey, InstrumentKey> Processor<&AccountEvent<ExchangeKey, AssetKey, InstrumentKey>>
     for StEmaData

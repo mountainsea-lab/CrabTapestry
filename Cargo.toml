@@ -41,6 +41,7 @@ futures = "0.3.31"
 once_cell = "1.21.3"
 async-trait = "0.1.86"
 async-stream = "0.3.6"
+parking_lot = "0.12.4"
 
 # Barter Ecosystem
 barter-integration = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }

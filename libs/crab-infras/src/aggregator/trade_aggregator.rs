@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::info;
 use rust_decimal::prelude::FromPrimitive;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::{Duration, Instant};
 use ta4r::bar::base_bar::BaseBar;
 use ta4r::num::decimal_num::DecimalNum;
@@ -192,12 +192,12 @@ impl TradeAggregatorPool {
     pub async fn aggregate_trade(
         &self,
         event: &PublicTradeEvent,
-        periods: &[u64], // 毫秒单位
+        periods: &[i64], // 毫秒单位
     ) -> Vec<(BarKey, BaseBar<DecimalNum>)> {
         let mut results = Vec::with_capacity(periods.len());
 
         for &period in periods {
-            let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period);
+            let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period as u64);
             let mut guard = aggregator.write().await;
             guard.last_update = Instant::now();
 
@@ -215,12 +215,11 @@ impl TradeAggregatorPool {
                 }
             }
         }
-
         results
     }
 
     /// trade_candle -> BaseBar 转换
-    fn candle_to_basebar(candle: &TradeCandle, period: u64) -> BaseBar<DecimalNum> {
+    fn candle_to_basebar(candle: &TradeCandle, period: i64) -> BaseBar<DecimalNum> {
         let open = DecimalNum::from_f64(candle.open.value()).unwrap_or(DecimalNum::new(0));
         let high = DecimalNum::from_f64(candle.high.value()).unwrap_or(DecimalNum::new(0));
         let low = DecimalNum::from_f64(candle.low.value()).unwrap_or(DecimalNum::new(0));
@@ -229,7 +228,7 @@ impl TradeAggregatorPool {
         let amount = DecimalNum::from_f64(candle.close.value() * candle.volume.value()).unwrap_or(DecimalNum::new(0));
 
         BaseBar::<DecimalNum> {
-            time_period: time::Duration::milliseconds(period as i64),
+            time_period: time::Duration::milliseconds(period),
             begin_time: milliseconds_to_offsetdatetime(candle.time_range.open_time),
             end_time: milliseconds_to_offsetdatetime(candle.time_range.close_time),
             open_price: Some(open),

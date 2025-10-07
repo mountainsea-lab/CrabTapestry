@@ -635,6 +635,7 @@ dependencies = [
  "futures",
  "futures-util",
  "ms-tracing",
+ "parking_lot",
  "reqwest",
  "rust_decimal",
  "serde",

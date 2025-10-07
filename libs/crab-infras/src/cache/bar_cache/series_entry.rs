@@ -1,10 +1,11 @@
+use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use ta4r::bar::base_bar_series::BaseBarSeries;
 use ta4r::bar::base_bar_series_builder::BaseBarSeriesBuilder;
 use ta4r::bar::types::BarSeriesBuilder;
 use ta4r::num::decimal_num::DecimalNum;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::Notify;
 
 pub const STATE_UNINIT: u8 = 0;
 pub const STATE_LOADING: u8 = 1;

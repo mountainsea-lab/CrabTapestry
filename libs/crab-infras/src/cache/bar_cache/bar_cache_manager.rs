@@ -4,6 +4,7 @@ use crate::external::crab_hmds::DefaultHmdsExchange;
 use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_vec_to_basebars};
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::error;
+use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -12,7 +13,6 @@ use ta4r::bar::base_bar_series::BaseBarSeries;
 use ta4r::bar::base_bar_series_builder::BaseBarSeriesBuilder;
 use ta4r::bar::types::{BarSeries, BarSeriesBuilder};
 use ta4r::num::decimal_num::DecimalNum;
-use tokio::sync::RwLock;
 use tokio::time::timeout;
 
 #[derive(Clone)]
@@ -104,7 +104,7 @@ impl BarCacheManager {
 
             // 写入 entry.series（替换内容）
             {
-                let mut w = entry.series.write().await;
+                let mut w = entry.series.write();
                 *w = new_series;
             }
 
@@ -160,10 +160,10 @@ impl BarCacheManager {
     }
 
     /// 将新 bar 追加到 series（实时更新）
-    pub async fn append_bar(&self, key: &BarKey, bar: BaseBar<DecimalNum>) -> Result<(), String> {
+    pub fn append_bar(&self, key: &BarKey, bar: BaseBar<DecimalNum>) -> Result<(), String> {
         if let Some(entry_ref) = self.caches.get(key) {
             let entry = entry_ref.clone();
-            let mut w = entry.series.write().await;
+            let mut w = entry.series.write();
             w.add_bar(bar);
             Ok(())
         } else {
@@ -196,11 +196,11 @@ impl BarCacheManager {
 
     /// 读取最近 n 根 bar（异步）
     /// 如果 series 尚未 ready 或 key 不存在，则返回空 Vec
-    pub async fn get_last_n_bars(&self, key: &BarKey, n: usize) -> Vec<BaseBar<DecimalNum>> {
+    pub fn get_last_n_bars(&self, key: &BarKey, n: usize) -> Vec<BaseBar<DecimalNum>> {
         if let Some(entry_ref) = self.caches.get(key) {
             let entry = entry_ref.clone();
             if entry.is_ready() {
-                let r = entry.series.read().await;
+                let r = entry.series.read();
                 let len = r.get_bar_count();
                 let start = len.saturating_sub(n);
                 (start..len).filter_map(|i| r.get_bar(i).cloned()).collect::<Vec<_>>()
