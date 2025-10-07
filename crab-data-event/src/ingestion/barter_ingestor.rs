@@ -1,9 +1,9 @@
 use crate::ingestion::Ingestor;
-use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
 use barter_data::streams::Streams;
 use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
+use barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use crab_infras::aggregator::types::PublicTradeEvent;
 use crab_infras::config::sub_config::Subscription;
 use crossbeam::channel::Sender;

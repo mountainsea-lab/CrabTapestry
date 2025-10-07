@@ -203,11 +203,11 @@ impl CrabTrader {
     /// 构建交易系统（启用审计模式）
     pub async fn build_system() -> Result<System<DefaultEngine, EngineEvent>, BarterError> {
         let strategy_config = global::get_strategy_config().get();
-        let instruments = strategy_config.system_config.instruments.clone();
+        let instrument_config = Arc::new(strategy_config.system_config.instruments.clone());
         let executions = strategy_config.system_config.executions.clone();
 
         // Construct IndexedInstruments
-        let instruments = IndexedInstruments::new(instruments);
+        let instruments = IndexedInstruments::new((*instrument_config).clone());
 
         // Initialise MarketData Stream
         let market_stream = init_indexed_multi_exchange_market_stream(&instruments, &[SubKind::PublicTrades]).await?;
@@ -221,7 +221,7 @@ impl CrabTrader {
             DefaultRiskManager::default(),
             market_stream,
             DefaultGlobalData::default(),
-            |_| StEmaData::new(),
+            |_| StEmaData::new((*instrument_config).clone()),
         );
 
         // Construct SystemBuild - 确保启用审计模式

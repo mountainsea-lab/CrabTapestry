@@ -1,11 +1,11 @@
 use crate::ingestor::realtime::SubscriberStatus;
 use crate::ingestor::realtime::subscriber::RealtimeSubscriber;
 use anyhow::Result;
-use barter_data::barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use barter_data::exchange::binance::futures::BinanceFuturesUsd;
 use barter_data::streams::Streams;
 use barter_data::streams::reconnect::stream::ReconnectingStream;
 use barter_data::subscription::trade::PublicTrades;
+use barter_instrument::instrument::market_data::kind::MarketDataInstrumentKind;
 use crab_infras::aggregator::types::PublicTradeEvent;
 use futures_util::StreamExt;
 use ms_tracing::tracing_utils::internal::{info, warn};
@@ -174,7 +174,7 @@ impl RealtimeSubscriber for BinanceSubscriber {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    use log::debug;
+    use ms_tracing::tracing_utils::internal::debug;
     use std::sync::Arc;
     use tokio::time::{Duration, sleep};
 

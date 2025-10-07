@@ -42,8 +42,12 @@ once_cell = "1.21.3"
 async-trait = "0.1.86"
 async-stream = "0.3.6"
 
-# barter-data
-barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-data" }
+# Barter Ecosystem
+barter-integration = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-instrument = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-data = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter-execution = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
+barter = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "crab-barter" }
 
 # tracing
 ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}

@@ -12,8 +12,9 @@ crab-types =  { path = "../crab-types" }
 reqwest ={workspace = true}
 
 # barter-data
+barter-instrument = { workspace = true }
 barter-data = { workspace = true }
-barter-integration = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-integration" }
+barter-integration = { workspace = true }
 
 # ta4r
 ta4r = { git = "https://github.com/mountainsea-lab/ta4r.git", branch = "main" }

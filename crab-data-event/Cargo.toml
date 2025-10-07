@@ -17,8 +17,9 @@ futures = {workspace = true }
 once_cell = {workspace = true }
 async-stream =  {workspace = true }
 
-# barter-data
-barter-data = { git = "https://github.com/ztNozdormu/barter-rs.git", branch = "dev-local", package = "barter-data" }
+# barter
+barter-instrument = { workspace = true }
+barter-data = { workspace = true }
 
 # tracing
 ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
