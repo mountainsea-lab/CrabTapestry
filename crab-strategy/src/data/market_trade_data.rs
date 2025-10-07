@@ -99,8 +99,7 @@ where
                     // info!("Trade Event: {:?}", pub_tv);
                     // 1. 聚合生成bar
                     let aggregator_pool = self.aggregators.clone();
-                    let latest_bars = tokio::runtime::Handle::current()
-                        .block_on(aggregator_pool.aggregate_trade(&pub_tv, &[M1.to_millis()]));
+                    let latest_bars = aggregator_pool.aggregate_trade(&pub_tv, &[M1.to_millis()]);
                     // 2. add bar
                     if !latest_bars.is_empty() {
                         // 3️⃣ 获取 BarCacheManager

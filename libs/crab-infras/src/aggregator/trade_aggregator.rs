@@ -7,13 +7,14 @@ use crab_types::time_frame::TimeFrame;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::info;
+use parking_lot::RwLock;
 use rust_decimal::prelude::FromPrimitive;
 use std::fmt;
-use std::sync::{Arc, RwLock as StdRwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ta4r::bar::base_bar::BaseBar;
 use ta4r::num::decimal_num::DecimalNum;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{Mutex, mpsc};
 use tokio::task;
 use trade_aggregation::{
     Aggregator, AlignedTimeRule, CandleComponent, GenericAggregator, MillisecondPeriod, TimestampResolution, Trade,
@@ -81,7 +82,7 @@ impl TradeAggregatorPool {
 
                 // 异步读取聚合器
                 for entry in self.aggregators.iter() {
-                    let guard = entry.value().read().await; // tokio::RwLock 异步锁
+                    let guard = entry.value().read(); // tokio::RwLock 异步锁
                     if now.duration_since(guard.last_update) > stale_duration {
                         to_remove_keys.push(entry.key().clone());
                     }
@@ -162,7 +163,7 @@ impl TradeAggregatorPool {
                                 pool.get_or_create_aggregator(&event.exchange, &event.symbol, period_sec as u64);
 
                             // 异步写锁
-                            let mut guard = aggregator.write().await;
+                            let mut guard = aggregator.write();
                             guard.last_update = Instant::now();
 
                             let trade: Trade = (&event).into();
@@ -175,7 +176,7 @@ impl TradeAggregatorPool {
 
                                     let item =
                                         S::Item::from_trade_candle(&exchange, &symbol, period, timestamp, trade_candle);
-                                    let _ = tx.send(item).await;
+                                    let _ = tx.send(item);
                                 }
                                 guard.candle_count += 1;
                             }
@@ -189,7 +190,7 @@ impl TradeAggregatorPool {
     }
 
     /// 聚合单笔交易，并返回生成的 TradeCandle 转换后的 BaseBar
-    pub async fn aggregate_trade(
+    pub fn aggregate_trade(
         &self,
         event: &PublicTradeEvent,
         periods: &[i64], // 毫秒单位
@@ -198,7 +199,7 @@ impl TradeAggregatorPool {
 
         for &period in periods {
             let aggregator = self.get_or_create_aggregator(&event.exchange, &event.symbol, period as u64);
-            let mut guard = aggregator.write().await;
+            let mut guard = aggregator.write();
             guard.last_update = Instant::now();
 
             // 转换为 trade_aggregation::Trade
