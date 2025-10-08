@@ -1,4 +1,4 @@
-use crate::cache::bar_cache::bar_key::BarKey;
+use crab_types::bar_cache::bar_key::BarKey;
 use dashmap::DashMap;
 use serde::Deserialize;
 use std::sync::Arc;

@@ -1,8 +1,8 @@
 use crate::aggregator::types::{PublicTradeEvent, TradeCandle};
 use crate::aggregator::{AggregatorOutput, OutputSink};
-use crate::cache::bar_cache::bar_key::BarKey;
 use crate::config::sub_config::Subscription;
 use crab_common_utils::time_utils::{milliseconds_to_offsetdatetime, parse_period_to_millis};
+use crab_types::bar_cache::bar_key::BarKey;
 use crab_types::time_frame::TimeFrame;
 use crossbeam::channel::Receiver;
 use dashmap::DashMap;

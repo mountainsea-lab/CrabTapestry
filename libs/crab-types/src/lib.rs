@@ -1,3 +1,4 @@
+pub mod bar_cache;
 pub mod crab_time;
 pub mod time_frame;
 

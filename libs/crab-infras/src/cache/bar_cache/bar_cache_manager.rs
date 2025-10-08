@@ -1,7 +1,7 @@
-use crate::cache::bar_cache::bar_key::BarKey;
 use crate::cache::bar_cache::series_entry::{STATE_LOADING, STATE_READY, STATE_UNINIT, SeriesEntry};
 use crate::external::crab_hmds::DefaultHmdsExchange;
 use crate::external::crab_hmds::meta::{OhlcvRecord, ohlcv_vec_to_basebars};
+use crab_types::bar_cache::bar_key::BarKey;
 use dashmap::DashMap;
 use ms_tracing::tracing_utils::internal::{error, info};
 use parking_lot::RwLock;

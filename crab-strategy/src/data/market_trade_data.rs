@@ -11,15 +11,12 @@ use barter_instrument::Keyed;
 use barter_instrument::asset::AssetIndex;
 use barter_instrument::exchange::{ExchangeId, ExchangeIndex};
 use barter_instrument::index::IndexedInstruments;
-use barter_instrument::instrument::market_data::MarketDataInstrument;
 use barter_instrument::instrument::{Instrument, InstrumentIndex};
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
 use crab_infras::aggregator::types::PublicTradeEvent;
 use crab_types::time_frame::TimeFrame::M1;
-use derive_more::Constructor;
-use ms_tracing::tracing_utils::internal::{info, warn};
+use ms_tracing::tracing_utils::internal::warn;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Basic [`InstrumentDataState`] implementation that tracks the [`OrderBookL1`] and last traded
