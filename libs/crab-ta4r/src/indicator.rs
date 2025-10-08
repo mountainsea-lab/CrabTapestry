@@ -1,12 +1,12 @@
 pub mod registry;
 
-use crate::types::IndicatorMeta;
+use crate::meta::indicator_meta::IndicatorMeta;
 use std::sync::Arc;
 use ta4r::bar::builder::types::BarSeriesRef;
 use ta4r::bar::types::BarSeries;
-use ta4r::indicators::Indicator;
 use ta4r::indicators::types::IndicatorError;
 use ta4r::num::TrNum;
+
 /// 顶层指标 trait —— 面向策略和可视化封装 ta4r::Indicator
 pub trait CrabIndicator: Send + Sync {
     type Num: TrNum + 'static;
@@ -33,11 +33,7 @@ pub trait CrabIndicator: Send + Sync {
     }
 
     /// 返回底层 ta4r 指标引用（可选）
-    fn as_ta4r(
-        &self,
-    ) -> Option<Arc<dyn Indicator<Num = Self::Num, Output = Self::Output, Series = Self::Series> + Send + Sync>> {
-        None
-    }
+    fn as_ta4r(&self) -> Option<Arc<Self>>;
 
     /// 批量导出（用于可视化）
     fn values(&self) -> Vec<(usize, Self::Output)> {

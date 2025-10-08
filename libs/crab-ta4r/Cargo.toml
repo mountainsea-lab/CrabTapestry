@@ -4,21 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Async
-tokio = { workspace = true }
-parking_lot = { workspace = true }
-
 # CrabTapestry Ecosystem
 crab-types =  { path = "../crab-types" }
 
+# Async
+parking_lot = { workspace = true }
+
 # Ta4r
 ta4r = { workspace = true } # 指向基础 ta4r 库（指标底层）
+
 # Data Struct
 serde = { workspace = true }
-dashmap =  { workspace = true }
 
 # Time
 chrono = { workspace = true }
-
-# Log
-ms-tracing = { workspace = true }

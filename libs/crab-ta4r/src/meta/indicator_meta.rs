@@ -1,17 +1,18 @@
-use crate::indicator::{CrabIndicator, CrabIndicatorAny};
-use crate::meta::CrabIndicatorAny;
+use crate::indicator::CrabIndicatorAny;
 use crate::meta::param::{ParamSpec, ParamValue};
 use crate::meta::view::VisualizationConfig;
 use crate::types::IndicatorCategory;
-use serde::{Deserialize, Serialize};
+use crab_types::bar_cache::bar_key::BarKey;
 use std::collections::HashMap;
+use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use ta4r::bar::builder::types::BarSeriesRef;
 use ta4r::bar::types::BarSeries;
 use ta4r::num::TrNum;
 
 /// 构建指标实例的上下文
-pub struct IndicatorInitContext<N: TrNum, S: BarSeries<N>> {
+pub struct IndicatorInitContext<N: TrNum + 'static, S: BarSeries<N>> {
     /// 指标绑定的数据序列
     pub series: BarSeriesRef<S>,
 
@@ -19,26 +20,45 @@ pub struct IndicatorInitContext<N: TrNum, S: BarSeries<N>> {
     pub params: HashMap<String, ParamValue>,
 
     /// 可选运行上下文信息
-    pub exchange: Option<String>,
-    pub symbol: Option<String>,
-    pub period: Option<String>,
+    pub binding: Option<BarKey>,
+
+    /// 每个指标实例在运行时的唯一 key （如策略实例维度） BarKey+具体指标名称
+    pub id: String,
 
     /// 可选附加信息（如策略 id、数据版本等）
     pub metadata: HashMap<String, String>,
+    pub _marker: PhantomData<N>,
 }
 
 // --------------------------- 指标元信息 ---------------------------
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct IndicatorMeta {
     pub name: String,
     pub display_name: String,
     pub description: Option<String>,
-    pub category: String,
+    pub category: IndicatorCategory,
     pub params: HashMap<String, ParamSpec>,
+    pub visualization: VisualizationConfig,
     pub factory: Arc<dyn Fn(Box<dyn std::any::Any>) -> Arc<dyn CrabIndicatorAny> + Send + Sync>,
     pub unstable_bars: usize,
     pub version: Option<String>,
     pub author: Option<String>,
+}
+
+impl fmt::Debug for IndicatorMeta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IndicatorMeta")
+            .field("name", &self.name)
+            .field("display_name", &self.display_name)
+            .field("description", &self.description)
+            .field("category", &self.category)
+            .field("params", &self.params)
+            .field("visualization", &self.visualization)
+            .field("unstable_bars", &self.unstable_bars)
+            .field("version", &self.version)
+            .field("author", &self.author)
+            .finish_non_exhaustive() // 👈 表示略去 factory
+    }
 }
 //
 // // Factory 示例对接

@@ -685,12 +685,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crab-types",
- "dashmap",
- "ms-tracing",
  "parking_lot",
  "serde",
  "ta4r",
- "tokio",
 ]
 
 [[package]]
