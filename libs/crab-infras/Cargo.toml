@@ -17,7 +17,7 @@ barter-data = { workspace = true }
 barter-integration = { workspace = true }
 
 # ta4r
-ta4r = { git = "https://github.com/mountainsea-lab/ta4r.git", branch = "main" }
+ta4r = { workspace = true }
 
 # redis
 bb8 = "0.9.0"

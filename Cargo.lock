@@ -680,6 +680,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crab-ta4r"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "parking_lot",
+ "serde",
+ "ta4r",
+]
+
+[[package]]
 name = "crab-types"
 version = "0.1.0"
 dependencies = [
