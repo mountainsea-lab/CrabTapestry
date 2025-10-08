@@ -46,3 +46,9 @@ pub trait CrabIndicator: Send + Sync {
         (0..len).filter_map(|i| self.get_value(i).ok().map(|v| (i, v))).collect()
     }
 }
+
+// --------------------------- 类型擦除 trait ---------------------------
+pub trait CrabIndicatorAny: Send + Sync {
+    fn name(&self) -> &str;
+    fn get_value_as_f64(&self, index: usize) -> f64;
+}
