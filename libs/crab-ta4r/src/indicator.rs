@@ -46,5 +46,7 @@ pub trait CrabIndicator: Send + Sync {
 // --------------------------- 类型擦除 trait ---------------------------
 pub trait CrabIndicatorAny: Send + Sync {
     fn name(&self) -> &str;
+    fn meta(&self) -> &IndicatorMeta;
     fn get_value_as_f64(&self, index: usize) -> f64;
+    fn values(&self) -> Vec<(usize, f64)>;
 }
