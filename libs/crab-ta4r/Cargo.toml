@@ -1,0 +1,10 @@
+[package]
+name = "crab-ta4r"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+ta4r = { workspace = true } # 指向基础 ta4r 库（指标底层）
