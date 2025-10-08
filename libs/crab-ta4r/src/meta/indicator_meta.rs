@@ -30,6 +30,25 @@ pub struct IndicatorInitContext<N: TrNum + 'static, S: BarSeries<N>> {
     pub _marker: PhantomData<N>,
 }
 
+/// 类型擦除版本 —— 用于动态指标构建工厂
+#[derive(Clone)]
+pub struct IndicatorInitContextAny {
+    /// 可选的通用 series 引用（类型擦除）
+    pub series: Option<Arc<dyn std::any::Any + Send + Sync>>,
+
+    /// 构造参数
+    pub params: HashMap<String, ParamValue>,
+
+    /// 所属 BarKey
+    pub binding: Option<BarKey>,
+
+    /// 每个实例唯一标识
+    pub id: String,
+
+    /// 附加元数据
+    pub metadata: HashMap<String, String>,
+}
+
 // --------------------------- 指标元信息 ---------------------------
 #[derive(Clone)]
 pub struct IndicatorMeta {
@@ -39,7 +58,7 @@ pub struct IndicatorMeta {
     pub category: IndicatorCategory,
     pub params: HashMap<String, ParamSpec>,
     pub visualization: VisualizationConfig,
-    pub factory: Arc<dyn Fn(Box<dyn std::any::Any>) -> Arc<dyn CrabIndicatorAny> + Send + Sync>,
+    pub factory: Arc<dyn Fn(IndicatorInitContextAny) -> Arc<dyn CrabIndicatorAny> + Send + Sync>,
     pub unstable_bars: usize,
     pub version: Option<String>,
     pub author: Option<String>,
