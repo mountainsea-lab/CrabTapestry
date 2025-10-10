@@ -15,9 +15,6 @@ pub struct CrabRegistry {
 
     /// 规则元信息注册表
     pub rules: Arc<RwLock<HashMap<String, RuleMeta>>>,
-
-    /// 策略元信息注册表
-    pub strategies: Arc<RwLock<HashMap<String, StrategyMeta>>>,
 }
 
 impl CrabRegistry {
@@ -30,10 +27,6 @@ impl CrabRegistry {
         self.rules.write().insert(meta.name.clone(), meta);
     }
 
-    pub fn register_strategy(&self, meta: StrategyMeta) {
-        self.strategies.write().insert(meta.name.clone(), meta);
-    }
-
     // -------------------- 查询接口 --------------------
     pub fn list_indicators(&self) -> Vec<IndicatorMeta> {
         self.indicators.read().values().cloned().collect()
@@ -43,10 +36,6 @@ impl CrabRegistry {
         self.rules.read().values().cloned().collect()
     }
 
-    pub fn list_strategies(&self) -> Vec<StrategyMeta> {
-        self.strategies.read().values().cloned().collect()
-    }
-
     // -------------------- 按名称查询 --------------------
     pub fn get_indicator(&self, name: &str) -> Option<IndicatorMeta> {
         self.indicators.read().get(name).cloned()
@@ -54,9 +43,5 @@ impl CrabRegistry {
 
     pub fn get_rule(&self, name: &str) -> Option<RuleMeta> {
         self.rules.read().get(name).cloned()
-    }
-
-    pub fn get_strategy(&self, name: &str) -> Option<StrategyMeta> {
-        self.strategies.read().get(name).cloned()
     }
 }

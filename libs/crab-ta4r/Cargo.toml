@@ -18,3 +18,4 @@ serde = { workspace = true }
 
 # Time
 chrono = { workspace = true }
+num-traits = { workspace = true }

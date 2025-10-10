@@ -11,7 +11,7 @@ use ta4r::bar::builder::types::BarSeriesRef;
 use ta4r::bar::types::BarSeries;
 use ta4r::num::TrNum;
 
-/// 构建指标实例的上下文
+// ====================== 上下文：构建指标时的输入环境 ======================
 pub struct IndicatorInitContext<N: TrNum + 'static, S: BarSeries<N>> {
     /// 指标绑定的数据序列
     pub series: BarSeriesRef<S>,
@@ -49,18 +49,41 @@ pub struct IndicatorInitContextAny {
     pub metadata: HashMap<String, String>,
 }
 
-// --------------------------- 指标元信息 ---------------------------
+// ====================== 元信息层：指标定义与工厂 ======================
+
+/// 指标元信息结构 ——
+/// 用于描述指标的属性、可视化配置及动态构建方式。
 #[derive(Clone)]
 pub struct IndicatorMeta {
+    /// 内部名称（如 "sma"）
     pub name: String,
+
+    /// 显示名称（如 "Simple Moving Average"）
     pub display_name: String,
+
+    /// 描述信息
     pub description: Option<String>,
+
+    /// 分类（趋势类、震荡类等）
     pub category: IndicatorCategory,
+
+    /// 参数规范（如 "period" -> int 14）
     pub params: HashMap<String, ParamSpec>,
+
+    /// 可视化配置（颜色、图层、线型等）
     pub visualization: VisualizationConfig,
+
+    /// 指标实例构造工厂 ——
+    ///   类型擦除闭包：由 `IndicatorInitContextAny` 构建具体实例
     pub factory: Arc<dyn Fn(IndicatorInitContextAny) -> Arc<dyn CrabIndicatorAny> + Send + Sync>,
+
+    /// 不稳定 bar 数量
     pub unstable_bars: usize,
+
+    /// 可选版本号
     pub version: Option<String>,
+
+    /// 可选作者信息
     pub author: Option<String>,
 }
 

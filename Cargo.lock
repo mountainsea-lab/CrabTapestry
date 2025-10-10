@@ -685,6 +685,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crab-types",
+ "num-traits",
  "parking_lot",
  "serde",
  "ta4r",
