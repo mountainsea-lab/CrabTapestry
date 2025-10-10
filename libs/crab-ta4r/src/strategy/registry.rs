@@ -1,4 +1,4 @@
-use crate::meta::strategy_meta::StrategyMeta;
+use crate::strategy::strategy_meta::StrategyMeta;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;

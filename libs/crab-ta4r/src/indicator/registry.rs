@@ -1,6 +1,5 @@
 use crate::meta::indicator_meta::IndicatorMeta;
 use crate::meta::rule_meta::RuleMeta;
-use crate::meta::strategy_meta::StrategyMeta;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;

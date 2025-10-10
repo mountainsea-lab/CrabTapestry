@@ -1,3 +1,5 @@
+use crate::strategy::view::StrategyVisualization;
+
 pub mod registry;
 pub mod strategy_meta;
 mod view;
