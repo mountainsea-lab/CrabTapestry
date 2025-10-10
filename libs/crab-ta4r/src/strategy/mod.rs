@@ -2,7 +2,7 @@ use crate::strategy::view::StrategyVisualization;
 
 pub mod registry;
 pub mod strategy_meta;
-mod view;
+pub mod view;
 
 /// 类型擦除后的统一策略接口
 pub trait CrabStrategyAny: Send + Sync {
