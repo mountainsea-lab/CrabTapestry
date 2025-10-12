@@ -1,3 +1,9 @@
+mod factory;
+
+use crate::any::any_indicator::IndicatorAny;
+use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
+use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use ta4r::TradingRecord;
 use ta4r::analysis::CostModel;
@@ -6,8 +12,6 @@ use ta4r::num::TrNum;
 use ta4r::rule::Rule;
 use ta4r::strategy::Strategy;
 use ta4r::strategy::base_strategy::BaseStrategy;
-
-use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
 
 // =============================================================
 // 🧩 Step 1. StrategyBundleTypes: 提供关联类型定义
@@ -44,8 +48,8 @@ pub trait StrategyBundle: StrategyBundleTypes {
         + Sync
         + 'static;
 
-    /// 返回可视化指标（例如 SMA, RSI 等线）
-    fn indicators_for_viz(&self) -> Vec<IndicatorLine>;
+    /// 返回可视化指标（Arc<dyn IndicatorAny>）
+    fn indicators_for_viz(&self) -> Vec<Arc<dyn IndicatorAny>>;
 
     /// 返回规则可视化数据（默认空实现）
     fn rules_for_viz(&self, _len: usize) -> Vec<RuleResult> {
@@ -69,6 +73,29 @@ pub trait StrategyBundle: StrategyBundleTypes {
 
     /// 策略名称
     fn name(&self) -> &'static str;
+
+    /// 可选：策略参数集合（可用于可视化 / 调试）
+    fn params(&self) -> Option<HashMap<String, String>> {
+        None
+    }
+
+    /// 可选：获取原始指标对象
+    fn raw_indicators(&self) -> Option<Vec<Arc<dyn Any>>> {
+        None
+    }
+
+    // /// 可选：获取交易记录 todo!(暂时延后)
+    // fn trading_record(&self) -> Option<Arc<dyn Any>> {
+    //     None
+    // }
+
+    /// 返回 series（必须由具体 bundle 提供）
+    fn series(&self) -> Arc<Self::Series>;
+
+    /// 返回 series 长度
+    fn series_len(&self) -> usize {
+        self.series().get_bar_count()
+    }
 }
 
 // =============================================================
@@ -79,6 +106,18 @@ pub trait CrabStrategyAny: Send + Sync {
     fn should_enter(&self, index: usize) -> bool;
     fn should_exit(&self, index: usize) -> bool;
     fn get_visualization_data(&self) -> Option<StrategyVisualization>;
+}
+
+/// 可选扩展接口
+pub trait CrabStrategyAnyEx: CrabStrategyAny {
+    fn get_strategy_params(&self) -> Option<HashMap<String, String>> {
+        None
+    }
+    fn get_raw_indicators(&self) -> Option<Vec<Arc<dyn IndicatorAny>>> {
+        None
+    }
+    // todo!(暂时延后)
+    // fn get_trading_record(&self) -> Option<Arc<dyn TradingRecordAny>>;
 }
 
 // =============================================================
@@ -101,12 +140,28 @@ where
     }
 
     fn get_visualization_data(&self) -> Option<StrategyVisualization> {
-        let indicators = self.indicators_for_viz();
-        let rules = self.rules_for_viz(indicators.first().map(|l| l.values.len()).unwrap_or(0));
+        let indicators_any = self.indicators_for_viz();
+        let indicators_line: Vec<IndicatorLine> = indicators_any
+            .iter()
+            .map(|i| {
+                let len = self.series_len();
+                let values: Vec<(usize, f64)> =
+                    (0..len).map(|idx| (idx, i.get_value(idx).unwrap_or(f64::NAN))).collect();
+                IndicatorLine {
+                    name: i.name().to_string(),
+                    color: None,
+                    values,
+                    visible: true,
+                }
+            })
+            .collect();
+
+        let rules = self.rules_for_viz(self.series_len());
+
         Some(StrategyVisualization {
             name: self.name().to_string(),
-            indicators,
-            signals: Vec::new(), // 应用层可额外注入交易信号
+            indicators: indicators_line,
+            signals: Vec::new(), // 应用层可注入交易信号
             rules,
             metrics: None,
         })
