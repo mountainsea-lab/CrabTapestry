@@ -71,7 +71,7 @@ pub trait BarSeriesWrapper: Send + Sync {
 
 // AnySeries 实现
 pub struct AnySeriesImpl {
-    inner: Arc<dyn BarSeriesWrapper>,
+    pub inner: Arc<dyn BarSeriesWrapper>,
 }
 
 impl AnySeriesImpl {
