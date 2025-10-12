@@ -100,7 +100,7 @@ pub trait StrategyBundle: StrategyBundleTypes {
 // =============================================================
 // 🎭 Step 3. 类型擦除 Trait: CrabStrategyAny
 // =============================================================
-pub trait CrabStrategyAny: Send + Sync {
+pub trait CrabStrategyAny {
     fn name(&self) -> &str;
     fn should_enter(&self, index: usize) -> bool;
     fn should_exit(&self, index: usize) -> bool;
@@ -124,7 +124,7 @@ pub trait CrabStrategyAnyEx: CrabStrategyAny {
 // =============================================================
 impl<T> CrabStrategyAny for T
 where
-    T: StrategyBundle + Send + Sync + 'static,
+    T: StrategyBundle + 'static,
 {
     fn name(&self) -> &str {
         self.name()
