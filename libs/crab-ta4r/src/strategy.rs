@@ -1,4 +1,5 @@
 mod factory;
+mod registry;
 
 use crate::any::any_indicator::IndicatorAny;
 use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
