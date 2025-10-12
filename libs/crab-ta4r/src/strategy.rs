@@ -3,6 +3,7 @@ mod registry;
 
 use crate::any::any_indicator::IndicatorAny;
 use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
+use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -91,11 +92,12 @@ pub trait StrategyBundle: StrategyBundleTypes {
     // }
 
     /// 返回 series（必须由具体 bundle 提供）
-    fn series(&self) -> Arc<Self::Series>;
+    fn series(&self) -> Arc<RwLock<Self::Series>>;
 
     /// 返回 series 长度
     fn series_len(&self) -> usize {
-        self.series().get_bar_count()
+        // 获取 RwLock 中的数据并调用 get_bar_count 方法
+        self.series().read().get_bar_count()
     }
 }
 
