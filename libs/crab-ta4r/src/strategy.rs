@@ -20,10 +20,10 @@ use ta4r::strategy::base_strategy::BaseStrategy;
 // =============================================================
 pub trait StrategyBundleTypes {
     type Num: TrNum + 'static;
-    type CostBuy: CostModel<Self::Num> + Clone + Send + Sync + 'static;
-    type CostSell: CostModel<Self::Num> + Clone + Send + Sync + 'static;
-    type Series: BarSeries<Self::Num> + Send + Sync + 'static;
-    type TradingRec: TradingRecord<Self::Num, Self::CostBuy, Self::CostSell, Self::Series> + Send + Sync + 'static;
+    type CostBuy: CostModel<Self::Num> + Clone + 'static;
+    type CostSell: CostModel<Self::Num> + Clone + 'static;
+    type Series: BarSeries<Self::Num> + 'static;
+    type TradingRec: TradingRecord<Self::Num, Self::CostBuy, Self::CostSell, Self::Series> + 'static;
 }
 
 // =============================================================
@@ -36,9 +36,7 @@ pub trait StrategyBundle: StrategyBundleTypes {
             CostSell = Self::CostSell,
             Series = Self::Series,
             TradingRec = Self::TradingRec,
-        > + Send
-        + Sync
-        + 'static;
+        > + 'static;
 
     type ExitRule: Rule<
             Num = Self::Num,
@@ -46,9 +44,7 @@ pub trait StrategyBundle: StrategyBundleTypes {
             CostSell = Self::CostSell,
             Series = Self::Series,
             TradingRec = Self::TradingRec,
-        > + Send
-        + Sync
-        + 'static;
+        > + 'static;
 
     /// 返回可视化指标（Arc<dyn IndicatorAny>）
     fn indicators_for_viz(&self) -> Vec<Arc<dyn IndicatorAny>>;
