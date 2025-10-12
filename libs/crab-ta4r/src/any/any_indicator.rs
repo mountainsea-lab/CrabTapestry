@@ -5,7 +5,7 @@ use ta4r::indicators::Indicator;
 use ta4r::num::TrNum;
 
 /// 类型擦除后的指标
-pub trait IndicatorAny: Send + Sync {
+pub trait IndicatorAny {
     /// 获取指标值，返回 f64 方便可视化
     fn get_value(&self, index: usize) -> Option<f64>;
 
@@ -19,7 +19,7 @@ pub trait IndicatorAny: Send + Sync {
 // Blanket impl: 对任何具体指标实现 IndicatorAny
 impl<N, S, I> IndicatorAny for I
 where
-    I: Indicator<Num = N, Series = S> + Send + Sync + 'static,
+    I: Indicator<Num = N, Series = S> + 'static,
     N: TrNum + ToPrimitive + 'static,
     S: BarSeries<N>,
     I::Output: ToPrimitive,
