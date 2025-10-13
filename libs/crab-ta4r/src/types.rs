@@ -14,7 +14,6 @@ pub enum IndicatorCategory {
 }
 
 /// 泛型别名：把 BaseStrategy 包装成 Arc
-/// 泛型别名：把 BaseStrategy 包装成 Arc
 pub type GenericStrategy<T> = Arc<
     BaseStrategy<
         <T as StrategyBundleTypes>::Num,
