@@ -3,17 +3,17 @@ mod registry;
 
 use crate::any::any_indicator::IndicatorAny;
 use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
+use crate::types::GenericStrategy;
 use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ta4r::TradingRecord;
 use ta4r::analysis::CostModel;
 use ta4r::bar::types::BarSeries;
 use ta4r::num::TrNum;
 use ta4r::rule::Rule;
 use ta4r::strategy::Strategy;
-use ta4r::strategy::base_strategy::BaseStrategy;
+use ta4r::TradingRecord;
 
 // =============================================================
 // 🧩 Step 1. StrategyBundleTypes: 提供关联类型定义
@@ -55,19 +55,7 @@ pub trait StrategyBundle: StrategyBundleTypes {
     }
 
     /// 返回已构建好的基础策略
-    fn strategy_arc(
-        &self,
-    ) -> Arc<
-        BaseStrategy<
-            Self::Num,
-            Self::CostBuy,
-            Self::CostSell,
-            Self::Series,
-            Self::TradingRec,
-            Self::EntryRule,
-            Self::ExitRule,
-        >,
-    >;
+    fn strategy_arc(&self) -> GenericStrategy<Self>;
 
     /// 策略名称
     fn name(&self) -> &'static str;
