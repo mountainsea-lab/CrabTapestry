@@ -22,9 +22,15 @@ barter = { git = "https://github.com/mountainsea-lab/barter-rs.git", branch = "c
 # CrabTapestry Ecosystem
 crab-types =  { path = "../libs/crab-types" }
 crab-infras = { path = "../libs/crab-infras"}
+crab-ta4r = { path = "../libs/crab-ta4r"}
+
+# mountta
+mountta = { git = "ssh://git@github.com/mountainsea-lab/mountta.git", branch = "main" }
 
 # tracing
 ms-tracing ={ git = "https://github.com/mountainsea-lab/ms-tracing.git", branch = "main", version = "0.1.6"}
+
+
 
 # Time
 chrono =  { workspace = true }
@@ -33,17 +39,11 @@ chrono =  { workspace = true }
 serde_json =  { workspace = true }
 serde =  { workspace = true }
 arc-swap = "1.7.1"
-dashmap =  { workspace = true }
 
 # Data Structures
 smol_str = { workspace = true }
 rust_decimal ={ workspace = true }
 rust_decimal_macros = { workspace = true }
-derive_more = { version = "2.0.1", features = [
-    "constructor",
-    "display",
-    "from",
-] }
 
 # Error
 anyhow =  { workspace = true }

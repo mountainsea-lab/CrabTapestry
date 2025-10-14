@@ -8,12 +8,12 @@ use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use ta4r::TradingRecord;
 use ta4r::analysis::CostModel;
 use ta4r::bar::types::BarSeries;
 use ta4r::num::TrNum;
 use ta4r::rule::Rule;
 use ta4r::strategy::Strategy;
-use ta4r::TradingRecord;
 
 // =============================================================
 // 🧩 Step 1. StrategyBundleTypes: 提供关联类型定义
