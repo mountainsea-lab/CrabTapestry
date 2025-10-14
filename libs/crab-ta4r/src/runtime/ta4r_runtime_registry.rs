@@ -3,16 +3,13 @@ use crate::strategy::CrabStrategyAny;
 use chrono::{DateTime, Utc};
 use crab_types::bar_cache::bar_key::BarKey;
 use dashmap::DashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 /// ✅ Ta4rRuntimeRegistry: 运行时策略注册中心
 #[derive(Default, Clone)]
 pub struct Ta4rRuntimeRegistry {
-    /// 策略实例：BarKey -> 策略对象（线程安全、并发读写）
-    pub strategy_bundles: Arc<DashMap<BarKey, Arc<dyn CrabStrategyAny>>>,
-
-    /// 元数据表（可选）：记录注册时间、状态、描述
-    pub metadata: Arc<DashMap<BarKey, StrategyMeta>>,
+    pub strategy_bundles: Rc<DashMap<BarKey, Rc<dyn CrabStrategyAny>>>,
+    pub metadata: Rc<DashMap<BarKey, StrategyMeta>>,
 }
 
 /// 📄 策略元信息
@@ -29,7 +26,7 @@ impl Ta4rRuntimeRegistry {
     // =========================================================
 
     /// 注册策略（带可选描述）
-    pub fn register_strategy(&self, key: BarKey, strategy: Arc<dyn CrabStrategyAny>, description: Option<String>) {
+    pub fn register_strategy(&self, key: BarKey, strategy: Rc<dyn CrabStrategyAny>, description: Option<String>) {
         self.strategy_bundles.insert(key.clone(), strategy);
         self.metadata.insert(
             key,
@@ -42,12 +39,12 @@ impl Ta4rRuntimeRegistry {
     }
 
     /// 获取策略实例
-    pub fn get_strategy(&self, key: &BarKey) -> Option<Arc<dyn CrabStrategyAny>> {
+    pub fn get_strategy(&self, key: &BarKey) -> Option<Rc<dyn CrabStrategyAny>> {
         self.strategy_bundles.get(key).map(|v| v.clone())
     }
 
     /// 移除策略（返回移除的实例）
-    pub fn remove_strategy(&self, key: &BarKey) -> Option<Arc<dyn CrabStrategyAny>> {
+    pub fn remove_strategy(&self, key: &BarKey) -> Option<Rc<dyn CrabStrategyAny>> {
         self.metadata.remove(key);
         self.strategy_bundles.remove(key).map(|(_, v)| v)
     }

@@ -2,10 +2,12 @@ use crate::config::strategy_config::StrategyConfigManager;
 use crate::trader::crab_trader::CrabTrader;
 use anyhow::{Result, anyhow};
 use crab_infras::cache::bar_cache::bar_cache_manager::BarCacheManager;
+use crab_ta4r::runtime::ta4r_runtime_registry::Ta4rRuntimeRegistry;
 use ms_tracing::tracing_utils::internal::{error, info};
 use once_cell::sync::OnceCell;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
-use crab_ta4r::runtime::ta4r_runtime_registry::Ta4rRuntimeRegistry;
 
 /// 全局策略配置单例
 static STRATEGY_CONFIG: OnceCell<Arc<StrategyConfigManager>> = OnceCell::new();
@@ -17,7 +19,9 @@ static CRAB_TRADER: OnceCell<Arc<CrabTrader>> = OnceCell::new();
 static BAR_CACHE_MANAGER: OnceCell<Arc<BarCacheManager>> = OnceCell::new();
 
 /// 全局 Ta4rRuntimeRegistry 指标规则注册中心 单例
-static TA4R_RUNTIME_REGISTRY: OnceCell<Arc<Ta4rRuntimeRegistry>> = OnceCell::new();
+thread_local! {
+    static TA4R_RUNTIME_REGISTRY: RefCell<Rc<Ta4rRuntimeRegistry>> = RefCell::new(Rc::new(Ta4rRuntimeRegistry::default()));
+}
 
 /// 初始化全局服务（配置 + 交易器）
 pub async fn init_global_services() -> Result<()> {
@@ -53,11 +57,8 @@ pub async fn init_global_services() -> Result<()> {
     info!("✅ BarCacheManager 全局实例初始化成功。");
 
     // 4️⃣ 初始化 Ta4rRuntimeRegistry
-    let registry = Arc::new(Ta4rRuntimeRegistry::default());
-    if TA4R_RUNTIME_REGISTRY.set(registry.clone()).is_err() {
-        error!("⚠️ TA4R_RUNTIME_REGISTRY 已初始化，重复调用被忽略。");
-        return Err(anyhow!("TA4R_RUNTIME_REGISTRY already initialized"));
-    }
+    init_ta4r_registry(Ta4rRuntimeRegistry::default());
+
     info!("✅ Ta4rRuntimeRegistry 全局实例初始化成功。");
 
     Ok(())
@@ -87,10 +88,14 @@ pub fn get_bar_cache_manager() -> Arc<BarCacheManager> {
         .clone()
 }
 
-/// 获取全局 Ta4rRuntimeRegistry 实例
-pub fn get_ta4r_runtime_registry() -> Arc<Ta4rRuntimeRegistry> {
-    TA4R_RUNTIME_REGISTRY
-        .get()
-        .expect("❌ TA4R_RUNTIME_REGISTRY not initialized — 请先调用 init_global_services()")
-        .clone()
+// 获取全局 Ta4rRuntimeRegistry 实例
+pub fn get_ta4r_registry() -> Rc<Ta4rRuntimeRegistry> {
+    TA4R_RUNTIME_REGISTRY.with(|reg| reg.borrow().clone())
+}
+
+// 初始化全局注册中心（可选）
+pub fn init_ta4r_registry(registry: Ta4rRuntimeRegistry) {
+    TA4R_RUNTIME_REGISTRY.with(|reg| {
+        *reg.borrow_mut() = Rc::new(registry);
+    });
 }
