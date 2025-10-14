@@ -656,7 +656,7 @@ dependencies = [
  "barter-integration",
  "chrono",
  "crab-infras",
- "crab-ta4r 0.1.0",
+ "crab-ta4r",
  "crab-types 0.1.0",
  "mountta",
  "ms-tracing",
@@ -686,20 +686,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crab-ta4r"
-version = "0.1.0"
-source = "git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r#34a9dcf8b0500bfe7558be5c51b275a7e0871ee8"
-dependencies = [
- "chrono",
- "crab-types 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r)",
- "dashmap",
- "num-traits",
- "parking_lot",
- "serde",
- "ta4r",
-]
-
-[[package]]
 name = "crab-types"
 version = "0.1.0"
 dependencies = [
@@ -710,7 +696,7 @@ dependencies = [
 [[package]]
 name = "crab-types"
 version = "0.1.0"
-source = "git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r#34a9dcf8b0500bfe7558be5c51b275a7e0871ee8"
+source = "git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r#f2bb959712b172fb283056fdf11bd7a455a64a3d"
 dependencies = [
  "chrono",
  "serde",
@@ -1848,10 +1834,10 @@ dependencies = [
 [[package]]
 name = "mountta"
 version = "0.1.0"
-source = "git+ssh://git@github.com/mountainsea-lab/mountta.git?branch=main#43be2023addd816c35402a3bb11a088b44b58dfa"
+source = "git+ssh://git@github.com/mountainsea-lab/mountta.git?branch=main#787518045fcc2c56e6d80c441d6a9f8d9c34fab1"
 dependencies = [
  "anyhow",
- "crab-ta4r 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r)",
+ "crab-ta4r",
  "crab-types 0.1.0 (git+https://github.com/mountainsea-lab/CrabTapestry.git?branch=feature%2Fcrab-ta4r)",
  "log",
  "num-traits",

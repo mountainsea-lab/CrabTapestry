@@ -52,6 +52,7 @@ impl AlgoStrategy for EmaStrategy {
             // Don't open if there is no instrument market price available
             let price = state.data.price()?;
             // todo!()    strategy.execute_entry()
+            // global::get_ta4r_registry().get_strategy()
             // Generate Market order to buy the minimum allowed quantity
             Some(OrderRequestOpen {
                 key: OrderKey {

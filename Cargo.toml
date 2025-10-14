@@ -25,6 +25,10 @@ default-members = [
 
 resolver = "2"
 
+# Git URL 拉取的 crab-ta4r 替换为本地 path
+[patch."https://github.com/mountainsea-lab/CrabTapestry.git"]
+crab-ta4r = { path = "libs/crab-ta4r" }  # 所有 crate 都会重定向到本地 path
+
 [workspace.dependencies]
 # Web
 warp = { version = "0.4", features = ["server"] }

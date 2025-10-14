@@ -68,6 +68,21 @@ impl StEmaData {
         );
         Some((instrument, exchange, symbol))
     }
+
+    /// 注册策略到全局 Ta4rRuntimeRegistry
+    fn register_sma_cross_strategy(&self, exchange: &str, symbol: &str, _period_ms: u64, sma_period: usize) {
+        // 1️⃣ 构造 BarKey
+        let bar_key = BarKey::new(exchange, symbol, &M1.to_str());
+
+        // 2️⃣ 获取对应的 BarSeries
+        let series = global::get_bar_cache_manager().get_series_arc(&bar_key);
+
+        // 3️⃣ 构建策略 Bundle
+        let bundle: Rc<dyn CrabStrategyAny> = Rc::new(SmaCrossBundle::new(sma_period, series));
+
+        // 4️⃣ 注册到全局 Registry
+        global::get_ta4r_registry().register_strategy(bar_key, bundle, None);
+    }
 }
 
 impl InstrumentDataState for StEmaData {
@@ -110,12 +125,9 @@ where
                             let _ = series_cache_manager.ensure_and_append_sync(&latest_bar.0, 300, latest_bar.1);
                         }
                     }
-                    // 3. init Ta4rRuntimeRegistry
-                    let series_cache_manager = global::get_bar_cache_manager();
-                    let bar_key = BarKey::new(&pub_tv.exchange, &pub_tv.symbol, M1.to_str());
-                    let series = series_cache_manager.get_series_arc(&bar_key);
-                    let bundle: Rc<dyn CrabStrategyAny> = Rc::new(SmaCrossBundle::new(12, series));
-                    global::get_ta4r_registry().register_strategy(bar_key, bundle, None);
+
+                    // 3. 注册策略到全局 Registry
+                    self.register_sma_cross_strategy(&pub_tv.exchange, &pub_tv.symbol, M1.to_millis() as u64, 12);
                 } else {
                     warn!("Instrument lookup failed for {:?}", event.instrument);
                 }

@@ -25,17 +25,28 @@ impl Ta4rRuntimeRegistry {
     // ✅ 基础注册 / 查询
     // =========================================================
 
-    /// 注册策略（带可选描述）
+    /// 注册策略（带可选描述），同一 BarKey 只注册一次
     pub fn register_strategy(&self, key: BarKey, strategy: Rc<dyn CrabStrategyAny>, description: Option<String>) {
-        self.strategy_bundles.insert(key.clone(), strategy);
-        self.metadata.insert(
-            key,
-            StrategyMeta {
-                name: "Unknown".to_string(),
-                registered_at: Utc::now(),
-                description,
-            },
-        );
+        use dashmap::mapref::entry::Entry;
+
+        // 1️⃣ 尝试插入策略，如果已经存在就忽略
+        match self.strategy_bundles.entry(key.clone()) {
+            Entry::Occupied(_) => {
+                // 已经注册，直接返回
+                return;
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(strategy.clone());
+            }
+        }
+
+        // 2️⃣ 插入元数据
+        let meta = StrategyMeta {
+            name: strategy.name().to_string(), // 使用策略自身名称
+            registered_at: Utc::now(),
+            description,
+        };
+        self.metadata.insert(key, meta);
     }
 
     /// 获取策略实例
