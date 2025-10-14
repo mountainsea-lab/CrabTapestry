@@ -5,6 +5,7 @@ use crab_infras::cache::bar_cache::bar_cache_manager::BarCacheManager;
 use ms_tracing::tracing_utils::internal::{error, info};
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
+use crab_ta4r::runtime::ta4r_runtime_registry::Ta4rRuntimeRegistry;
 
 /// 全局策略配置单例
 static STRATEGY_CONFIG: OnceCell<Arc<StrategyConfigManager>> = OnceCell::new();
@@ -12,8 +13,11 @@ static STRATEGY_CONFIG: OnceCell<Arc<StrategyConfigManager>> = OnceCell::new();
 /// 全局交易器单例
 static CRAB_TRADER: OnceCell<Arc<CrabTrader>> = OnceCell::new();
 
-/// 全局 BarCacheManager 单例
+/// 全局 BarCacheManager BaseBarSeries缓存管理器 单例
 static BAR_CACHE_MANAGER: OnceCell<Arc<BarCacheManager>> = OnceCell::new();
+
+/// 全局 Ta4rRuntimeRegistry 指标规则注册中心 单例
+static TA4R_RUNTIME_REGISTRY: OnceCell<Arc<Ta4rRuntimeRegistry>> = OnceCell::new();
 
 /// 初始化全局服务（配置 + 交易器）
 pub async fn init_global_services() -> Result<()> {
@@ -48,6 +52,14 @@ pub async fn init_global_services() -> Result<()> {
     }
     info!("✅ BarCacheManager 全局实例初始化成功。");
 
+    // 4️⃣ 初始化 Ta4rRuntimeRegistry
+    let registry = Arc::new(Ta4rRuntimeRegistry::default());
+    if TA4R_RUNTIME_REGISTRY.set(registry.clone()).is_err() {
+        error!("⚠️ TA4R_RUNTIME_REGISTRY 已初始化，重复调用被忽略。");
+        return Err(anyhow!("TA4R_RUNTIME_REGISTRY already initialized"));
+    }
+    info!("✅ Ta4rRuntimeRegistry 全局实例初始化成功。");
+
     Ok(())
 }
 
@@ -72,5 +84,13 @@ pub fn get_bar_cache_manager() -> Arc<BarCacheManager> {
     BAR_CACHE_MANAGER
         .get()
         .expect("❌ BAR_CACHE_MANAGER not initialized — 请先调用 init_global_services()")
+        .clone()
+}
+
+/// 获取全局 Ta4rRuntimeRegistry 实例
+pub fn get_ta4r_runtime_registry() -> Arc<Ta4rRuntimeRegistry> {
+    TA4R_RUNTIME_REGISTRY
+        .get()
+        .expect("❌ TA4R_RUNTIME_REGISTRY not initialized — 请先调用 init_global_services()")
         .clone()
 }
