@@ -2,18 +2,18 @@ mod factory;
 mod registry;
 
 use crate::any::any_indicator::IndicatorAny;
-use crate::meta::view::{IndicatorLine, RuleResult, StrategyVisualization};
+use crate::meta::view::{RuleResult, StrategyVisualization};
 use crate::types::GenericStrategy;
 use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ta4r::TradingRecord;
 use ta4r::analysis::CostModel;
 use ta4r::bar::types::BarSeries;
 use ta4r::num::TrNum;
 use ta4r::rule::Rule;
 use ta4r::strategy::Strategy;
+use ta4r::TradingRecord;
 
 // =============================================================
 // 🧩 Step 1. StrategyBundleTypes: 提供关联类型定义
@@ -106,51 +106,51 @@ pub trait CrabStrategyAnyEx: CrabStrategyAny {
     // todo!(暂时延后)
     // fn get_trading_record(&self) -> Option<Arc<dyn TradingRecordAny>>;
 }
-
-// =============================================================
-// ⚙️ Step 4. Blanket impl: 自动为任意 StrategyBundle 实现 CrabStrategyAny
-// =============================================================
-impl<T> CrabStrategyAny for T
-where
-    T: StrategyBundle + 'static,
-{
-    fn name(&self) -> &str {
-        self.name()
-    }
-
-    fn should_enter(&self, index: usize) -> bool {
-        self.strategy_arc().as_ref().should_enter(index, None)
-    }
-
-    fn should_exit(&self, index: usize) -> bool {
-        self.strategy_arc().as_ref().should_exit(index, None)
-    }
-
-    fn get_visualization_data(&self) -> Option<StrategyVisualization> {
-        let indicators_any = self.indicators_for_viz();
-        let indicators_line: Vec<IndicatorLine> = indicators_any
-            .iter()
-            .map(|i| {
-                let len = self.series_len();
-                let values: Vec<(usize, f64)> =
-                    (0..len).map(|idx| (idx, i.get_value(idx).unwrap_or(f64::NAN))).collect();
-                IndicatorLine {
-                    name: i.name().to_string(),
-                    color: None,
-                    values,
-                    visible: true,
-                }
-            })
-            .collect();
-
-        let rules = self.rules_for_viz(self.series_len());
-
-        Some(StrategyVisualization {
-            name: self.name().to_string(),
-            indicators: indicators_line,
-            signals: Vec::new(), // 应用层可注入交易信号
-            rules,
-            metrics: None,
-        })
-    }
-}
+//
+// // =============================================================
+// // ⚙️ Step 4. Blanket impl: 自动为任意 StrategyBundle 实现 CrabStrategyAny 不能跨crate使用
+// // =============================================================
+// impl<T> CrabStrategyAny for T
+// where
+//     T: StrategyBundle + 'static,
+// {
+//     fn name(&self) -> &str {
+//         self.name()
+//     }
+//
+//     fn should_enter(&self, index: usize) -> bool {
+//         self.strategy_arc().as_ref().should_enter(index, None)
+//     }
+//
+//     fn should_exit(&self, index: usize) -> bool {
+//         self.strategy_arc().as_ref().should_exit(index, None)
+//     }
+//
+//     fn get_visualization_data(&self) -> Option<StrategyVisualization> {
+//         let indicators_any = self.indicators_for_viz();
+//         let indicators_line: Vec<IndicatorLine> = indicators_any
+//             .iter()
+//             .map(|i| {
+//                 let len = self.series_len();
+//                 let values: Vec<(usize, f64)> =
+//                     (0..len).map(|idx| (idx, i.get_value(idx).unwrap_or(f64::NAN))).collect();
+//                 IndicatorLine {
+//                     name: i.name().to_string(),
+//                     color: None,
+//                     values,
+//                     visible: true,
+//                 }
+//             })
+//             .collect();
+//
+//         let rules = self.rules_for_viz(self.series_len());
+//
+//         Some(StrategyVisualization {
+//             name: self.name().to_string(),
+//             indicators: indicators_line,
+//             signals: Vec::new(), // 应用层可注入交易信号
+//             rules,
+//             metrics: None,
+//         })
+//     }
+// }

@@ -14,9 +14,13 @@ use barter_instrument::index::IndexedInstruments;
 use barter_instrument::instrument::{Instrument, InstrumentIndex};
 use crab_infras::aggregator::trade_aggregator::TradeAggregatorPool;
 use crab_infras::aggregator::types::PublicTradeEvent;
+use crab_ta4r::strategy::CrabStrategyAny;
+use crab_types::bar_cache::bar_key::BarKey;
 use crab_types::time_frame::TimeFrame::M1;
+use mountta::strategys::sma_cross_strategy::SmaCrossBundle;
 use ms_tracing::tracing_utils::internal::warn;
 use rust_decimal::Decimal;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// Basic [`InstrumentDataState`] implementation that tracks the [`OrderBookL1`] and last traded
@@ -106,6 +110,12 @@ where
                             let _ = series_cache_manager.ensure_and_append_sync(&latest_bar.0, 300, latest_bar.1);
                         }
                     }
+                    // 3. init Ta4rRuntimeRegistry
+                    let series_cache_manager = global::get_bar_cache_manager();
+                    let bar_key = BarKey::new(&pub_tv.exchange, &pub_tv.symbol, M1.to_str());
+                    let series = series_cache_manager.get_series_arc(&bar_key);
+                    let bundle: Rc<dyn CrabStrategyAny> = Rc::new(SmaCrossBundle::new(12, series));
+                    global::get_ta4r_registry().register_strategy(bar_key, bundle, None);
                 } else {
                     warn!("Instrument lookup failed for {:?}", event.instrument);
                 }
