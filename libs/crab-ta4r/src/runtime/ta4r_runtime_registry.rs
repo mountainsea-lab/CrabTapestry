@@ -5,7 +5,7 @@ use crab_types::bar_cache::bar_key::BarKey;
 use dashmap::DashMap;
 use std::sync::Arc;
 
-/// ✅ MounttaRuntimeRegistry: 运行时策略注册中心
+/// ✅ Ta4rRuntimeRegistry: 运行时策略注册中心
 #[derive(Default, Clone)]
 pub struct Ta4rRuntimeRegistry {
     /// 策略实例：BarKey -> 策略对象（线程安全、并发读写）
