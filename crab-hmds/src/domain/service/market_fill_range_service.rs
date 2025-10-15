@@ -15,7 +15,8 @@ use chrono::Utc;
 use crab_infras::config::sub_config::Subscription;
 use diesel::associations::HasTable;
 use diesel::dsl::{max, min};
-use diesel::{BoolExpressionMethods, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
+use diesel::sql_types::BigInt;
+use diesel::{BoolExpressionMethods, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
 use ms_tracing::tracing_utils::internal::{debug, info};
 use std::collections::HashMap;
 
@@ -156,8 +157,36 @@ fn query_period_time_ranges_optimized(
     Ok(map)
 }
 
+// Function to delete the unsynced records based on the query result
+pub async fn delete_unsynced_latest_ranges(conn: &mut MysqlConnection) -> AppResult<()> {
+    use crate::schema::hmds_market_fill_range::dsl::hmds_market_fill_range;
+    use crate::schema::hmds_market_fill_range::id;
+
+    // Step 1: Query the latest ranges
+    let latest_ranges = query_latest_ranges(conn).await?;
+
+    // Step 2: Filter out the unsynced ranges
+    let unsynced_ids: Vec<u64> = latest_ranges
+        .into_iter()
+        .filter(|range| range.status != 2) // Only keep unsynced records
+        .map(|range| range.id) // Extract the IDs
+        .collect();
+
+    // Step 3: Batch delete the unsynced records
+    if !unsynced_ids.is_empty() {
+        diesel::delete(hmds_market_fill_range.filter(id.eq_any(unsynced_ids))) // Corrected reference to `id`
+            .execute(conn)
+            .map_err(|e| AppError::DatabaseError(e.into()))?;
+    }
+
+    Ok(())
+}
+
 /// 统一生成历史回溯 + 实时增量区间，并插入数据库
 pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> AppResult<()> {
+    // 先移除残缺的最新区间
+    delete_unsynced_latest_ranges(conn).await?;
+
     let max_count = 500;
     let app_config = get_app_config();
     let lookback_days = app_config.app.lookback_days;
