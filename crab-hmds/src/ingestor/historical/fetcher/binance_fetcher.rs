@@ -1,3 +1,4 @@
+use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
 use crate::ingestor::historical::HistoricalFetcher;
 use crate::ingestor::types::{FetchContext, OHLCVRecord, TickRecord};
 use anyhow::Result;
@@ -11,12 +12,14 @@ use std::sync::Arc;
 /// Binance historical data fetcher
 pub struct BinanceFetcher {
     client: Arc<DefaultBinanceExchange<'static>>,
+    dedup_ohlcv: Arc<Deduplicator<OHLCVRecord>>,
 }
 
 impl BinanceFetcher {
     pub fn new() -> Self {
         Self {
             client: Arc::new(DefaultBinanceExchange::default()),
+            dedup_ohlcv: Arc::new(Deduplicator::<OHLCVRecord>::new(60_000)),
         }
     }
 
@@ -63,7 +66,13 @@ impl BinanceFetcher {
             .collect();
         // info!("ctx range_id-{}, limit_size {}, start_time {},end_time {}, records size {}",
         //     ctx.range_id.unwrap(), ctx.limit, ctx.range.start, ctx.range.end, records.len());
-        Ok(records)
+        // 如果数据量小于 limit，则返回空 Vec，控制上游逻辑
+        let dedup_records = self.dedup_ohlcv.deduplicate(records, DedupMode::Historical);
+        if ctx.limit == 500 && dedup_records.len() < ctx.limit as usize {
+            return Ok(Vec::new());
+        }
+
+        Ok(dedup_records)
     }
 
     /// 内部方法：拉取单个分页 Tick
@@ -79,12 +88,10 @@ impl HistoricalFetcher for BinanceFetcher {
     /// 流式拉取 OHLCV
     /// stream pull ohlcv from exchange
     async fn stream_ohlcv(&self, ctx: Arc<FetchContext>) -> Result<BoxStream<'static, Result<OHLCVRecord>>> {
-        let client = Arc::clone(&self.client);
-
         let s = stream::once({
             let ctx = ctx.clone();
             async move {
-                let fetcher = BinanceFetcher { client };
+                let fetcher = BinanceFetcher::new();
                 fetcher.fetch_ohlcv_page(&ctx, ctx.range.start, ctx.range.end).await
             }
         })
@@ -102,14 +109,12 @@ impl HistoricalFetcher for BinanceFetcher {
         let chunk_ms = 60 * 60 * 1000; // 每小时为例
         let ranges = ctx.range.split(chunk_ms);
         let ctx_clone = ctx.clone();
-        let client = Arc::clone(&self.client);
 
         let s = stream::iter(ranges.into_iter())
             .then(move |range| {
                 let ctx = ctx_clone.clone();
-                let client = Arc::clone(&client);
                 async move {
-                    let fetcher = BinanceFetcher { client };
+                    let fetcher = BinanceFetcher::new();
                     fetcher.fetch_ticks_page(&ctx, range.start, range.end).await
                 }
             })

@@ -15,8 +15,7 @@ use chrono::Utc;
 use crab_infras::config::sub_config::Subscription;
 use diesel::associations::HasTable;
 use diesel::dsl::{max, min};
-use diesel::sql_types::BigInt;
-use diesel::{BoolExpressionMethods, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl};
 use ms_tracing::tracing_utils::internal::{debug, info};
 use std::collections::HashMap;
 
@@ -71,9 +70,12 @@ pub async fn query_list_by_filter(
 
     let mut query = hmds_market_fill_range.into_boxed();
 
-    // 默认条件：未同步或失败的区间，重试次数 < 5
-    query = query.filter(status.eq(0).or(status.eq(3))).filter(retry_count.lt(5));
-
+    if let Some(ref stat) = filter.status {
+        query = query.filter(status.eq_any(stat));
+    }
+    if let Some(ref count) = filter.retry_count {
+        query = query.filter(retry_count.lt(count));
+    }
     // 可选筛选条件
     if let Some(ref ex) = filter.exchange {
         query = query.filter(exchange.eq(ex));
@@ -89,15 +91,16 @@ pub async fn query_list_by_filter(
     }
 
     // 排序：按 start_time 最近的记录
-    let sort_order = filter.sort_by_start_time.as_ref().unwrap_or(&SortOrder::Desc);
+    let sort_order = filter.sort_order.as_ref().unwrap_or(&SortOrder::Desc);
     query = match sort_order {
         SortOrder::Asc => query.order(start_time.asc()),
         SortOrder::Desc => query.order(start_time.desc()),
     };
 
-    // 限制查询条数
-    let limit_count = filter.limit.unwrap_or(50);
-    query = query.limit(limit_count as i64);
+    // 查询条数限制
+    if let Some(limit_count) = filter.limit {
+        query = query.limit(limit_count as i64);
+    }
 
     // 执行查询
     let result = query
@@ -184,8 +187,8 @@ pub async fn delete_unsynced_latest_ranges(conn: &mut MysqlConnection) -> AppRes
 
 /// 统一生成历史回溯 + 实时增量区间，并插入数据库
 pub async fn generate_and_insert_fill_ranges(conn: &mut MysqlConnection) -> AppResult<()> {
-    // 先移除残缺的最新区间
-    delete_unsynced_latest_ranges(conn).await?;
+    // // 先移除残缺的最新区间
+    // delete_unsynced_latest_ranges(conn).await?;
 
     let max_count = 500;
     let app_config = get_app_config();

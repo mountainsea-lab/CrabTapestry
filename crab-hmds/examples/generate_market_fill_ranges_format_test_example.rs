@@ -1,5 +1,5 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
-use crab_hmds::domain::model::market_fill_range::HmdsMarketFillRange;
+use crab_hmds::domain::model::market_fill_range::{FillRangeFilter, HmdsMarketFillRange};
 use crab_hmds::domain::service::query_fill_range_list;
 use crab_hmds::global::init_global_services;
 use crab_types::time_frame::TimeFrame;
@@ -21,8 +21,9 @@ async fn main() -> anyhow::Result<()> {
     // 初始化全局变量
     setup().await;
 
+    let range_filter = FillRangeFilter::new(None, None, None, None);
     // 查询填充区间列表
-    let fill_range_list = query_fill_range_list().await?;
+    let fill_range_list = query_fill_range_list(range_filter).await?;
 
     if fill_range_list.is_empty() {
         println!("没有找到填充区间数据");

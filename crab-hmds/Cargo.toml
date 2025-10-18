@@ -54,6 +54,7 @@ dotenvy = { workspace = true }
 toml = "0.5.11"
 hex = "0.4.3"
 tempfile = "3.23.0"
+log = "0.4.28"
 
 [dev-dependencies]
 criterion = "0.7.0"

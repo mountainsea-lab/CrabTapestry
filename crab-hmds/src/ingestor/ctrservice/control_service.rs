@@ -79,7 +79,7 @@ where
         let dedup_tick = Arc::new(Deduplicator::<TickRecord>::new(60_000));
         let dedup_trade = Arc::new(Deduplicator::<TradeRecord>::new(60_000));
 
-        let buffer_ohlcv = DataBuffer::new(Some(1000), 10000, CapacityStrategy::DropOldest);
+        let buffer_ohlcv = DataBuffer::new(Some(100000), 1000, CapacityStrategy::DropOldest);
         let buffer_tick = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
         let buffer_trade = DataBuffer::new(Some(10_000), 50, CapacityStrategy::Block);
 
@@ -378,7 +378,7 @@ where
                                 // 直接入 buffer，无去重，批量推送
                                 match batch {
                                     HistoricalBatchEnum::OHLCV(hb) => {
-                                        if !hb.data.is_empty() {
+                                        if hb.data.len() > 0 {
                                             let mut rang_status = if hb.data.len() as i32 >= hb.limit {
                                                 FillRangeStatus::Synced
                                             } else {
@@ -435,7 +435,7 @@ where
     pub fn spawn_buffer_consumer_task(self: Arc<Self>) -> JoinHandle<()> {
         tokio::spawn(async move {
             info!("Buffer Consumer task started");
-            const FLUSH_INTERVAL: Duration = Duration::from_millis(500); // 时间窗口
+            const FLUSH_INTERVAL: Duration = Duration::from_millis(5000); // 时间窗口
 
             let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
 
@@ -443,8 +443,7 @@ where
                 tokio::select! {
                     // 关闭信号
                     _ = self.shutdown.notified() => {
-                        info!("Buffer Consumer shutdown triggered");
-
+                        info!("Buffer Consumer shutdown triggered;buffer_ohlcv len {}",self.buffer_ohlcv.len());
                         // flush 剩余数据
                         let batch = self.buffer_ohlcv.pop_batch().await;
                         if !batch.is_empty() {
@@ -458,6 +457,7 @@ where
                     // 时间窗口 flush
                     _ = ticker.tick() => {
                         let batch = self.buffer_ohlcv.pop_batch().await;
+                        info!("Buffer Consumer;buffer_ohlcv len {}",self.buffer_ohlcv.len());
                         if !batch.is_empty() {
                             if let Err(e) = self.handle_batch(batch).await {
                                 error!("Timed flush failed: {}", e);
@@ -478,34 +478,11 @@ where
         }
 
         let start = Instant::now();
-
-        // 去重，deduplicate 需要改成支持 Arc<T>
-        let deduped = self.dedup_ohlcv.deduplicate_arc(batch, DedupMode::Unified);
-        if deduped.is_empty() {
-            return Ok(());
-        }
-
-        // 打印每条记录用于验证
-        // for record in &deduped {
-        //     let r = record.as_ref();
-        //     info!(
-        //         "OHLCVRecord - symbol: {}, period: {}, timestamp: {}, open: {}, high: {}, low: {}, close: {}, volume: {}",
-        //         r.symbol,
-        //         r.period,
-        //         r.timestamp(),
-        //         r.open,
-        //         r.high,
-        //         r.low,
-        //         r.close,
-        //         r.volume
-        //     );
-        // }
-
         let duration = start.elapsed();
-        self.buffer_ohlcv.metrics.record_batch(deduped.len(), duration, deduped.len());
+        self.buffer_ohlcv.metrics.record_batch(batch.len(), duration, batch.len());
 
         // ✅ 落库
-        Self::save_with_log(&deduped).await?;
+        Self::save_with_log(&batch).await?;
 
         Ok(())
     }

@@ -147,18 +147,53 @@ impl FillRangeStatus {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FillRangeFilter {
     pub exchange: Option<String>,
     pub symbol: Option<String>,
     pub period: Option<String>,
-    pub status: Option<i8>,
+    pub status: Option<Vec<i8>>, // 0: 未同步, 1: 同步中, 2: 已同步, 3: 同步失败
     pub retry_count: Option<i32>,
     pub last_try_time: Option<NaiveDateTime>, // 可选更新最后一次尝试同步时间
-    pub sort_by_start_time: Option<SortOrder>,
+    pub sort_order: Option<SortOrder>,
     pub limit: Option<i32>, // 限制查询条数 默认100条(每次处理100个归档区间)--暂时改为50个区间
     pub page: Option<usize>,
     pub page_size: Option<usize>,
+}
+
+impl Default for FillRangeFilter {
+    fn default() -> Self {
+        Self {
+            exchange: None,
+            symbol: None,
+            period: None,
+            status: Some(vec![0, 1, 3]),
+            retry_count: None,
+            last_try_time: None,
+            sort_order: None,
+            limit: Some(50),
+            page: None,
+            page_size: None,
+        }
+    }
+}
+
+impl FillRangeFilter {
+    /// 构造一个带主要参数的实例
+    pub fn new(
+        status: Option<Vec<i8>>,
+        retry_count: Option<i32>,
+        limit: Option<i32>,
+        sort_order: Option<SortOrder>,
+    ) -> Self {
+        Self {
+            status: status,
+            retry_count: retry_count,
+            limit: limit,
+            sort_order,
+            ..Default::default()
+        }
+    }
 }
 
 // 伪装成一张表，为了获取最新插入的自动自增的ID （MySQL特有）

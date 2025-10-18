@@ -593,6 +593,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
+ "log",
  "md5",
  "ms-tracing",
  "once_cell",

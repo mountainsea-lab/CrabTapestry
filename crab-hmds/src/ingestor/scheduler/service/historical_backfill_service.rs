@@ -1,5 +1,5 @@
 use crate::domain::model::AppResult;
-use crate::domain::model::market_fill_range::{FillRangeStatus, HmdsMarketFillRange};
+use crate::domain::model::market_fill_range::{FillRangeFilter, FillRangeStatus, HmdsMarketFillRange};
 use crate::domain::service::{
     query_fill_range_list, query_latest_ranges, update_fill_range_info, update_fill_ranges_status,
 };
@@ -279,7 +279,9 @@ where
 
     /// 预生成的数据区间信息[HmdsMarketFillRange]--> 调度任务[BackfillJob]
     pub async fn backfill_historical(&self, data_type: BackfillDataType) {
-        if let Ok(range_list) = query_fill_range_list().await {
+        let range_filter = FillRangeFilter::default();
+
+        if let Ok(range_list) = query_fill_range_list(range_filter).await {
             if range_list.is_empty() {
                 debug!("Backfill range list is empty");
                 return;

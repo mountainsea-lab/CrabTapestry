@@ -8,6 +8,7 @@ use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::service::market_fill_range_service::MarketFillRangeService;
 use crate::domain::service::ohlcv_record_service::OhlcvRecordService;
 use crate::global::get_mysql_pool;
+use diesel::Connection;
 
 pub mod market_fill_range_service;
 mod ohlcv_record_service;
@@ -19,6 +20,7 @@ pub async fn save_ohlcv_records_batch(datas: &[NewHmdsOhlcvRecord]) -> Result<()
     let mut ohlcv_record_service = OhlcvRecordService { repo };
     ohlcv_record_service.insert_new_ohlcv_records_batch(datas).await
 }
+
 /// 分页查询ohlcv records数据
 pub async fn query_ohlcv_page(ohlcv_filter: OhlcvFilter) -> Result<PageResult<HmdsOhlcvRecord>, anyhow::Error> {
     let mut conn = get_mysql_pool().get()?;
@@ -55,11 +57,11 @@ pub async fn generate_and_insert_fill_ranges() -> Result<(), anyhow::Error> {
 }
 
 /// 查询区间任务集合
-pub async fn query_fill_range_list() -> Result<Vec<HmdsMarketFillRange>, anyhow::Error> {
+pub async fn query_fill_range_list(range_filter: FillRangeFilter) -> Result<Vec<HmdsMarketFillRange>, anyhow::Error> {
     let mut conn = get_mysql_pool().get()?;
     let repo = MarketFillRangeRepository::new(&mut conn);
     let mut market_fill_range_service = MarketFillRangeService { repo };
-    let range_filter = FillRangeFilter::default();
+
     let result = market_fill_range_service.query_list(range_filter).await?;
     Ok(result)
 }

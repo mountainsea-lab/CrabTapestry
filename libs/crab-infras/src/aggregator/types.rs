@@ -1,6 +1,6 @@
 use crate::aggregator::AggregatorOutput;
 use crate::cache::BaseBar;
-use barter_data::event::{DataKind, MarketEvent};
+use barter_data::event::MarketEvent;
 use barter_data::streams::reconnect::Event;
 use barter_data::subscription::trade::PublicTrade;
 use barter_instrument::Side;

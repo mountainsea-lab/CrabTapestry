@@ -49,7 +49,7 @@ impl_repository_with_filter!(
         }
 
         if let Some(ref status_val) = filter.status {
-            q = q.filter(status.eq(status_val));
+            q = q.filter(status.eq_any(status_val));
         }
 
         if let Some(ref retry_count_val) = filter.retry_count {
@@ -60,7 +60,7 @@ impl_repository_with_filter!(
             q = q.filter(last_try_time.gt(last_try_time_val));
         }
 
-        if let Some(order) = &filter.sort_by_start_time {
+        if let Some(order) = &filter.sort_order {
             q = {
                 match order {
                     SortOrder::Asc => q.order(start_time.asc()),

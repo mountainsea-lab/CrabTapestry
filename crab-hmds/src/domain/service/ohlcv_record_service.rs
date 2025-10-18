@@ -7,12 +7,11 @@ use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::impl_full_service;
 // use crate::schema::hmds_ohlcv_record::dsl::hmds_ohlcv_record;
 // use crate::schema::hmds_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
+use crate::global::get_mysql_pool;
 use anyhow::Result;
-use diesel::sql_types::*;
-use diesel::{ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{Connection, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
 use hex;
-use std::error::Error;
-use std::io::Write;
+use tokio::task;
 
 impl_full_service!(
     OhlcvRecordService,
@@ -35,7 +34,7 @@ impl<'a> OhlcvRecordService<'a> {
     }
 
     pub async fn insert_new_ohlcv_records_batch(&mut self, datas: &[NewHmdsOhlcvRecord]) -> Result<()> {
-        insert_new_ohlcv_records_batch(&mut self.repo.conn, datas, 500).await?;
+        insert_new_ohlcv_records_batch(&mut self.repo.conn, datas, 500)?;
         Ok(())
     }
 
@@ -45,114 +44,56 @@ impl<'a> OhlcvRecordService<'a> {
     }
 }
 
-/// 批量安全插入新 K 线，遇到 hash_id 已存在自动忽略
-/// 自动按 batch_size 拆分
-pub async fn insert_new_ohlcv_records_batch(
+/// 批量插入
+pub fn insert_new_ohlcv_records_batch(
     conn: &mut MysqlConnection,
-    ohlcv_records: &[NewHmdsOhlcvRecord],
-    batch_size: usize, // 每批大小，例如 500
+    records: &[NewHmdsOhlcvRecord],
+    batch_size: usize,
 ) -> Result<usize, diesel::result::Error> {
-    if ohlcv_records.is_empty() {
+    if records.is_empty() {
         return Ok(0);
     }
 
     let mut total_inserted = 0;
 
-    // 按 batch_size 拆分数据
-    for batch in ohlcv_records.chunks(batch_size) {
-        for rec in batch {
-            sql_query(
+    conn.transaction::<_, diesel::result::Error, _>(|tx_conn| {
+        for batch in records.chunks(batch_size) {
+            // 构造批量 SQL
+            let mut sql = String::from(
                 "INSERT IGNORE INTO hmds_ohlcv_record \
-                (hash_id, ts, period_start_ts, symbol, exchange, period, open, high, low, close, volume, turnover, num_trades, vwap, created_at) \
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-            )
-                .bind::<Binary, _>(rec.hash_id.clone())
-                .bind::<Bigint, _>(rec.ts)
-                .bind::<Nullable<Bigint>, _>(rec.period_start_ts)
-                .bind::<VarChar, _>(rec.symbol.clone())
-                .bind::<VarChar, _>(rec.exchange.clone())
-                .bind::<VarChar, _>(rec.period.clone())
-                .bind::<Double, _>(rec.open)
-                .bind::<Double, _>(rec.high)
-                .bind::<Double, _>(rec.low)
-                .bind::<Double, _>(rec.close)
-                .bind::<Double, _>(rec.volume)
-                .bind::<Nullable<Double>, _>(rec.turnover)
-                .bind::<Nullable<Integer>, _>(rec.num_trades.map(|v| v as i32))
-                .bind::<Nullable<Double>, _>(rec.vwap)
-                .execute(conn)?;
+                 (hash_id, ts, period_start_ts, symbol, exchange, period, open, high, low, close, volume, turnover, num_trades, vwap, created_at) VALUES ",
+            );
 
-            total_inserted += 1;
+            let mut values: Vec<String> = Vec::with_capacity(batch.len());
+            for rec in batch {
+                values.push(format!(
+                    "(X'{}', {}, {}, '{}', '{}', '{}', {}, {}, {}, {}, {}, {}, {}, {}, CURRENT_TIMESTAMP)",
+                    hex::encode(&rec.hash_id),
+                    rec.ts,
+                    rec.period_start_ts.map_or("NULL".to_string(), |v| v.to_string()),
+                    rec.symbol.replace("'", "''"),
+                    rec.exchange.replace("'", "''"),
+                    rec.period.replace("'", "''"),
+                    rec.open,
+                    rec.high,
+                    rec.low,
+                    rec.close,
+                    rec.volume,
+                    rec.turnover.map_or("NULL".to_string(), |v| v.to_string()),
+                    rec.num_trades.map_or("NULL".to_string(), |v| v.to_string()),
+                    rec.vwap.map_or("NULL".to_string(), |v| v.to_string())
+                ));
+            }
+
+            sql.push_str(&values.join(","));
+
+            let inserted = sql_query(sql).execute(tx_conn)?;
+            total_inserted += inserted;
         }
-    }
 
-    Ok(total_inserted)
+        Ok(total_inserted)
+    })
 }
-
-/// 批量安全插入 K 线，重复 hash_id 自动忽略 批量优化版本
-#[warn(unused_imports)]
-pub fn insert_new_ohlcv_records_batch_file(
-    conn: &mut MysqlConnection,
-    ohlcv_records: &[NewHmdsOhlcvRecord],
-    batch_size: usize, // 每批大小，例如 10_000
-    created_at: &str,  // 固定时间戳，例如 "2025-10-03 12:00:00"
-) -> Result<usize, Box<dyn Error>> {
-    if ohlcv_records.is_empty() {
-        return Ok(0);
-    }
-
-    let mut total_inserted = 0;
-
-    for batch in ohlcv_records.chunks(batch_size) {
-        // 1️⃣ 创建临时文件
-        let mut tmpfile = tempfile::NamedTempFile::new()?;
-
-        // 2️⃣ 写入制表符分隔的 CSV 数据
-        for rec in batch {
-            writeln!(
-                tmpfile,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                hex::encode(&rec.hash_id),
-                rec.ts,
-                rec.period_start_ts.unwrap_or(0),
-                &rec.symbol,
-                &rec.exchange,
-                &rec.period,
-                rec.open,
-                rec.high,
-                rec.low,
-                rec.close,
-                rec.volume,
-                rec.turnover.unwrap_or(0.0),
-                rec.num_trades.unwrap_or(0),
-                rec.vwap.unwrap_or(0.0),
-                created_at // 固定 created_at
-            )?;
-        }
-        tmpfile.flush()?;
-        let path = tmpfile.path().to_str().unwrap();
-
-        // 3️⃣ 构造 LOAD DATA LOCAL INFILE IGNORE SQL
-        let sql = format!(
-            r#"LOAD DATA LOCAL INFILE '{}'
-            IGNORE
-            INTO TABLE hmds_ohlcv_record
-            FIELDS TERMINATED BY '\t'
-            LINES TERMINATED BY '\n'
-            (hash_id, ts, period_start_ts, symbol, exchange, period,
-             open, high, low, close, volume, turnover, num_trades, vwap, created_at)"#,
-            path
-        );
-
-        // 4️⃣ 执行 SQL
-        sql_query(sql).execute(conn)?;
-
-        total_inserted += batch.len();
-    }
-
-    Ok(total_inserted)
-}
-
 pub async fn query_list_by_filter(
     conn: &mut MysqlConnection,
     ohlcv_filter: &OhlcvFilter,
