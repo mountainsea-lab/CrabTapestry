@@ -64,8 +64,6 @@ impl BinanceFetcher {
                 period: period.as_ref().to_string(),
             })
             .collect();
-        // info!("ctx range_id-{}, limit_size {}, start_time {},end_time {}, records size {}",
-        //     ctx.range_id.unwrap(), ctx.limit, ctx.range.start, ctx.range.end, records.len());
         // 如果数据量小于 limit，则返回空 Vec，控制上游逻辑
         let dedup_records = self.dedup_ohlcv.deduplicate(records, DedupMode::Historical);
         if ctx.limit == 500 && dedup_records.len() < ctx.limit as usize {

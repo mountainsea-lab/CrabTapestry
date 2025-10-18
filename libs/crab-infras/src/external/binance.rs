@@ -5,15 +5,20 @@ use barter_integration::error::SocketError;
 use barter_integration::protocol::http::rest::RestRequest;
 use barter_integration::protocol::http::rest::client::RestClient;
 use barter_integration::protocol::http::{BuildStrategy, HttpParser};
-use ms_tracing::tracing_utils::internal::error;
+use ms_tracing::tracing_utils::internal::{debug, error, warn};
 use reqwest::RequestBuilder;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
 mod constant;
 pub mod market;
 pub mod meta;
+
+const MAX_RETRIES: usize = 3;
+const RETRY_BASE_DELAY_MS: u64 = 500; // 初始重试延迟 0.5 秒
 
 pub struct BinanceSigner;
 impl BuildStrategy for BinanceSigner {
@@ -77,7 +82,7 @@ where
         match self.rest_client.execute(fetch_request).await {
             Ok((response, _)) => Some(response.0),
             Err(err) => {
-                error!("Failed to fetch coin data: {:?}", err);
+                error!("Failed to fetch exchange info: {:?}", err);
                 None
             }
         }
@@ -108,31 +113,58 @@ where
         S4: Into<Option<u64>>,
         S5: Into<Option<u64>>,
     {
-        let mut parameters: BTreeMap<String, String> = BTreeMap::new();
+        let mut params = BTreeMap::new();
+        params.insert("symbol".into(), symbol.into());
+        params.insert("interval".into(), interval.into());
 
-        parameters.insert("symbol".into(), symbol.into());
-        parameters.insert("interval".into(), interval.into());
-
-        // Add three optional parameters
-        if let Some(lt) = limit.into() {
-            parameters.insert("limit".into(), format!("{}", lt));
+        if let Some(v) = limit.into() {
+            params.insert("limit".into(), v.to_string());
         }
-        if let Some(st) = start_time.into() {
-            parameters.insert("startTime".into(), format!("{}", st));
+        if let Some(v) = start_time.into() {
+            params.insert("startTime".into(), v.to_string());
         }
-        if let Some(et) = end_time.into() {
-            parameters.insert("endTime".into(), format!("{}", et));
+        if let Some(v) = end_time.into() {
+            params.insert("endTime".into(), v.to_string());
         }
 
-        let fetch_klines_request = FetchKlineSummaryRequest { query_params: parameters };
-        // info!("Fetching kline summary client execute {:?}", fetch_klines_request);
-        match self.rest_client.execute(fetch_klines_request).await {
-            Ok((response, _)) => response.0,
-            Err(err) => {
-                error!("Failed to fetch coin data: {:?}", err);
-                Vec::new()
+        let request = FetchKlineSummaryRequest { query_params: params };
+
+        // 🧩 预先构造一个简单的重试延迟生成器
+        let retry_delays = (0..MAX_RETRIES).map(|i| RETRY_BASE_DELAY_MS * 2u64.pow(i as u32));
+
+        for (attempt, delay) in retry_delays.enumerate() {
+            match self.rest_client.execute(request.clone()).await {
+                Ok((response, _)) => {
+                    //     debug!(
+                    //     "Successfully fetched {} klines for attempt {}/{}",
+                    //     response.0.len(),
+                    //     attempt + 1,
+                    //     MAX_RETRIES
+                    // );
+                    return response.0;
+                }
+                Err(err) => {
+                    let err_str = format!("{:?}", err);
+                    let retriable = err_str.contains("Timeout")
+                        || err_str.contains("Connection")
+                        || err_str.contains("Socket")
+                        || err_str.contains("temporarily");
+
+                    warn!("Fetch klines attempt {}/{} failed: {:?}", attempt + 1, MAX_RETRIES, err);
+
+                    if retriable && attempt + 1 < MAX_RETRIES {
+                        warn!("Will retry after {} ms...", delay);
+                        sleep(Duration::from_millis(delay)).await;
+                        continue;
+                    } else {
+                        error!("Aborting after {} failed attempts.", attempt + 1);
+                        break;
+                    }
+                }
             }
         }
+
+        Vec::new()
     }
 }
 

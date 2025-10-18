@@ -457,7 +457,7 @@ where
                     // 时间窗口 flush
                     _ = ticker.tick() => {
                         let batch = self.buffer_ohlcv.pop_batch().await;
-                        info!("Buffer Consumer;buffer_ohlcv len {}",self.buffer_ohlcv.len());
+                        // info!("Buffer Consumer;buffer_ohlcv len {}",self.buffer_ohlcv.len());
                         if !batch.is_empty() {
                             if let Err(e) = self.handle_batch(batch).await {
                                 error!("Timed flush failed: {}", e);
