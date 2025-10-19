@@ -1,23 +1,16 @@
 use anyhow::Result;
-use chrono::{Duration, Utc};
 use crab_hmds::config::AppConfig;
-use crab_hmds::global::get_app_config;
 use crab_hmds::ingestor::dedup::Deduplicatable;
 use crab_hmds::ingestor::historical::fetcher::binance_fetcher::BinanceFetcher;
 use crab_hmds::ingestor::scheduler::back_fill_dag::back_fill_scheduler::BaseBackfillScheduler;
+use crab_hmds::ingestor::scheduler::service::InMemoryBackfillMetaStore;
 use crab_hmds::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;
-use crab_hmds::ingestor::scheduler::service::{BackfillMetaStore, InMemoryBackfillMetaStore, MarketKey};
 use crab_hmds::ingestor::scheduler::{BackfillDataType, HistoricalBatchEnum};
-use crab_hmds::{load_app_config, load_subscriptions};
-use crab_infras::config::sub_config::{Subscription, SubscriptionMap};
+use crab_infras::config::sub_config::Subscription;
 use dashmap::DashMap;
-use dotenvy::dotenv;
-use futures::future::join_all;
-use ms_tracing::tracing_utils::internal::{info, warn};
-use std::env;
+use ms_tracing::tracing_utils::internal::info;
 use std::sync::Arc;
 use tokio::sync::Notify;
-use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() -> Result<()> {
