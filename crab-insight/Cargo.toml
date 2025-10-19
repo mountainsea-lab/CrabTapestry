@@ -20,7 +20,7 @@ jsonwebtoken =  { version = "10", features = ["aws_lc_rs"] }
 lettre = "0.11.19"
 serde.workspace = true
 serde_json.workspace = true
-sqlx = { version = "0.8.6", features = ["runtime-async-std-native-tls", "mysql", "chrono", "uuid"] }
+sqlx = { version = "0.8.6", features = ["runtime-async-std-native-tls", "postgres", "chrono", "uuid"] }
 time.workspace = true
 validator = { version = "0.20.0", features = ["derive"] }
 ms-tracing.workspace = true
