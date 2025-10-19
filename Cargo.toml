@@ -9,6 +9,7 @@ members = [
     "crab-data-event" ,
     "crab-hmds",
     "crab-strategy",
+    "crab-insight",
 ]
 
 default-members = [
@@ -21,6 +22,7 @@ default-members = [
     "crab-data-event" ,
     "crab-hmds",
     "crab-strategy",
+    "crab-insight",
 ]
 
 resolver = "2"
