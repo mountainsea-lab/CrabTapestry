@@ -1037,6 +1037,7 @@ dependencies = [
  "futures",
  "futures-util",
  "ms-tracing",
+ "once_cell",
  "parking_lot",
  "reqwest",
  "rust_decimal",

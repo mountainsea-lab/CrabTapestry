@@ -67,6 +67,8 @@ sqlx = { version = "0.8", features = [
 # Cryptographic Signatures
 uuid = { version = "1.18.1", features = ["v4"] }
 
+once_cell = { workspace = true }
+
 [features]
 default = []
 mysql = ["diesel/mysql"]  # 可选 feature，只在需要 MySQL 的服务启用
