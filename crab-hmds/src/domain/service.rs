@@ -8,7 +8,6 @@ use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::service::market_fill_range_service::MarketFillRangeService;
 use crate::domain::service::ohlcv_record_service::OhlcvRecordService;
 use crate::global::get_mysql_pool;
-use diesel::Connection;
 
 pub mod market_fill_range_service;
 mod ohlcv_record_service;

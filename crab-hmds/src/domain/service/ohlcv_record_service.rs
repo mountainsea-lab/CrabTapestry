@@ -5,13 +5,9 @@ use crate::domain::repository::UpdatableRepository;
 use crate::domain::repository::ohlcv_record_repository::OhlcvRecordRepository;
 use crate::domain::repository::{FilterableRepository, InsertableRepository};
 use crate::impl_full_service;
-// use crate::schema::hmds_ohlcv_record::dsl::hmds_ohlcv_record;
-// use crate::schema::hmds_ohlcv_record::{exchange, period, period_start_ts, symbol, ts};
-use crate::global::get_mysql_pool;
 use anyhow::Result;
 use diesel::{Connection, ExpressionMethods, MysqlConnection, QueryDsl, RunQueryDsl, sql_query};
 use hex;
-use tokio::task;
 
 impl_full_service!(
     OhlcvRecordService,

@@ -5,7 +5,7 @@ use barter_integration::error::SocketError;
 use barter_integration::protocol::http::rest::RestRequest;
 use barter_integration::protocol::http::rest::client::RestClient;
 use barter_integration::protocol::http::{BuildStrategy, HttpParser};
-use ms_tracing::tracing_utils::internal::{debug, error, warn};
+use ms_tracing::tracing_utils::internal::{error, warn};
 use reqwest::RequestBuilder;
 use std::collections::BTreeMap;
 use std::fmt::Debug;

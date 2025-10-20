@@ -3,7 +3,7 @@ use crate::domain::model::ohlcv_record::to_new_records_with_hash;
 use crate::domain::service::{save_ohlcv_records_batch, update_fill_ranges_status};
 use crate::ingestor::buffer::data_buffer::{CapacityStrategy, DataBuffer};
 use crate::ingestor::ctrservice::{ControlMsg, InternalMsg, ServiceParams, ServiceState};
-use crate::ingestor::dedup::deduplicator::{DedupMode, Deduplicator};
+use crate::ingestor::dedup::deduplicator::Deduplicator;
 use crate::ingestor::historical::HistoricalFetcherExt;
 use crate::ingestor::realtime::market_data_pipe_line::MarketDataPipeline;
 use crate::ingestor::scheduler::service::historical_backfill_service::HistoricalBackfillService;

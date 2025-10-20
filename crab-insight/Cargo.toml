@@ -24,3 +24,5 @@ sqlx = { version = "0.8.6", features = ["runtime-async-std-native-tls", "postgre
 time.workspace = true
 validator = { version = "0.20.0", features = ["derive"] }
 ms-tracing.workspace = true
+
+crab-infras = { path = "../libs/crab-infras", features = ["postgres"]}

@@ -1062,6 +1062,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
+ "crab-infras",
  "dotenv",
  "jsonwebtoken",
  "lettre",
