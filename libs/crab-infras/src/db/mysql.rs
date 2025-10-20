@@ -1,5 +1,3 @@
-#![cfg(feature = "mysql")]
-
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use dotenvy::dotenv;

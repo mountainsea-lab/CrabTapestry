@@ -55,10 +55,19 @@ dotenvy = {workspace = true}
 
 # db
 diesel = { version = "2.2.10", features = ["r2d2", "chrono", "extras"], optional = true }
-
+sqlx = { version = "0.8", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "json",
+    "chrono",
+    "uuid",
+    "migrate"
+] }
 # Cryptographic Signatures
 uuid = { version = "1.18.1", features = ["v4"] }
 
 [features]
 default = []
 mysql = ["diesel/mysql"]  # 可选 feature，只在需要 MySQL 的服务启用
+postgres = ["sqlx/postgres"]  # 可选 feature，只在需要 PostgreSQL 的服务启用
