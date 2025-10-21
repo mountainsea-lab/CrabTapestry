@@ -9,6 +9,8 @@ pub mod mysql;
 
 #[cfg(feature = "postgres")]
 pub mod postgres;
+pub mod repository;
+
 /// 通用数据库抽象层
 #[derive(Clone)]
 pub struct Database {
