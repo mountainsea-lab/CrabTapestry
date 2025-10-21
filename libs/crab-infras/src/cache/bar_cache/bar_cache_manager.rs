@@ -405,7 +405,7 @@ mod tests {
         manager.wait_ready(&key, Duration::from_secs(10)).await.unwrap();
 
         // 获取最近 3 根 bar
-        let last_three = manager.get_last_n_bars(&key, 3).await;
+        let last_three = manager.get_last_n_bars(&key, 3);
         assert!(!last_three.is_empty());
 
         // 打印日志，便于调试
@@ -442,7 +442,7 @@ mod tests {
             .expect("wait_ready failed");
 
         // 获取最近 3 根 bar
-        let last_three = manager.get_last_n_bars(&key, 3).await;
+        let last_three = manager.get_last_n_bars(&key, 3);
 
         // 验证结果
         assert!(!last_three.is_empty(), "Expected non-empty bars");

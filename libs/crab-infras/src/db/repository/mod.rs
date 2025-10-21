@@ -2,6 +2,7 @@ use crate::db::repository::types::{Page, RepositoryError};
 use async_trait::async_trait;
 
 pub mod base_service;
+pub mod memory_repo;
 pub mod types;
 
 // ============================
