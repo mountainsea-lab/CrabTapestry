@@ -50,7 +50,6 @@ chrono = {workspace = true}
 trade_aggregation = "13.0.1"
 
 # config
-toml =  { workspace = true }
 dotenvy = {workspace = true}
 
 # db
