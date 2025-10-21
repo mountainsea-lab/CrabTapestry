@@ -1,5 +1,7 @@
 use anyhow::Result;
+use dotenvy::dotenv;
 use once_cell::sync::OnceCell;
+use std::env;
 use std::sync::Arc;
 
 #[cfg(feature = "mysql")]
@@ -29,11 +31,12 @@ static GLOBAL_DB: OnceCell<Database> = OnceCell::new();
 
 impl Database {
     /// 初始化全局数据库实例
-    pub async fn initialize(database_url: &str) -> Result<()> {
-        dotenvy::dotenv().ok();
+    pub async fn initialize() -> Result<()> {
+        dotenv().ok();
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
         // 创建 backend
-        let backend = build_backend(database_url).await?;
+        let backend = build_backend(&database_url).await?;
 
         GLOBAL_DB
             .set(Database { inner: backend })
