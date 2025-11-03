@@ -3,7 +3,7 @@ use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_c
 use crate::server::routes::handlers::trader_handlers::{disable_trading, enable_trading, get_status};
 use crate::server::routes::handlers::tradingview_handlers::{get_config, get_history, get_symbol_info, get_time};
 use ms_tracing::LogQuery;
-use warp::{self, Filter};
+use warp::{self, Filter, cors};
 
 pub mod handlers;
 
@@ -57,9 +57,7 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
             .and_then(get_symbol_info))
         .or(warp::path("history")
             .and(warp::get())
-            .and(warp::query::<
-                crate::server::routes::handlers::tradingview_handlers::HistoryQuery,
-            >())
+            .and(warp::query::<handlers::tradingview_handlers::HistoryQuery>())
             .and_then(get_history));
 
     // ====================== 合并所有路由 ======================
@@ -75,6 +73,7 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
         .or(sysinfo)
         .or(health)
         .or(tradingview_routes)
+        .with(cors())
 }
 
 #[allow(dead_code)]
