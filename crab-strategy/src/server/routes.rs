@@ -1,6 +1,7 @@
 use crate::server::AppState;
 use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_cache, with_tx};
 use crate::server::routes::handlers::trader_handlers::{disable_trading, enable_trading, get_status};
+use crate::server::routes::handlers::tradingview_handlers::{get_config, get_history, get_symbol_info, get_time};
 use ms_tracing::LogQuery;
 use warp::{self, Filter};
 
@@ -45,6 +46,23 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
         .and_then(get_status);
     //===============trader handlers=================
 
+    // ====================== TradingView Datafeed（根路径） ======================
+    let tradingview_routes = warp::path("time")
+        .and(warp::get())
+        .and_then(get_time)
+        .or(warp::path("config").and(warp::get()).and_then(get_config))
+        .or(warp::path("symbols")
+            .and(warp::path::param::<String>())
+            .and(warp::get())
+            .and_then(get_symbol_info))
+        .or(warp::path("history")
+            .and(warp::get())
+            .and(warp::query::<
+                crate::server::routes::handlers::tradingview_handlers::HistoryQuery,
+            >())
+            .and_then(get_history));
+
+    // ====================== 合并所有路由 ======================
     warp::path::end()
         .map(handlers::index)
         .or(ping)
@@ -56,6 +74,7 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
         .or(version)
         .or(sysinfo)
         .or(health)
+        .or(tradingview_routes)
 }
 
 #[allow(dead_code)]
