@@ -1,7 +1,9 @@
 use crate::server::AppState;
 use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_cache, with_tx};
 use crate::server::routes::handlers::trader_handlers::{disable_trading, enable_trading, get_status};
-use crate::server::routes::handlers::tradingview_handlers::{get_config, get_history, get_symbol_info, get_time};
+use crate::server::routes::handlers::tradingview_handlers::{
+    SearchQuery, SymbolQuery, get_config, get_history, get_symbol_info, get_time, search_symbols,
+};
 use ms_tracing::LogQuery;
 use warp::{self, Filter, cors};
 
@@ -52,13 +54,17 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
         .and_then(get_time)
         .or(warp::path("config").and(warp::get()).and_then(get_config))
         .or(warp::path("symbols")
-            .and(warp::path::param::<String>())
             .and(warp::get())
+            .and(warp::query::<SymbolQuery>()) // ✅ 解析 ?symbol=XXX
             .and_then(get_symbol_info))
         .or(warp::path("history")
             .and(warp::get())
             .and(warp::query::<handlers::tradingview_handlers::HistoryQuery>())
-            .and_then(get_history));
+            .and_then(get_history))
+        .or(warp::path("search")
+            .and(warp::get())
+            .and(warp::query::<SearchQuery>()) // ✅ 解析 ?query=XXX&limit=...
+            .and_then(search_symbols));
 
     // ====================== 合并所有路由 ======================
     warp::path::end()
