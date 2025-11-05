@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         service:
-#         - crab-data-event
+          #         - crab-data-event
           - crab-hmds
           # - future-service  # 可扩展更多服务
 
@@ -33,6 +33,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 🔹 设置 SSH Key，用于拉取私有仓库
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Debug workspace files
         run: |
@@ -63,7 +69,7 @@ jobs:
           echo "safe_tag=$SAFE_TAG" >> $GITHUB_OUTPUT
           echo "✅ 使用镜像标签: $SAFE_TAG"
 
-      # 🔹 构建并推送镜像
+      # 🔹 构建并推送镜像（支持 SSH key）
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
@@ -77,3 +83,4 @@ jobs:
             SERVICE_NAME=${{ matrix.service }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          ssh: default   # ✅ BuildKit 挂载 SSH
