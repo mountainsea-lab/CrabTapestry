@@ -7,7 +7,7 @@ use crate::global::init_global_services;
 use crate::server::ingestor_service_flow::start_ingestor_service_flow;
 use ms_tracing::tracing_utils::internal::info;
 use ms_tracing::{LogCache, LogEntry, setup_tracing_with_broadcast};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use warp::Filter;
@@ -41,7 +41,7 @@ pub async fn start() {
         start_ingestor_service_flow().await;
     });
 
-    let bind_address: SocketAddr = "127.0.0.1:10088".parse().unwrap();
+    let bind_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10088);
 
     // init app
     let app_state = AppState { tx: tx.clone(), cache: cache.clone() };
