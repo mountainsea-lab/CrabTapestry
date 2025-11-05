@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use warp::Filter;
 
-const APPLICATION_NAME: &str = "crab_hmds-hmds";
+const APPLICATION_NAME: &str = "crab-hmds";
 
 #[derive(Clone)]
 pub struct AppState {
