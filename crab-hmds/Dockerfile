@@ -6,7 +6,8 @@ ARG SERVICE_NAME
 ########################################
 # Builder 阶段
 ########################################
-FROM rust:${RUST_VERSION}-bullseye AS builder
+#FROM rust:${RUST_VERSION}-bullseye AS builder
+FROM rust:${RUST_VERSION}-slim AS builder
 ARG SERVICE_NAME
 WORKDIR /app
 
