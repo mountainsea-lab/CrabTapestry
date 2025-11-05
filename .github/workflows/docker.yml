@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - 'feature/crab-insight'
     tags:
       - 'v*'     # 仍支持发布版本标签构建
 
@@ -15,7 +16,7 @@ jobs:
     strategy:
       matrix:
         service:
-          - crab_hmds-data-event
+#          - crab_hmds-data-event
           - crab_hmds-hmds
           # - future-service  # 未来可扩展
 
