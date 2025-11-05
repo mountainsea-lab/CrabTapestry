@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.4
 #ARG RUST_VERSION=1.87.0
-ARG RUST_VERSION=nightly-bullseye
+ARG RUST_VERSION=1.92.0-nightly
 ARG SERVICE_NAME
 
 ########################################
 # Builder 阶段
 ########################################
 #FROM rust:${RUST_VERSION}-bullseye AS builder
-FROM rust:${RUST_VERSION} AS builder
+FROM rust:bullseye AS builder
 ARG SERVICE_NAME
 WORKDIR /app
 
@@ -21,6 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     make \
  && rm -rf /var/lib/apt/lists/*
+
+# 使用 rustup 安装指定 nightly
+RUN rustup install ${RUST_VERSION} && \
+    rustup default ${RUST_VERSION}
 
 # 构建缓存目录
 RUN mkdir -p /tmp/cargo-target
