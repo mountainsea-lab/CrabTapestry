@@ -2,12 +2,16 @@ name: Build & Push Docker Images
 
 on:
   push:
+    branches:
+      - main
+      - dev
     tags:
-      - 'v*'
+      - 'v*'     # 仍支持发布版本标签构建
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         service:
@@ -17,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -50,6 +54,27 @@ jobs:
             echo "file=Dockerfile" >> $GITHUB_OUTPUT
           fi
 
+      # 动态确定镜像标签
+      - name: Set image tags
+        id: vars
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            # 推 tag 发布时
+            echo "TAG_NAME=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "VERSION_TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "CHANNEL=release" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            # main 分支（稳定版）
+            echo "TAG_NAME=main" >> $GITHUB_OUTPUT
+            echo "VERSION_TAG=main-$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+            echo "CHANNEL=stable" >> $GITHUB_OUTPUT
+          else
+            # 其他分支（例如 dev）
+            echo "TAG_NAME=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "VERSION_TAG=${GITHUB_REF_NAME}-$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+            echo "CHANNEL=dev" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
@@ -57,10 +82,10 @@ jobs:
           file: ${{ steps.df.outputs.file }}
           push: true
           tags: |
+            mountainsealab/${{ matrix.service }}:${{ steps.vars.outputs.TAG_NAME }}
+            mountainsealab/${{ matrix.service }}:${{ steps.vars.outputs.VERSION_TAG }}
             mountainsealab/${{ matrix.service }}:latest
-            mountainsealab/${{ matrix.service }}:${{ github.ref_name }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
-          # 使用 GitHub Actions cache 来缓存 buildx 层（下次构建更快）
           cache-from: type=gha
           cache-to: type=gha,mode=max
