@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.4
-ARG RUST_VERSION=1.87.0
+#ARG RUST_VERSION=1.87.0
+ARG RUST_VERSION=nightly
 ARG SERVICE_NAME
 
 ########################################
