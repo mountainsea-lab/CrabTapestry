@@ -15,8 +15,8 @@ jobs:
     strategy:
       matrix:
         service:
-#          - crab_hmds-data-event
-          - crab_hmds-hmds
+#         - crab-data-event
+          - crab-hmds
           # - future-service  # 可扩展更多服务
 
     steps:
