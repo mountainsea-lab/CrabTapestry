@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.4
 #ARG RUST_VERSION=1.87.0
-ARG RUST_VERSION=nightly
+ARG RUST_VERSION=nightly-bullseye
 ARG SERVICE_NAME
 
 ########################################
 # Builder 阶段
 ########################################
 #FROM rust:${RUST_VERSION}-bullseye AS builder
-FROM rust:${RUST_VERSION}-slim AS builder
+FROM rust:${RUST_VERSION} AS builder
 ARG SERVICE_NAME
 WORKDIR /app
 
