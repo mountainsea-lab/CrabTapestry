@@ -47,7 +47,8 @@ RUN rm -rf src
 COPY . .
 
 # 编译指定服务
-RUN CARGO_TARGET_DIR=/tmp/cargo-target \
+RUN --mount=type=ssh \
+    CARGO_TARGET_DIR=/tmp/cargo-target \
     cargo build --release --package ${SERVICE_NAME}
 
 # 拷贝编译好的二进制
