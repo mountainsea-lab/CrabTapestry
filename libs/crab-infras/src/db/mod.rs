@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use std::env;
 use std::sync::Arc;
 
-#[cfg(not(any(feature = "postgres", feature = "mysql", feature = "sqlite")))]
+#[cfg(not(any(feature = "postgres", feature = "mysql")))]
 compile_error!("At least one database backend feature must be enabled.");
 
 #[cfg(feature = "mysql")]
@@ -68,23 +68,40 @@ impl Database {
 
 // ----------------- Feature backend 构建 -----------------
 
+// async fn build_backend(database_url: &str) -> Result<Arc<dyn DatabaseBackend + Send + Sync>> {
+//     #[cfg(feature = "postgres")]
+//     {
+//         let backend = postgres::PostgresDatabase::new(database_url).await?;
+//         Ok(Arc::new(backend));
+//     }
+//
+//     // #[cfg(feature = "mysql")]
+//     // {
+//     //     // todo!("impl feature")
+//     //     let backend = mysql::MySqlDatabase::new(database_url).await?;
+//     //     let backend =    make_mysql_pool().await?;
+//     //     return Ok(Arc::new(backend));
+//     // }
+//     //
+//     // #[allow(unreachable_code)]
+//     // Err(anyhow::anyhow!("No database feature enabled"))
+//     // fallback 分支 — 没启用任何数据库 feature
+//     Err(anyhow::anyhow!("No database backend feature enabled"))
+// }
+
 async fn build_backend(database_url: &str) -> Result<Arc<dyn DatabaseBackend + Send + Sync>> {
     #[cfg(feature = "postgres")]
     {
         let backend = postgres::PostgresDatabase::new(database_url).await?;
-        Ok(Arc::new(backend))
+        return Ok(Arc::new(backend)); // ✅ 注意这里要加 return
     }
 
     // #[cfg(feature = "mysql")]
     // {
-    //     // todo!("impl feature")
     //     let backend = mysql::MySqlDatabase::new(database_url).await?;
-    //     let backend =    make_mysql_pool().await?;
-    //     return Ok(Arc::new(backend));
+    //     return Ok(Arc::new(backend)); // ✅ 同样 return
     // }
-    //
-    // #[allow(unreachable_code)]
-    // Err(anyhow::anyhow!("No database feature enabled"))
-    // fallback 分支 — 没启用任何数据库 feature
+
+    // fallback，当没有任何 feature 启用时：
     Err(anyhow::anyhow!("No database backend feature enabled"))
 }

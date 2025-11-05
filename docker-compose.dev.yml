@@ -1,35 +1,35 @@
 services:
   # ---------------------------
-  # crab_hmds-data-event 应用服务
+  # crab-data-event 应用服务
   # ---------------------------
   crab-data-event:
     build:
       context: .
       dockerfile: ./crab-data-event/Dockerfile
       args:
-        SERVICE_NAME: crab_hmds-data-event
+        SERVICE_NAME: crab-data-event
     env_file:
       - ${CRAB_DATA_EVENT_ENV}
     volumes:
       - "${CRAB_DATA_EVENT_ENV}:/app/.env:ro"   # 挂载到容器 /app/.env
-    command: ["crab_hmds-data-event"]
+    command: ["crab-data-event"]
     ports:
       - "10086:10086"
 
   # ---------------------------
-  # crab_hmds-hmds 应用服务
+  # crab-hmds 应用服务
   # ---------------------------
   crab-hmds:
     build:
       context: .
       dockerfile: ./crab-hmds/Dockerfile
       args:
-        SERVICE_NAME: crab_hmds-hmds
+        SERVICE_NAME: crab-hmds
     env_file:
       - ${CRAB_HMDS_ENV}
     volumes:
       - "${CRAB_HMDS_ENV}:/app/.env:ro"
-      - "${PWD}/crab_hmds-hmds/config/hmds.toml:/app/crab_hmds-hmds/config/hmds.toml:ro"
-    command: ["crab_hmds-hmds"]
+      - "${PWD}/crab-hmds/config/hmds.toml:/app/crab-hmds/config/hmds.toml:ro"
+    command: ["crab-hmds"]
     ports:
       - "10088:10088"
