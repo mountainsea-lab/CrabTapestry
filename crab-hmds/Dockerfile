@@ -30,12 +30,11 @@ RUN mkdir -p /tmp/cargo-target
 # 这里假设 workspace 中 libs/crab_hmds-infras 也在源码目录下
 COPY Cargo.toml Cargo.lock ./
 COPY libs/crab-infras/Cargo.toml libs/crab-infras/Cargo.toml
-COPY libs/crab-types/Cargo.toml libs/crab-types/Cargo.toml
 
 # 这里挂载 SSH，允许 cargo 拉取私有仓库
 RUN --mount=type=ssh \
     CARGO_TARGET_DIR=/tmp/cargo-target \
-    cargo build --release --package ${SERVICE_NAME} || true \
+    cargo build --release --package ${SERVICE_NAME} || true
 
 # 生成依赖层缓存
 RUN mkdir src && echo "fn main() {}" > src/main.rs
