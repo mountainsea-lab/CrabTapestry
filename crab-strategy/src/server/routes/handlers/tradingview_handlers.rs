@@ -4,7 +4,7 @@ use crate::domain::service::tradingview_service::{
 use crate::domain::tradingview_dto::{HistoryQuery, SearchQuery, SymbolQuery, bars_to_udf};
 use chrono::Utc;
 use crab_infras::external::crab_hmds::meta::OhlcvRecord;
-use warp::{Rejection, Reply, http::StatusCode, reply};
+use warp::{Rejection, Reply, reply};
 
 /// TradingView Datafeed 兼容接口
 
@@ -16,20 +16,14 @@ pub async fn get_time() -> Result<impl Reply, Rejection> {
 
 /// 获取配置信息 /config
 pub async fn get_config() -> Result<impl Reply, Rejection> {
-    // 调用业务逻辑层
     match get_tradingview_config().await {
-        Ok(info) => {
-            // 成功返回 JSON 响应
-            Ok(reply::json(&info))
-        }
+        Ok(info) => Ok(reply::json(&info)),
         Err(err) => {
             eprintln!("❌ Failed to get symbol info: {:?}", err);
-            // 返回 HTTP 错误响应
-            let error_msg = reply::json(&serde_json::json!({
+            Ok(reply::json(&serde_json::json!({
                 "error": "Failed to fetch symbol info",
                 "detail": err.to_string()
-            }));
-            Ok(reply::with_status(error_msg, StatusCode::BAD_REQUEST))
+            })))
         }
     }
 }
@@ -45,11 +39,10 @@ pub async fn get_symbol_info(query: SymbolQuery) -> Result<impl Reply, Rejection
         Err(err) => {
             eprintln!("❌ Failed to get symbol info: {:?}", err);
             // 返回 HTTP 错误响应
-            let error_msg = reply::json(&serde_json::json!({
+            Ok(reply::json(&serde_json::json!({
                 "error": "Failed to fetch symbol info",
                 "detail": err.to_string()
-            }));
-            Ok(reply::with_status(error_msg, StatusCode::BAD_REQUEST))
+            })))
         }
     }
 }
@@ -96,13 +89,16 @@ pub async fn search_symbols(query: SearchQuery) -> Result<impl Reply, Rejection>
 /// 4️⃣ 查询历史 K 线 /history?symbol=BTC/USDT&resolution=1&from=...&to=...
 pub async fn get_history(query: HistoryQuery) -> Result<impl Reply, Rejection> {
     // 调用 fetch_history_data 获取真实 OHLCV 数据
-    let bars: Vec<OhlcvRecord> = match fetch_history_data(&query).await {
+    let mut bars: Vec<OhlcvRecord> = match fetch_history_data(&query).await {
         Ok(bars) => bars,
         Err(err) => {
             eprintln!("Failed to fetch history data: {:?}", err);
             Vec::new()
         }
     };
+
+    // 按时间升序排序
+    bars.sort_by_key(|bar| bar.period_start_ts.unwrap_or(bar.ts));
 
     // 根据 countback 截取最后 N 根 K 线
     let bars = if let Some(count) = query.countback {

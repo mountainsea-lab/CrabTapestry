@@ -18,12 +18,13 @@ pub struct SymbolInfoUdf {
     pub(crate) ticker: String,
     pub(crate) description: String,
     pub(crate) session: String,
+    pub(crate) timezone: String,
     pub(crate) exchange: String,
     pub(crate) minmov: i32,
     pub(crate) pricescale: i32,
     pub(crate) has_intraday: bool,
     pub(crate) supported_resolutions: Vec<String>,
-    pub(crate) has_no_volume: bool,
+    pub(crate) visible_plots_set: String,
     // 可选字段
     pub(crate) type_: String,
     pub(crate) currency_code: String,
@@ -31,7 +32,7 @@ pub struct SymbolInfoUdf {
 
 #[derive(Deserialize)]
 pub struct SymbolQuery {
-    symbol: String,
+    pub(crate) symbol: String,
 }
 
 /// 代表每个搜索结果的币种或交易对信息
@@ -48,10 +49,10 @@ pub struct SymbolSearchResult {
 /// 请求查询参数
 #[derive(Deserialize)]
 pub struct SearchQuery {
-    limit: Option<u32>,       // 限制返回结果数量
-    query: String,            // 搜索关键词
-    type_: Option<String>,    // 类型筛选，如 `crypto`
-    exchange: Option<String>, // 交易所筛选，如 `BINANCE`
+    pub(crate) limit: Option<u32>,       // 限制返回结果数量
+    pub(crate) query: String,            // 搜索关键词
+    pub(crate) type_: Option<String>,    // 类型筛选，如 `crypto`
+    pub(crate) exchange: Option<String>, // 交易所筛选，如 `BINANCE`
 }
 
 #[derive(Deserialize)]

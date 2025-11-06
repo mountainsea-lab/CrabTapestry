@@ -67,6 +67,49 @@ impl TimeFrame {
         }
     }
 
+    /// 转换为 TradingView 周期字符串
+    pub fn to_tradingview(&self) -> &'static str {
+        match self {
+            TimeFrame::M1 => "1",
+            TimeFrame::M3 => "3",
+            TimeFrame::M5 => "5",
+            TimeFrame::M15 => "15",
+            TimeFrame::M30 => "30",
+            TimeFrame::H1 => "60", // TradingView 用分钟
+            TimeFrame::H2 => "120",
+            TimeFrame::H4 => "240",
+            TimeFrame::H6 => "360",
+            TimeFrame::H8 => "480",
+            TimeFrame::H12 => "720",
+            TimeFrame::D1 => "1D",
+            TimeFrame::D3 => "3D",
+            TimeFrame::W1 => "1W",
+            TimeFrame::M1L => "1M",
+        }
+    }
+
+    /// 从 TradingView 周期字符串解析为 TimeFrame
+    pub fn from_tradingview(s: &str) -> Option<Self> {
+        match s {
+            "1" => Some(TimeFrame::M1),
+            "3" => Some(TimeFrame::M3),
+            "5" => Some(TimeFrame::M5),
+            "15" => Some(TimeFrame::M15),
+            "30" => Some(TimeFrame::M30),
+            "60" => Some(TimeFrame::H1),
+            "120" => Some(TimeFrame::H2),
+            "240" => Some(TimeFrame::H4),
+            "360" => Some(TimeFrame::H6),
+            "480" => Some(TimeFrame::H8),
+            "720" => Some(TimeFrame::H12),
+            "1D" | "1d" => Some(TimeFrame::D1),
+            "3D" | "3d" => Some(TimeFrame::D3),
+            "1W" | "1w" => Some(TimeFrame::W1),
+            "1M" => Some(TimeFrame::M1L),
+            _ => None,
+        }
+    }
+
     // Convenience function to parse a string and get the corresponding time frame and its millisecond value
     pub fn from_str_and_get_millis(s: &str) -> Option<(Self, u64)> {
         match s.parse::<TimeFrame>() {

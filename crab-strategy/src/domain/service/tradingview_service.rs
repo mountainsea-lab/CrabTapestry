@@ -1,9 +1,10 @@
-use crate::domain::tradingview_dto::{SymbolInfoUdf, SymbolQuery, SymbolSearchResult, TradingviewConfig};
+use crate::domain::tradingview_dto::{HistoryQuery, SymbolInfoUdf, SymbolQuery, SymbolSearchResult, TradingviewConfig};
 use crate::global;
-use crate::server::routes::handlers::tradingview_handlers::HistoryQuery;
 use crab_infras::external::crab_hmds::DefaultHmdsExchange;
 use crab_infras::external::crab_hmds::meta::OhlcvRecord;
 use crab_types::time_frame::TimeFrame;
+use ms_tracing::tracing_utils::internal::warn;
+use std::str::FromStr;
 
 /// get tradingview config
 pub async fn get_tradingview_config() -> anyhow::Result<TradingviewConfig> {
@@ -44,7 +45,7 @@ pub async fn get_tradingview_symbols(query: SymbolQuery) -> anyhow::Result<Symbo
                 supported_resolutions = raw_periods
                     .into_iter()
                     .filter_map(|s| TimeFrame::from_str(&s).ok()) // 转换为枚举
-                    .map(|tf| tf.to_str().to_string()) // 再转成统一字符串
+                    .map(|tf| tf.to_tradingview().to_string()) // 再转成统一字符串
                     .collect();
 
                 break;
@@ -63,12 +64,13 @@ pub async fn get_tradingview_symbols(query: SymbolQuery) -> anyhow::Result<Symbo
         ticker: symbol.clone(),
         description: format!("{} trading pair", symbol),
         session: "24x7".into(),
+        timezone: "Etc/UTC".into(),
         exchange: "BINANCE".into(), // 你也可以从 sub.exchange 填充
         minmov: 1,
         pricescale: 100, // 表示两位小数
         has_intraday: true,
         supported_resolutions,
-        has_no_volume: false,
+        visible_plots_set: "ohlcv".to_string(), // 或 "ohlc" 如果要不显示成交量
         type_: "crypto".into(),
         currency_code: matched_quote,
     };
@@ -83,11 +85,13 @@ fn default_supported_resolutions() -> Vec<String> {
         TimeFrame::M5,
         TimeFrame::M15,
         TimeFrame::H1,
+        TimeFrame::H4,
+        TimeFrame::H8,
         TimeFrame::D1,
         TimeFrame::W1,
     ]
     .iter()
-    .map(|tf| tf.to_str().to_string())
+    .map(|tf| tf.to_tradingview().to_string())
     .collect()
 }
 
@@ -144,17 +148,32 @@ pub async fn fetch_history_data(query: &HistoryQuery) -> anyhow::Result<Vec<Ohlc
     let symbol = &query.symbol;
 
     // resolution: 例如 "1", "5", "15", "60", "D"
-    let period = &query.resolution;
+    let period = match TimeFrame::from_tradingview(&query.resolution) {
+        Some(p) => p,
+        None => {
+            warn!("fetch_history_data period {} is not supported yet", &query.resolution);
+            return Ok(vec![]); // 提前返回空数据
+        }
+    };
 
     // 时间范围 from/to 秒级 -> 转为毫秒
     let from_ts = query.from * 1000;
     let to_ts = query.to * 1000;
 
     // limit: 如果 countback 有值，用它；否则不限制
-    let limit = query.countback.map(|c| c as usize);
+    let limit = query.countback.map(|c| c as i32);
 
     // 拉取数据
-    let klines: Vec<OhlcvRecord> = dbe.get_klines(symbol, period, limit, Some(from_ts), Some(to_ts)).await?;
+    let klines: Vec<OhlcvRecord> = dbe
+        .get_klines(
+            "BinanceFuturesUsd",
+            symbol,
+            period.to_str(),
+            limit,
+            Some(from_ts as u64),
+            Some(to_ts as u64),
+        )
+        .await;
 
     Ok(klines)
 }

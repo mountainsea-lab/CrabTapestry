@@ -1,8 +1,9 @@
+use crate::domain::tradingview_dto::{HistoryQuery, SearchQuery, SymbolQuery};
 use crate::server::AppState;
 use crate::server::routes::handlers::log_handlers::{query_logs, sse_logs, with_cache, with_tx};
 use crate::server::routes::handlers::trader_handlers::{disable_trading, enable_trading, get_status};
 use crate::server::routes::handlers::tradingview_handlers::{
-    SearchQuery, SymbolQuery, get_config, get_history, get_symbol_info, get_time, search_symbols,
+    get_config, get_history, get_symbol_info, get_time, search_symbols,
 };
 use ms_tracing::LogQuery;
 use warp::{self, Filter, cors};
@@ -59,7 +60,7 @@ pub fn routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Error 
             .and_then(get_symbol_info))
         .or(warp::path("history")
             .and(warp::get())
-            .and(warp::query::<handlers::tradingview_handlers::HistoryQuery>())
+            .and(warp::query::<HistoryQuery>())
             .and_then(get_history))
         .or(warp::path("search")
             .and(warp::get())
